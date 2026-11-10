@@ -1,6 +1,5 @@
 ---
 paths:
-  - "scripts/**"
   - "autoload/**"
   - "core/**"
 ---

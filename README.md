@@ -80,7 +80,7 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
 - Enable Git LFS before committing large binaries (see "Not set up yet").
 
 **Local files**
-- `.vscode/` holds per-machine paths and should not be committed.
+- `.vscode/` holds per-machine paths and is listed in `.gitignore`; never force-add it.
 - Editor Settings in Godot are per machine; only Project Settings (`project.godot`) are shared.
 
 ## Claude Code subagents
@@ -100,7 +100,7 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
 - **`export_presets.cfg`:** create via *Project -> Export* (Web preset) and do a trial export + upload to itch.io well before event day.
 - **Scenes:** no `.tscn` files yet. Each owner creates their screen in their own folder.
 - **Data:** `data/*.json` are empty arrays; `data/schema.md` is a draft to be updated in the first 3 hours of the event.
-- **`.editorconfig`** and a `.vscode/` entry in `.gitignore` were discussed but not added.
+- **`.editorconfig`** was discussed but not added (optional, e.g. `indent_style = tab`).
 
 ## Event-day timeline (48h)
 

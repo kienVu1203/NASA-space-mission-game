@@ -30,6 +30,7 @@ var _sorted_root: Node2D
 var _time: float = 0.0
 var _ambient: Array = []
 var _rng := RandomNumberGenerator.new()
+var _step_var: int = 1
 
 
 func setup(skin_ref, site_data: Dictionary, theme: String, walk_px: float = 58.0, run_px: float = 98.0) -> void:
@@ -538,4 +539,14 @@ func _draw_ruin_ground(b: Rect2) -> void:
 
 func _on_player_stepped() -> void:
 	if skin != null and skin.audio != null:
-		skin.audio.sfx_step()
+		_step_var = 2 if _step_var == 1 else 1
+		if theme_name == "earth":
+			if skin.audio.has_method("sfx_step_earth"):
+				skin.audio.sfx_step_earth(_step_var)
+			else:
+				skin.audio.sfx_step()
+		else:
+			if skin.audio.has_method("sfx_step_ruin"):
+				skin.audio.sfx_step_ruin(_step_var)
+			else:
+				skin.audio.sfx_step()

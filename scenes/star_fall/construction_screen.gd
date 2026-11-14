@@ -151,7 +151,10 @@ func _adjust_fuel(steps: int) -> void:
 	if is_equal_approx(before, campaign.design.fuel_kg):
 		skin.audio.sfx_denied()
 	else:
-		skin.audio.sfx_select()
+		if skin.audio.has_method("sfx_fuel_tick"):
+			skin.audio.sfx_fuel_tick()
+		else:
+			skin.audio.sfx_select()
 		fuel_flash = 0.25
 	_invalidate()
 	_rebuild_slot_menu()
@@ -167,15 +170,23 @@ func _invalidate() -> void:
 # ---------------------------------------------------------------- actions
 
 func _run_preflight() -> void:
+	if skin.audio.has_method("sfx_preflight_scan"):
+		skin.audio.sfx_preflight_scan()
 	checks = campaign.design.validate(campaign.content)
 	checks_run = true
 	var valid: bool = campaign.design.is_valid(campaign.content)
 	if valid:
-		skin.audio.sfx_confirm()
+		if skin.audio.has_method("sfx_preflight_pass"):
+			skin.audio.sfx_preflight_pass()
+		else:
+			skin.audio.sfx_confirm()
 		Events.preflight_passed.emit()
 		ui.notify("Preflight passed.", "good")
 	else:
-		skin.audio.sfx_denied()
+		if skin.audio.has_method("sfx_preflight_fail"):
+			skin.audio.sfx_preflight_fail()
+		else:
+			skin.audio.sfx_denied()
 		var first: Dictionary = campaign.design.first_blocking_failure(campaign.content)
 		Events.preflight_failed.emit(String(first.get("message", "")))
 		ui.notify("Preflight failed.", "bad")
@@ -187,7 +198,10 @@ func _confirm() -> void:
 	# atomic: the commit only happens when every blocking check is green.
 	var result: Dictionary = campaign.confirm_design()
 	if bool(result.get("ok", false)):
-		skin.audio.sfx_confirm()
+		if skin.audio.has_method("sfx_checkpoint"):
+			skin.audio.sfx_checkpoint()
+		else:
+			skin.audio.sfx_confirm()
 		campaign.set_checkpoint("construction")
 		design_confirmed_ok.emit()
 	else:

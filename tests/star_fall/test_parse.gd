@@ -31,7 +31,7 @@ const SCRIPTS := [
 var fails: int = 0
 
 
-func _init() -> void:
+func _initialize() -> void:
 	for path in SCRIPTS:
 		var script = load(String(path))
 		# can_instantiate() is false for a script that failed to compile.

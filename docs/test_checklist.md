@@ -3,8 +3,8 @@
 Ticked items are covered by an automated headless suite; the rest need a person
 at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 
-Six suites cover the build: `test_parse`, `test_logic`, `test_flow`,
-`test_encounter`, `test_phase3` and `test_phase4`.
+Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
+`test_encounter`, `test_phase3`, `test_phase4` and `test_debug_jump`.
 
 ## Automated (run these first)
 
@@ -159,7 +159,8 @@ Six suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 
 - [x] The snapshot is taken once; a second call is refused
 - [x] The return objective completes once
-- [x] A version 4 save round-trips stage, chapter, snapshot, objective, skip record and report record
+- [x] A version 5 save round-trips stage, chapter, snapshot, objective, skip record and report record
+- [x] A version 4 save (no finale record) still loads at the ready point
 - [x] Loading twice never duplicates components
 - [x] A version 3 save still loads, at the ready point, with its components
 - [x] A finale stage without a snapshot is corrected back to the ready point and reported
@@ -243,15 +244,21 @@ Six suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [x] A first letter selects the lowest matching word; correct letters advance only it — `test_phase3.gd`
 - [x] A wrong letter resets only that word, keeps it selected, and does not hurt Nick — `test_phase3.gd`
 - [x] Upper and lower case match; digits, spaces, accents, chords, function keys and held-key echo do not type — `test_phase3.gd`, `test_flow.gd`
-- [x] A completed word fires exactly one attack; single letters never fire — `test_phase3.gd`
+- [x] Every correct letter fires exactly one shot; completion adds none; a wrong letter fires none and resets the word — `test_phase3.gd`, `test_flow.gd`
+- [x] Retyped prefixes and requeued words never earn duplicate damage (per-position credit) — `test_phase3.gd`
+- [x] Shots still in flight resolve into exactly one victory; victory stops word damage — `test_phase3.gd`
+- [x] Every attempt changes the word order, keeps the same words and the easy-to-hard stages, and persists its history — `test_phase3.gd`, `test_flow.gd`
+- [x] The four new vocabulary entries are valid and reachable by deck selection — `test_phase3.gd`
 - [x] A missed word damages once, clears the target, requeues after a delay, and never doubles up — `test_phase3.gd`
-- [x] A completed entry cannot pay out twice; boss health equals deck size x damage — `test_phase3.gd`
+- [x] A completed entry cannot pay out twice; boss health equals total letters x damage per letter — `test_phase3.gd`
 - [x] The boss cannot die before the last entry, and the final attack still lands — `test_phase3.gd`
 - [x] Active words never share a lane — `test_phase3.gd`
-- [x] Retry restores both health bars, reuses the deck, restarts at the easy stage, keeps the journal — `test_phase3.gd`, `test_flow.gd`
+- [x] Retry restores both health bars, keeps the words in a new order, clears shots, restarts at the easy stage, keeps the journal — `test_phase3.gd`, `test_flow.gd`
 - [x] Pause, the journal, a dialogue and focus loss freeze words, time and damage — `test_flow.gd`
 - [x] Fast, target and slow scripted typists can all win — `test_phase3.gd`
-- [x] `shield_emitter` is awarded once and survives save/load without duplicates — `test_phase3.gd`, `test_flow.gd`
+- [x] Victory drops one shield emitter on open ground and restores exploration; the pickup grants it once and is removed — `test_flow.gd`
+- [x] The four shield states (undefeated, available, collected, installed) survive save/load, re-entry and migration from save version 3 — `test_phase3.gd`, `test_flow.gd`
+- [x] The workshop installs each recovered part once; uninstalled parts fail the simulation and block fabrication — `test_phase3.gd`, `test_flow.gd`
 - [x] The simulation uses `Wh = W x s / 3600`, is deterministic for a seed, and reports per-stage use and reserves — `test_phase3.gd`
 - [x] Missing components, mass, delta-v, energy, peak power, protection, data and relay-sync failures are reported with suggestions — `test_phase3.gd`
 - [x] Four distinct designs pass; trade-offs prevent a single best build — `test_phase3.gd`
@@ -259,8 +266,9 @@ Six suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [x] Simulating is free; fabrication is atomic, needs a current passing report, and happens once — `test_phase3.gd`, `test_flow.gd`
 - [x] A design change invalidates the previous report — `test_phase3.gd`, `test_flow.gd`
 - [x] Scavenging tops materials up to the floor and never above it — `test_phase3.gd`
-- [x] Version 1 and 2 saves still load; version 3 keeps the journal and workshop record — `test_phase3.gd`
+- [x] Version 1 to 3 saves still load (migrated); version 4 keeps the journal, workshop record, installed parts and attempt history — `test_phase3.gd`
 - [x] The real main scene plays from the title to READY_FOR_FINAL_ASSEMBLY, and Continue resumes there — `test_flow.gd`
+- [x] Every Ctrl+Shift+Alt debug jump lands on its screen with a consistent campaign; V, K, M and H work — `test_debug_jump.gd`
 
 ### Phase 4 manual checks
 
@@ -300,6 +308,11 @@ Six suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [ ] The Dawn Tower slope reads as a dead forest with a tower, not a generic ruin
 - [ ] The workshop report is understandable: what failed and what to change
 - [ ] The READY FOR FINAL ASSEMBLY summary is clearly the end of this build
+- [ ] After the victory the shield emitter drop is easy to spot, bobs gently, and the E prompt appears when Nick is close
+- [ ] Per-letter shots feel immediate; fast typing does not stack flashes or sounds; dim (no-damage) shots read as such
+- [ ] The bottom-right definition panel is readable for the longest words and definitions, and never hides a falling word or Nick
+- [ ] The workshop reads as repairing the ship: socket preview, install flash, fitted part visible
+- [ ] Workshop and typing screens do not overlap or clip at 1280x720, at the minimum window size and when resized
 - [ ] An educator has reviewed the vocabulary (spelling, meaning, suitability, bands)
 
 ## Regression (the legacy NASA mission-planner skeleton)

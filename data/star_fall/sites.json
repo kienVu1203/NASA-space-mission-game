@@ -834,7 +834,8 @@
       {"sprite": "waste_pile", "x": 300, "y": 230, "solid": [20, 9], "interact": "salvage_dawn_frame", "label": "Collect scrap metal"},
       {"sprite": "board_stack", "x": 540, "y": 360, "solid": [16, 8], "interact": "salvage_dawn_cells", "label": "Collect circuitry"},
       {"sprite": "harbor_crate", "x": 80, "y": 350, "solid": [18, 9], "interact": "salvage_dawn_seal", "label": "Collect polymer"},
-      {"sprite": "dawn_tower", "x": 360, "y": 120, "solid": [40, 12], "interact": "dawn_boss_gate", "label": "Enter the Dawn Tower"}
+      {"sprite": "dawn_tower", "x": 360, "y": 120, "solid": [40, 12], "interact": "dawn_boss_gate", "label": "Enter the Dawn Tower"},
+      {"sprite": "shield_emitter", "x": 404, "y": 156, "interact": "dawn_shield_drop", "label": "Collect the shield emitter"}
     ]
   }
 }

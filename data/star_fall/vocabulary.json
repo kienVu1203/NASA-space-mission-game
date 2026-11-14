@@ -1632,6 +1632,42 @@
    "category": "energy",
    "band": "advanced",
    "note": "Less heat lost means less energy burned."
+  },
+  {
+   "id": "v_mulch",
+   "text": "mulch",
+   "definition": "A layer of leaves, bark or straw spread over soil to keep it damp and protect it.",
+   "example": "We spread mulch around the young trees before the dry season.",
+   "category": "forest",
+   "band": "developing",
+   "note": "Fallen leaves can become mulch instead of waste."
+  },
+  {
+   "id": "v_rainwater",
+   "text": "rainwater",
+   "definition": "Water that falls as rain and can be collected and stored for later use.",
+   "example": "The school saves rainwater in a barrel to water its garden.",
+   "category": "water",
+   "band": "intermediate",
+   "note": "Collecting rainwater saves treated tap water."
+  },
+  {
+   "id": "v_peatland",
+   "text": "peatland",
+   "definition": "Wet land where dead plants build up very slowly into thick, dark peat.",
+   "example": "The peatland stores carbon that took thousands of years to collect.",
+   "category": "habitat",
+   "band": "advanced",
+   "note": "Draining a peatland releases the carbon it holds."
+  },
+  {
+   "id": "v_refurbish",
+   "text": "refurbish",
+   "definition": "To clean, repair and update something old so it can be used again.",
+   "example": "They refurbish old laptops and give them to new owners.",
+   "category": "recycling",
+   "band": "advanced",
+   "note": "Refurbishing keeps working parts out of the landfill."
   }
  ]
 }

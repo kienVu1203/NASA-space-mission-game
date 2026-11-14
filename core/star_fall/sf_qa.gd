@@ -19,6 +19,7 @@ extends RefCounted
 
 const SFCampaign := preload("res://core/star_fall/sf_campaign.gd")
 const SFReconstruction := preload("res://core/star_fall/sf_reconstruction.gd")
+const SFReturnSim := preload("res://core/star_fall/sf_return_sim.gd")
 
 const QA_FLAG := "--qa"
 const KEYS := ["I", "O", "P"]
@@ -324,6 +325,12 @@ static func apply_valid_reconstruction(campaign, reconstruction_data: Dictionary
 		report = ws.simulate(campaign.recovered_component_ids(), 30303)
 	if not bool(report.get("valid", false)):
 		return {"ok": false, "message": "No passing automated design."}
+	# The workshop requires every recovered component to be fitted before it will
+	# fabricate, so a skipped run installs them exactly as the workshop screen
+	# would. install_component() applies its own rules (must be recovered, not
+	# already fitted, not past final assembly).
+	for id in SFReturnSim.REQUIRED_COMPONENTS:
+		campaign.install_component(String(id))
 	ws.replenish(campaign)
 	var committed: Dictionary = ws.commit(campaign, report)
 	return committed

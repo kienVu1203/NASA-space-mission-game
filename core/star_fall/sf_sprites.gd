@@ -42,7 +42,55 @@ static func build_all() -> Dictionary:
 	# Phase 3 exploration props.
 	out["dead_tree"] = _tex(_dead_tree())
 	out["dawn_tower"] = _tex(_dawn_tower())
+	# Phase 3 recovered components: the world drop and the workshop icons.
+	out["shield_emitter"] = _tex(_shield_emitter())
+	out["navigation_chip"] = _tex(_navigation_chip())
+	out["power_core"] = _tex(_power_core())
 	return out
+
+
+## The shield emitter, as fallen from the tower crown: the same dark housing
+## and cyan lens, with two small fins. Origin is the ground-contact point.
+static func _shield_emitter() -> Image:
+	var img := _img(18, 16)
+	_rect(img, 3, 6, 12, 8, SFPalette.STEEL_DARK)
+	_rect(img, 3, 6, 12, 1, SFPalette.STEEL_MID)
+	_rect(img, 5, 8, 8, 4, SFPalette.CYAN_DIM)
+	_rect(img, 7, 9, 4, 2, SFPalette.CYAN)
+	_px(img, 7, 9, SFPalette.PAPER)
+	_rect(img, 0, 8, 3, 4, SFPalette.STEEL_MID)
+	_rect(img, 15, 8, 3, 4, SFPalette.STEEL_MID)
+	_rect(img, 8, 2, 2, 4, SFPalette.STEEL_MID)
+	_px(img, 8, 1, SFPalette.CYAN)
+	_rect(img, 4, 14, 10, 2, SFPalette.INK)
+	return img
+
+
+## The navigation chip: a cyan circuit block with gold contacts.
+static func _navigation_chip() -> Image:
+	var img := _img(16, 12)
+	_rect(img, 2, 2, 12, 8, SFPalette.CYAN_DARK)
+	_rect(img, 2, 2, 12, 1, SFPalette.CYAN)
+	_rect(img, 5, 4, 6, 4, SFPalette.INK)
+	_rect(img, 6, 5, 4, 2, SFPalette.CYAN)
+	for i in 4:
+		_px(img, 3 + i * 3, 0, SFPalette.GOLD)
+		_px(img, 3 + i * 3, 1, SFPalette.GOLD)
+		_px(img, 3 + i * 3, 10, SFPalette.GOLD)
+		_px(img, 3 + i * 3, 11, SFPalette.GOLD)
+	return img
+
+
+## The power core: a squat reactor can with a glowing gold window.
+static func _power_core() -> Image:
+	var img := _img(14, 16)
+	_rect(img, 2, 2, 10, 13, SFPalette.STEEL_DARK)
+	_rect(img, 1, 1, 12, 2, SFPalette.STEEL_MID)
+	_rect(img, 1, 13, 12, 2, SFPalette.STEEL_MID)
+	_rect(img, 4, 5, 6, 6, SFPalette.RUIN_DARK)
+	_rect(img, 5, 6, 4, 4, SFPalette.GOLD)
+	_px(img, 5, 6, SFPalette.PAPER)
+	return img
 
 
 ## A standing dead trunk from the former Dawn forest: bare, grey, split.

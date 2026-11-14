@@ -82,6 +82,8 @@ func _process(_delta: float) -> bool:
 			_dawn_tower()
 		52:
 			_sky_remnant()
+		54:
+			_shield_drop()
 		56:
 			_dawn_archive_and_workshop()
 		60:
@@ -768,7 +770,8 @@ func _sky_remnant() -> void:
 	check("the tutorial is recorded as seen", main.campaign.has_flag("typing_tutorial_seen"))
 	check("the fight starts after the briefing", enc.is_fighting() and not duel.input_locked)
 	check("exploration is not running during the fight", main.world == null)
-	check("boss health equals deck size x damage", enc.boss_health_max == enc.deck.size() * enc.damage_per_word())
+	check("boss health equals total letters x damage per letter", enc.boss_health_max == enc.total_letters() * enc.damage_per_letter())
+	check("the attempt history is recorded", main.campaign.typing_attempts >= 1 and main.campaign.typing_last_order.size() == enc.deck.size())
 
 	var guard := 0
 	while enc.active.is_empty() and guard < 400:
@@ -778,13 +781,14 @@ func _sky_remnant() -> void:
 	var text := String(word["text"])
 	duel.handle_key(KEY_A, text.to_upper().unicode_at(0))
 	check("an uppercase key selects the word", enc.typing.target_uid == int(word["uid"]) and enc.typing.progress == 1)
+	check("the selecting key fires one shot", enc.shots_fired == 1 and enc.attacks.size() == 1)
 	var echo := InputEventKey.new()
 	echo.pressed = true
 	echo.echo = true
 	echo.keycode = KEY_A
 	echo.unicode = text.unicode_at(1)
 	duel._unhandled_input(echo)
-	check("held-key echo does not type", enc.typing.progress == 1)
+	check("held-key echo does not type or fire", enc.typing.progress == 1 and enc.shots_fired == 1)
 	duel.handle_key(KEY_A, text.unicode_at(1), true)
 	check("a Ctrl/Alt chord does not type", enc.typing.progress == 1)
 	duel.handle_key(KEY_F1, 0)
@@ -811,7 +815,7 @@ func _sky_remnant() -> void:
 	duel.handle_key(KEY_ESCAPE)
 
 	_type(duel, text.substr(1))
-	check("finishing the word fires one attack", enc.attacks.size() == 1 and enc.completed.size() == 1)
+	check("every letter of the word fired exactly one shot", enc.shots_fired == text.length() and enc.completed.size() == 1)
 	check("the learned word is in the campaign journal", main.campaign.has_vocabulary(String(word["id"])))
 
 	# Defeat on purpose.
@@ -824,11 +828,18 @@ func _sky_remnant() -> void:
 	check("defeat sets no boss flag", not main.campaign.has_flag("sky_remnant_defeated"))
 	check("defeat keeps the journal", main.campaign.has_vocabulary(String(word["id"])))
 	check("defeat keeps earlier components", main.campaign.has_component("navigation_chip") and main.campaign.has_component("power_core"))
-	var deck_before := str(enc.deck)
+	var order_before: Array = enc.last_order.duplicate()
+	var words_before: Array = enc.last_order.duplicate()
+	words_before.sort()
 	duel.handle_key(KEY_R)
 	check("retry restarts the fight", duel.state == duel.State.FIGHT and enc.is_fighting())
 	check("retry restores both health bars", enc.nick_health == enc.nick_health_max and enc.boss_health == enc.boss_health_max)
-	check("retry reuses the deck", str(enc.deck) == deck_before)
+	var words_after: Array = enc.last_order.duplicate()
+	words_after.sort()
+	check("retry keeps the same words", words_after == words_before)
+	check("retry changes the word order", enc.last_order != order_before)
+	check("retry clears every shot in flight", enc.attacks.is_empty() and enc.shots_fired == 0)
+	check("the retry is persisted as a new attempt", main.campaign.typing_last_order == enc.last_order)
 	check("retry does not count journal words as damage", enc.completed.is_empty())
 
 	# Win through real key input.
@@ -844,10 +855,56 @@ func _sky_remnant() -> void:
 	duel.advance_for(3.0)
 	duel.handle_key(KEY_ENTER)
 	duel._confirm_victory()
-	check("the shield emitter is awarded", main.campaign.has_component("shield_emitter"))
-	check("the shield emitter is awarded once", _component_count("shield_emitter") == 1)
+	check("victory does not award the shield before pickup", not main.campaign.has_component("shield_emitter"))
 	check("the boss flag is set", main.campaign.has_flag("sky_remnant_defeated"))
+	check("the reward state is 'available'", main.campaign.reward_state("sky_remnant_defeated", "shield_emitter") == "available")
 	check("every deck word is in the journal", main.campaign.vocabulary_journal.size() >= enc.deck.size())
+	finish_dialogue()
+
+
+func _drop_count() -> int:
+	var n := 0
+	if main.world == null:
+		return 0
+	for p in main.world.props:
+		if is_instance_valid(p) and not p.is_queued_for_deletion() and p.prop_id == "dawn_shield_drop":
+			n += 1
+	return n
+
+
+func _shield_drop() -> void:
+	print("")
+	print("-- Shield drop: exploration, save/load, pickup " + "-".repeat(12))
+	check("victory returns to the Dawn Tower slope", main.screen == main.Screen.WORLD and main.zone == "dawn_tower", str(main.screen))
+	check("the typing encounter is gone", main.typing_duel == null)
+	check("Nick can move again", main.world != null and main.world.player.input_enabled)
+	check("Bill is following again", main.world.bill_companion != null)
+	check("exactly one shield pickup is in the world", _drop_count() == 1)
+	var drop = main.world.prop_by_id("dawn_shield_drop")
+	var blocked := false
+	for r in main.world.solid_rects():
+		if (r as Rect2).grow(6.0).has_point(drop.position):
+			blocked = true
+	check("the pickup sits on open ground, clear of every solid footprint", not blocked)
+	check("the pickup is clear of the tower", drop.position.distance_to(main.world.prop_by_id("dawn_boss_gate").position) > 34.0)
+	main._on_world_interact("dawn_boss_gate", main.world.prop_by_id("dawn_boss_gate"))
+	check("the gate does not restart the fight", main.screen == main.Screen.WORLD and main.dialogue != null)
+	finish_dialogue()
+	# Leave and come back: the drop is neither lost nor duplicated.
+	main._go(main.Screen.WORLD)
+	check("re-entering the area keeps exactly one drop", _drop_count() == 1)
+	# Quit and continue: the uncollected drop survives save/load.
+	check("a save exists with the drop uncollected", SFSave.has_valid_save())
+	main._continue_game()
+	check("continue resumes on the slope, not in the fight", main.screen == main.Screen.WORLD and main.zone == "dawn_tower" and main.typing_duel == null)
+	check("continue keeps the uncollected drop", _drop_count() == 1 and not main.campaign.has_component("shield_emitter"))
+	main._on_world_interact("dawn_shield_drop", main.world.prop_by_id("dawn_shield_drop"))
+	check("collecting grants the shield emitter", main.campaign.has_component("shield_emitter"))
+	check("the shield emitter is granted once", _component_count("shield_emitter") == 1)
+	check("the pickup is removed", _drop_count() == 0)
+	check("the reward state is 'collected'", main.campaign.reward_state("sky_remnant_defeated", "shield_emitter") == "collected")
+	main._collect_shield_drop()
+	check("a second pickup attempt grants nothing", _component_count("shield_emitter") == 1)
 	finish_dialogue()
 
 
@@ -864,6 +921,21 @@ func _dawn_archive_and_workshop() -> void:
 	finish_dialogue()
 
 	var ws = main.workshop_screen
+	check("the workshop opens on the component tray", ws.row == 0)
+	check("the shield appears as a collected, uninstalled part", ws._state("shield_emitter") == "ready")
+	ws.workshop.set_fuel(float(ws.preview["totals"]["propellant_needed_kg"]))
+	ws._design_changed()
+	var uninstalled: Dictionary = ws.run_simulation()
+	check("uninstalled parts fail the simulation", not bool(uninstalled["valid"]) and String(uninstalled["failures"][0]).findn("not installed") >= 0)
+	ws.tray_index = 2
+	check("choosing the shield previews its socket", ws._previewed_component() == "shield_emitter")
+	ws.handle_key(KEY_ENTER)
+	check("ENTER installs the shield emitter", main.campaign.is_component_installed("shield_emitter"))
+	check("the reward state is 'installed'", main.campaign.reward_state("sky_remnant_defeated", "shield_emitter") == "installed")
+	check("installing again is refused", not ws.install("shield_emitter"))
+	for id in ["navigation_chip", "power_core"]:
+		check("%s installs" % id, ws.install(String(id)))
+	check("all three parts are fitted", main.campaign.all_required_installed())
 	ws.workshop.set_fuel(0.0)
 	ws._design_changed()
 	var bad: Dictionary = ws.run_simulation()
@@ -876,6 +948,8 @@ func _dawn_archive_and_workshop() -> void:
 	main._on_world_interact("crash_vela", main.world.prop_by_id("crash_vela"))
 	check("the wreck reopens the workshop", main.screen == main.Screen.WORKSHOP)
 	ws = main.workshop_screen
+	check("installed parts persist across leaving", main.campaign.all_required_installed() and ws._state("shield_emitter") == "fitted")
+	check("the workshop then opens on the design rows", ws.row == 1)
 	check("the workshop kept the revised selection", float(ws.workshop.selection["fuel_kg"]) == 0.0)
 
 	ws.workshop.set_fuel(float(ws.preview["totals"]["propellant_needed_kg"]))
@@ -912,6 +986,7 @@ func _ready_and_continue() -> void:
 	check("continue restores the ready stage", main.campaign.stage == main.campaign.STAGE_READY)
 	check("continue shows the ready summary", main.screen == main.Screen.CHECKPOINT)
 	check("continue keeps all three components once", _component_count("navigation_chip") == 1 and _component_count("power_core") == 1 and _component_count("shield_emitter") == 1)
+	check("continue keeps all three installed", main.campaign.all_required_installed())
 	check("continue keeps the journal", main.campaign.vocabulary_journal.size() >= 20)
 	check("continue keeps the committed design", main.campaign.reconstruction.has("committed"))
 	check("the return_home chapter is now playable", String(main.campaign.content.chapter("return_home")["stage"]) == "return_home")

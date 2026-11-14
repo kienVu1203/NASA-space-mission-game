@@ -56,7 +56,12 @@ static func prerequisites(campaign, reconstruction_data: Dictionary, others_clea
 
 	var components_ok := true
 	for id in COMPONENTS:
-		components_ok = components_ok and campaign.has_component(String(id))
+		# Fitted to the frame, not merely carried: the merged workshop requires
+		# every recovered component to be installed before it fabricates, so the
+		# gate must agree with it or a fabrication could be described as ready
+		# while a part is still in the backpack.
+		components_ok = components_ok and campaign.has_component(String(id)) \
+			and campaign.is_component_installed(String(id))
 	checks.append({"id": "components", "ok": components_ok})
 
 	var committed: Dictionary = campaign.reconstruction.get("committed", {}) as Dictionary

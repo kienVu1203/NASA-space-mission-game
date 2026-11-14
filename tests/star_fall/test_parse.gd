@@ -34,6 +34,7 @@ const SCRIPTS := [
 	"res://core/star_fall/sf_reconstruction.gd",
 	"res://core/star_fall/sf_finale.gd",
 	"res://core/star_fall/sf_qa.gd",
+	"res://core/star_fall/sf_debug_presets.gd",
 	"res://scenes/star_fall/player.gd",
 	"res://scenes/star_fall/bill_companion.gd",
 	"res://scenes/star_fall/prop.gd",
@@ -49,6 +50,7 @@ const SCRIPTS := [
 	"res://scenes/star_fall/cinematic_screen.gd",
 	"res://scenes/star_fall/mission_report_screen.gd",
 	"res://scenes/star_fall/credits_screen.gd",
+	"res://scenes/star_fall/debug_jump.gd",
 	"res://scenes/star_fall/main.gd",
 ]
 

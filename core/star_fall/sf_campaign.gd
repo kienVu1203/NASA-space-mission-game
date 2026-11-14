@@ -7,7 +7,7 @@ extends RefCounted
 const SFContent := preload("res://core/star_fall/sf_content.gd")
 const SFDesign := preload("res://core/star_fall/sf_design.gd")
 
-const SAVE_VERSION := 4
+const SAVE_VERSION := 5
 
 # Campaign stages. The stage is the only thing that decides which screen runs.
 const STAGE_MENU := "menu"
@@ -141,6 +141,20 @@ const FLAG_RETURN_OBJECTIVE_COMPLETE := "return_objective_complete"
 const FLAG_MISSION_REPORT_SEEN := "mission_report_seen"
 const FLAG_QA_STAGE_SKIP_USED := "qa_stage_skip_used"
 
+## The components the rebuilt VELA needs installed before final assembly.
+const REQUIRED_INSTALL := [COMPONENT_NAVIGATION_CHIP, COMPONENT_POWER_CORE, COMPONENT_SHIELD_EMITTER]
+
+## A boss reward's four states, derived from three separate saved facts (the
+## boss flag, the recovered list, the installed list), never one flag:
+##   undefeated  the boss flag is not set
+##   available   the boss is defeated and the drop waits in the world
+##   collected   Nick picked it up (it is in recovered_components)
+##   installed   it is fitted to the VELA in the workshop
+const REWARD_UNDEFEATED := "undefeated"
+const REWARD_AVAILABLE := "available"
+const REWARD_COLLECTED := "collected"
+const REWARD_INSTALLED := "installed"
+
 var content
 
 var stage: String = STAGE_MENU
@@ -169,6 +183,12 @@ var active_mission: String = MISSION_SIGNAL
 # the committed design and its passing report summary.
 var vocabulary_journal: Array = []
 var reconstruction: Dictionary = {}
+# Save version 4. Components fitted to the rebuilt VELA (always a subset of
+# recovered_components), and the typing-encounter attempt history used to give
+# every new attempt a changed word order.
+var installed_components: Array = []
+var typing_attempts: int = 0
+var typing_last_order: Array = []
 
 # Phase 4 progression. `finale` holds the frozen snapshot taken when the player
 # chose "Complete Assembly and Launch", whether the cinematic was skipped, and
@@ -205,6 +225,9 @@ func reset_campaign() -> void:
 	vocabulary_journal = []
 	reconstruction = {}
 	finale = {}
+	installed_components = []
+	typing_attempts = 0
+	typing_last_order = []
 	play_seconds = 0.0
 
 
@@ -520,6 +543,66 @@ func complete_boss(reward_flag: String, component_id: String) -> bool:
 	return true
 
 
+## Records a boss victory without granting its reward: the reward drops into
+## the world and is awarded by collect_boss_reward(). Returns false when the
+## boss was already defeated, so a replayed result changes nothing.
+func defeat_boss(reward_flag: String) -> bool:
+	if reward_flag == "" or has_flag(reward_flag):
+		return false
+	set_flag(reward_flag)
+	return true
+
+
+## Picks up a defeated boss's dropped component. Only possible after the
+## victory, and only once: a collected reward never respawns or duplicates.
+func collect_boss_reward(reward_flag: String, component_id: String) -> bool:
+	if not has_flag(reward_flag) or has_component(component_id):
+		return false
+	return award_component(component_id)
+
+
+func reward_state(reward_flag: String, component_id: String) -> String:
+	if is_component_installed(component_id):
+		return REWARD_INSTALLED
+	if has_component(component_id):
+		return REWARD_COLLECTED
+	if has_flag(reward_flag):
+		return REWARD_AVAILABLE
+	return REWARD_UNDEFEATED
+
+
+## Fits a recovered component to the rebuilt VELA. Refused for a component
+## Nick does not have, one already fitted, or once the VELA is assembled.
+func install_component(component_id: String) -> bool:
+	if not has_component(component_id) or installed_components.has(component_id):
+		return false
+	if has_flag(FLAG_READY_FOR_FINAL_ASSEMBLY):
+		return false
+	installed_components.append(component_id)
+	return true
+
+
+func is_component_installed(component_id: String) -> bool:
+	return installed_components.has(component_id)
+
+
+func installed_component_ids() -> Array:
+	return installed_components.duplicate()
+
+
+func all_required_installed() -> bool:
+	for id in REQUIRED_INSTALL:
+		if not is_component_installed(String(id)):
+			return false
+	return true
+
+
+## Records that a typing attempt started with this play order.
+func record_typing_attempt(attempt: int, order: Array) -> void:
+	typing_attempts = maxi(typing_attempts, attempt)
+	typing_last_order = order.duplicate()
+
+
 ## Applies the Dawn Tower outcome: the final archive is restored and the full
 ## reconstruction workshop opens. Idempotent.
 func complete_dawn_tower() -> bool:
@@ -775,6 +858,9 @@ func to_save_dict() -> Dictionary:
 		"vocabulary_journal": vocabulary_journal.duplicate(),
 		"reconstruction": reconstruction.duplicate(true),
 		"finale": finale.duplicate(true),
+		"installed_components": installed_components.duplicate(),
+		"typing_attempts": typing_attempts,
+		"typing_last_order": typing_last_order.duplicate(),
 		"play_seconds": play_seconds,
 	}
 
@@ -874,7 +960,10 @@ func apply_save_dict(data: Dictionary) -> Array:
 	else:
 		active_mission = MISSION_SIGNAL
 
-	# Phase 3 (save version 3). Older saves simply have neither field.
+	# Phase 3 (save version 3). Older saves simply have neither field. An older
+	# save whose boss reward was awarded on victory already lists the shield in
+	# recovered_components, so it maps to "collected" (or "installed" below):
+	# ownership is kept and the boss never has to be fought again.
 	var journal_raw: Variant = data.get("vocabulary_journal", [])
 	if journal_raw is Array:
 		for j in (journal_raw as Array):
@@ -883,10 +972,36 @@ func apply_save_dict(data: Dictionary) -> Array:
 	var recon_raw: Variant = data.get("reconstruction", {})
 	if recon_raw is Dictionary:
 		reconstruction = (recon_raw as Dictionary).duplicate(true)
+
+	# Save version 4: installed components and the typing attempt history.
+	# Only components Nick actually recovered can be installed.
+	var installed_raw: Variant = data.get("installed_components", null)
+	if installed_raw is Array:
+		for c in (installed_raw as Array):
+			var id := String(c)
+			if has_component(id) and not installed_components.has(id):
+				installed_components.append(id)
+	elif reconstruction.has("committed"):
+		# Migration: an older save that already fabricated the VELA had every
+		# recovered component fitted. Nothing is invented for saves that did
+		# not: their shield (if earned) stays collected, ready to install.
+		for id in recovered_components:
+			installed_components.append(String(id))
+	typing_attempts = maxi(0, int(data.get("typing_attempts", 0)))
+	var order_raw: Variant = data.get("typing_last_order", [])
+	if order_raw is Array:
+		for o in (order_raw as Array):
+			if o is String:
+				typing_last_order.append(String(o))
+
 	# A ready flag without the committed design it describes cannot be trusted:
-	# reopen the workshop rather than claim an assembly that has no record.
+	# reopen the workshop rather than claim an assembly that has no record. The
+	# same holds when a required component is missing or not installed.
 	if has_flag(FLAG_READY_FOR_FINAL_ASSEMBLY) and not reconstruction.has("committed"):
 		warnings.append("Assembled design record missing; the workshop will reopen.")
+		flags.erase(FLAG_READY_FOR_FINAL_ASSEMBLY)
+	elif has_flag(FLAG_READY_FOR_FINAL_ASSEMBLY) and not all_required_installed():
+		warnings.append("A required component is not installed; the workshop will reopen.")
 		flags.erase(FLAG_READY_FOR_FINAL_ASSEMBLY)
 
 	# Phase 4 (save version 4). Older saves simply have no finale record. A

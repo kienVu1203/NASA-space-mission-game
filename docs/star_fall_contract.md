@@ -40,6 +40,7 @@ core/star_fall/                 Pure logic and presentation kit. No UI nodes.
   sf_return_sim.gd              Phase 3: return-mission simulation (pure)
   sf_finale.gd                  Phase 4: finale prerequisites, report, score (pure)
   sf_qa.gd                      Phase 4: QA stage-skip latch and milestone planning (pure)
+  sf_debug_presets.gd           Debug builds: campaign states for the phase hotkeys (pure)
   sf_campaign.gd                Campaign state, quests, salvage, save dicts (pure)
   sf_save.gd                    Versioned save/load to user:// (pure + FileAccess)
   sf_dialogue.gd                Dialogue model (pure)
@@ -63,13 +64,14 @@ scenes/star_fall/
   cinematic_screen.gd           Phase 4: the escape cinematic (six scenes + final card)
   mission_report_screen.gd      Phase 4: the recorded-run report and the score
   credits_screen.gd             Phase 4: the credit roll and the closing message
+  debug_jump.gd                 Debug builds: Ctrl+Shift+Alt phase hotkeys and help list
 
 data/star_fall/
   ship_parts.json               Hull, mission requirements, components, salvage
   campaign.json                 Chapters, missions, memories, archives, dialogue
   encounters.json               Phase 2 boss tuning, patterns, projectile types
   sites.json                    Authored world layouts (five sites)
-  vocabulary.json               Phase 3: 199-entry environmental vocabulary library
+  vocabulary.json               Phase 3: 203-entry environmental vocabulary library
   typing.json                   Phase 3: typing encounter tuning
   reconstruction.json           Phase 3: workshop options and simulation constants
   finale.json                   Phase 4: assembly copy, cinematic script, report copy,
@@ -82,7 +84,8 @@ tests/star_fall/
   test_encounter.gd             Phase 2 combat rules, escalation, retry, rewards
   test_phase3.gd                Phase 3 vocabulary, typing, pacing, workshop, simulation, save
   test_phase4.gd                Phase 4 finale gate, cinematic, report, score, save, QA skip
-  capture.gd                    Dev tool: renders 46 key screens to PNG
+  test_debug_jump.gd            Every debug phase jump and in-fight debug command
+  capture.gd                    Dev tool: renders 48 key screens to PNG
 ```
 
 ### Rules the architecture enforces
@@ -152,7 +155,7 @@ menu -> briefing -> construction -> launch -> flight -> crash_intro
 | `base_return` | Progression | Crash-site base, both components shown |
 | `phase_two_complete` | Checkpoint | Phase 2 summary; continues into the Dawn Tower |
 | `complete` | Checkpoint | Legacy Phase 2 stopping point; resumes at the Phase 2 summary |
-| `dawn_intro` | World (Dawn Tower) | Former forest, survey projector, checkpoint, gate |
+| `dawn_intro` | World (Dawn Tower) | Former forest, survey projector, checkpoint, gate; after the victory, the shield emitter drop |
 | `dawn_boss` | Typing duel | Sky Remnant. Never checkpointed mid-fight |
 | `dawn_archive` | Archive | Dawn Project archive; unlocks the workshop |
 | `reconstruction` | Workshop | VELA reconstruction and return simulation |
@@ -462,7 +465,13 @@ is_archive_restored(archive_id: String) -> bool
 reveal_future_earth() -> bool                  # applies once; sets the mission
 complete_silent_coast() -> bool                # applies once; unlocks Dawn Tower
 # Phase 3 (all idempotent)
-complete_boss(reward_flag, component_id) -> bool   # false if the flag was already set
+complete_boss(reward_flag, component_id) -> bool   # flag + award in one step (kept for tests; the game no longer uses it)
+defeat_boss(reward_flag) -> bool               # victory only: the reward drops into the world
+collect_boss_reward(reward_flag, component_id) -> bool  # the pickup; once, only after defeat
+reward_state(reward_flag, component_id) -> String  # undefeated | available | collected | installed
+install_component(component_id) -> bool        # recovered and not yet fitted; refused once assembled
+is_component_installed(id) / installed_component_ids() / all_required_installed()
+record_typing_attempt(attempt, order) -> void  # attempt history for word-order variation
 complete_dawn_tower() -> bool                  # restores the archive, unlocks the workshop
 record_vocabulary(entry_id) -> bool            # false if already in the journal
 has_vocabulary(entry_id) -> bool
@@ -598,7 +607,7 @@ prevents launch. A design is launchable only when every blocking check passes.
 
 ---
 
-## 7. Save schema (version 1 baseline; v2 section 13; v3 section 19; v4 section 19a)
+## 7. Save schema (v1 baseline; v2 section 13; v3/v4 section 19; v5 section 19a)
 
 Path: `user://star_fall_save.json`. On Windows this resolves under
 `%APPDATA%\Godot\app_userdata\STAR FALL\`.
@@ -719,6 +728,7 @@ GODOT="/c/Users/<you>/Downloads/Godot_v4.0-stable_win64.exe/Godot_v4.0-stable_wi
 "$GODOT" --headless --path . --script res://tests/star_fall/test_encounter.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_phase3.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_phase4.gd
+"$GODOT" --headless --path . --script res://tests/star_fall/test_debug_jump.gd
 ```
 
 Each prints `PASS`/`FAIL` per check and a `RESULT:` line, and exits non-zero on
@@ -729,7 +739,8 @@ cinematic, report, score, save-version and QA-skip suite; `test_flow.gd` drives
 the real main scene from the title to the credits, then walks the campaign again
 with the QA skip.
 
-**Warning:** `test_flow.gd`, `test_phase4.gd` and `capture.gd` delete
+**Warning:** `test_flow.gd`, `test_phase4.gd`, `test_debug_jump.gd` and
+`capture.gd` delete
 `user://star_fall_save.json`. Back up a real save before running them.
 
 ### Screenshots (needs a display, not headless)
@@ -739,9 +750,25 @@ with the QA skip.
 "$GODOT" --path . --script res://tests/star_fall/capture.gd -- --shots=17,18
 ```
 
-Writes 46 PNGs to `user://captures/` (01-34 the campaign, 35-45 the finale, plus 22b). `--shots=` renders only the named screens
+Writes 48 PNGs to `user://captures/` (01-36 the campaign and workshop, 46-56
+the Phase 4 finale, plus 22b). `--shots=` renders only the named screens
 (by their number prefix), which is the quickest way to re-check one pose. This
 is a presentation aid only; it is not evidence that the game plays correctly.
+
+### Debug hotkeys
+
+Debug builds only (`OS.is_debug_build()`): `main.gd` adds `debug_jump.gd`,
+which reads **Ctrl + Shift + Alt + key** in `_input()` (before any screen) and
+consumes it. Digits 1–0 apply a preset from `sf_debug_presets.gd` (one per
+phase entry point and boss fight, built cumulatively through the real campaign
+methods) and resume through `_resume_from_campaign()`. V forces a win
+(`SFEncounterModel.force_victory()` / `SFTypingEncounter.force_victory()`),
+K heals Nick, M adds salvage, H toggles the on-screen list. The first jump of
+a session copies the save to `user://star_fall_save.before_debug.json`. The
+README lists every key.
+
+The launch sequence cannot be skipped with Esc in any build (an earlier
+headless-only skip was removed); use a hotkey to jump past it.
 
 ### What headless verification does and does not prove
 
@@ -754,7 +781,7 @@ Phase 2 fights can be won through their own rules and fully reset on retry;
 the finale gate refuses to open on any missing prerequisite; the cinematic's
 natural end and its skip both emit one outcome and apply identical state; the
 report is deterministic and cannot be raised by farming; a skipped cinematic
-never changes the score; a version 4 save round-trips the ending and a version 3
+never changes the score; a version 5 save round-trips the ending and a version 4
 save still loads; and the QA skip walks the campaign in legal, resumable states
 without leaving input locked.
 
@@ -1155,11 +1182,15 @@ reconstruction workshop and the return-mission simulation. It stops at
 
 Rules the split enforces:
 
-- The typing screen reports `word_learned(id)` and `duel_finished("victory")`;
-  `main.gd` records the journal entry and awards `shield_emitter` through
-  `complete_boss()`, which refuses a repeat.
+- The typing screen reports `word_learned(id)`, `attempt_started(attempt,
+  order)` and `duel_finished("victory")`. `main.gd` records the journal entry
+  and the attempt history, and on victory only calls `defeat_boss()`: the
+  `shield_emitter` drops onto the slope and is awarded by
+  `collect_boss_reward()` when Nick picks it up (E), exactly once.
 - A typing fight is never serialised. The pre-boss checkpoint is the resume
-  point; a retry rebuilds the encounter from the same deck.
+  point; a retry rebuilds the encounter from the same words in a new order.
+- A boss already defeated is never fought again: resuming a `dawn_boss` save
+  with `sky_remnant_defeated` set lands on the slope.
 - The workshop previews and simulates for free. Only
   `SFReconstruction.commit()` spends materials, after checking every condition,
   and it refuses once the VELA is assembled.
@@ -1169,8 +1200,10 @@ Rules the split enforces:
 ```
 Phase 2 summary -> dawn_intro (world) -> survey projector (memory_healthy_forest)
   -> boardwalk checkpoint -> tower gate -> dawn_boss (typing)
-  -> victory -> shield_emitter -> dawn_archive -> reconstruction (workshop)
-  -> simulate -> fabricate -> ready_for_final_assembly (summary) -> title
+  -> victory -> slope (shield emitter drop, exploration restored)
+  -> pick up the emitter (E) -> dawn_archive -> reconstruction (workshop)
+  -> install the three parts -> simulate -> fabricate
+  -> ready_for_final_assembly (summary) -> title
 ```
 
 The tower gate refuses entry, in the fiction, until the forest memory has been
@@ -1186,9 +1219,9 @@ with wings, a skull of fused debris and ember eyes, nesting in the shield.
 
 ### Rules
 
-- One correctly completed word fires one attack; the attack damages the boss
-  once when it arrives (0.45 s flight). Individual letters never fire. Enter is
-  not required.
+- **Every correct letter fires one shot** (0.45 s flight), including the
+  selecting letter and the last letter. Completing a word adds no extra shot.
+  Enter is not required. Held-key echo and Ctrl/Alt chords never type.
 - A wrong letter resets only the selected word to zero and keeps it selected;
   the wrong key is not reinterpreted as a new selection; it never damages Nick.
 - No target: a first letter selects the matching active word **closest to the
@@ -1197,14 +1230,27 @@ with wings, a skull of fused debris and ember eyes, nesting in the shield.
   cleared if it was that word, the instance is removed, and the entry returns to
   the pending queue (in deck order) after `requeue_delay_seconds`. It is never
   respawned at the bottom, never removed from the deck, and never doubles up.
-- Boss health = deck size × `damage_per_word`. Each entry's first completion is
-  its only payout. Victory requires every entry complete **and** every attack
-  landed; the controller defensively zeroes health then, so the fight can never
-  be stranded with all words done.
+- **Damage model.** Boss health = (sum of the deck's word lengths) ×
+  `damage_per_letter`. A shot carries damage only the first time its
+  (deck entry, letter position) is typed in the attempt. Retyping a prefix
+  after a wrong letter, or the already-typed letters of a requeued word, still
+  fires a visible (dimmer) shot but deals nothing. A word's last position can
+  only be typed by completing it, so health reaches zero exactly when every
+  entry is complete and the last credited shot lands; it can never reach zero
+  earlier. Victory requires every entry complete **and** every shot landed,
+  fires once, and the controller defensively zeroes health then.
+- **Order.** Every attempt (first entry, retry, re-entry after leaving or
+  reloading) reshuffles the same deck entries *inside their stages*
+  (`SFVocabulary.order_for_attempt`, seed = deck seed + attempt × 7919), so
+  foundation words still open the fight. If the shuffle equals the previous
+  attempt's order (saved as `typing_last_order`), the first stage with two or
+  more entries is rotated by one place: bounded, never a reshuffle loop.
+  Completed words are never reset mid-attempt.
 - After the last word: no spawns, no word damage, the final attack resolves,
   then the boss dissolves and the result is offered.
-- Nick at zero health stops everything and offers Retry (same deck, easy stage,
-  every encounter-local value reset). Campaign progress and the journal stay.
+- Nick at zero health stops everything and offers Retry (same words in a new
+  order, easy stage, every encounter-local value and every shot in flight
+  reset). Campaign progress and the journal stay.
 - Pause, the journal, a dialogue and window focus loss stop the simulation
   entirely: words, spawns, damage, encounter time and pace measurement.
 
@@ -1216,8 +1262,14 @@ with wings, a skull of fused debris and ember eyes, nesting in the shield.
   first letter not already on screen is preferred; variety is never bought by
   skipping the stage order.
 - Labels show the typed prefix in gold; urgency moves green → gold → red and
-  blinks near the line. The learning panel shows the selected word, its short
-  definition, and a clear "WRONG LETTER - START AGAIN FROM 'X'" notice.
+  blinks near the line. The **learning panel is bottom right** (x 352–632,
+  y 290–352), below the danger line and right of Nick, so it never covers a
+  falling word: it shows the selected word and its own definition (up to three
+  lines), keeps them through a typing reset, shows a neutral prompt when
+  nothing is selected, and carries the "WRONG LETTER - START AGAIN FROM 'X'"
+  notice on its bottom line.
+- Impact sound, boss flash and shake are rate-limited (one per 0.12 s), so fast
+  typing gives a steady patter rather than stacked effects.
 
 ### `data/star_fall/typing.json`
 
@@ -1228,7 +1280,7 @@ with wings, a skull of fused debris and ember eyes, nesting in the shield.
              "archive_id": "dawn_archive", "seed": 51207, "visual": {...}},
   "arena":  {"spawn_y": 112, "danger_y": 278, "lanes_x": [168, 272, 376, 480],
              "nick": {"x": 320, "y": 318}, "boss_point": {"x": 320, "y": 74}},
-  "health": {"nick_health": 100, "miss_damage": 12, "damage_per_word": 10},
+  "health": {"nick_health": 100, "miss_damage": 12, "damage_per_letter": 2},
   "attack": {"flight_seconds": 0.45},
   "timing": {"first_spawn_delay": 1.2, "victory_hold_seconds": 1.8,
              "requeue_delay_seconds": 4.0, "lane_retry_seconds": 0.25,
@@ -1313,11 +1365,21 @@ Day-one construction used credits and new parts. The future workshop uses
 | Payload, optional | environmental samples (30 kg, 25 W cooling), additional records (240 MB) |
 | Route | Fast Corridor, Extended Arc |
 
-- The right panel always shows a free live preview. **V** certifies a report
+- **Installation.** The VELA is drawn in its bay with three sockets (navigation
+  chip, power core, shield emitter). The component tray below shows each part
+  only if Nick has it, with its state in words and a glyph (`X MISSING`,
+  `+ READY`, `OK FITTED`). Choosing a ready part blinks it in its socket;
+  ENTER installs it (`SFCampaign.install_component`) with a short flash, and
+  the socket then shows the part. The simulation sees **installed** parts only,
+  so an uninstalled part fails as "Not installed: ...", and **F** refuses until
+  all three are fitted.
+- The right panel always shows a free live preview (eight compact checks with
+  OK/NO in words, the first failure, and per-stage use when the SIMULATE row
+  is focused). The footer always states the next step. **V** certifies a report
   for the exact design; any change clears it ("the previous report no longer
   applies"), and **F** refuses a stale or failing report.
 - **F** checks, in order: not already assembled, current passing report, all
-  three components, fabrication capacity, materials. Only then are materials
+  three components recovered and installed, fabrication capacity, materials. Only then are materials
   removed, once.
 - **C** tops each material up to the replenish floor (8 scrap, 4 circuitry,
   3 polymer), never above it. The floor covers the cheapest passing design, so
@@ -1368,9 +1430,12 @@ records; an amplifier on the Extended Arc runs out of buffer. **Both day-one
 engines** have a passing Extended Arc design whose salvage fits the replenish
 floor, so every valid Phase 1 build can reach READY_FOR_FINAL_ASSEMBLY.
 
-## 19. Phase 3 save schema (version 3)
+## 19. Phase 3 save schema (versions 3 and 4)
 
-Version 3 adds two fields. Versions 1 and 2 load with both empty.
+Version 3 adds two fields. Versions 1 and 2 load with both empty. Version 4
+adds three more (below); versions 1 to 3 load with them migrated. Version 5
+(section 19a) is Phase 4's. Phase 3 shipped on version 4, so a version 4
+document written there loads unchanged.
 
 ```jsonc
 {
@@ -1394,15 +1459,27 @@ Version 3 adds two fields. Versions 1 and 2 load with both empty.
   no record.
 - An active falling word, attack or partial typing fight is never saved.
 
-## 19a. Phase 4 save schema (version 4)
-
-Version 4 adds one field, `finale`, and raises the document version to 4.
-Versions 1, 2 and 3 still load: a document without `finale` simply has no
-finale record, exactly as a Phase 3 save should.
+Version 4 (main): installed components and typing attempt history.
 
 ```jsonc
 {
   "version": 4,
+  "installed_components": ["navigation_chip", "power_core", "shield_emitter"],
+  "typing_attempts": 3,                          // typing attempts started so far
+  "typing_last_order": ["v_air", "v_soil", ...]  // ids of the last attempt's order
+}
+```
+
+Version 5 (Phase 4) adds the frozen finale snapshot:
+
+Code from both branches was merged with the same version number, so the
+document version was raised to **5**. Versions 1-4 all still load: a document
+without `finale` simply has no finale record, exactly as a Phase 4-less save
+should.
+
+```jsonc
+{
+  "version": 5,
   "stage": "credits",
   "chapter_id": "return_home",
   "finale": {
@@ -1415,7 +1492,7 @@ finale record, exactly as a Phase 3 save should.
     "frozen": true,                 // the snapshot exists and is trusted
     "cinematic_skipped": false      // descriptive only; never read by the score
   },
-  // ... every version 3 field, unchanged
+  // ... every version 4 field, unchanged
 }
 ```
 
@@ -1437,6 +1514,36 @@ Rules:
 
 ---
 
+### Version 4: installed components and the typing attempt history
+
+```jsonc
+{
+  "installed_components": ["navigation_chip", "power_core", "shield_emitter"],
+  "typing_attempts": 3,                         // typing attempts started so far
+  "typing_last_order": ["v_air", "v_soil", ...] // ids of the last attempt's order
+}
+```
+
+The shield emitter's state is never one flag. It is derived from three saved
+facts: `sky_remnant_defeated` (flag), `recovered_components`, and
+`installed_components`:
+
+| State | Flag | Recovered | Installed | What the player sees |
+|---|---|---|---|---|
+| undefeated | no | no | no | The fight at the tower gate |
+| available | yes | no | no | The glowing drop below the gate (persists across revisits and save/load) |
+| collected | yes | yes | no | `+ READY` in the workshop tray |
+| installed | yes | yes | yes | The emitter in its socket on the VELA |
+
+- Installed ids are kept only if they are also recovered.
+- **Migration.** A version 1–4 save has no `installed_components`. If it has a
+  committed (fabricated) design, every recovered component is marked installed;
+  otherwise none is. A version 3 save whose victory already awarded the shield
+  therefore keeps it as *collected* (or *installed* if assembled) and never has
+  to fight again. A save that never earned the shield gains nothing.
+- A `ready_for_final_assembly` flag is cleared with a warning if a required
+  component is not installed.
+
 ## 20. Phase 3 stable IDs
 
 | Kind | id |
@@ -1449,7 +1556,8 @@ Rules:
 | Site | `dawn_tower` |
 | Stage | `dawn_intro`, `dawn_boss`, `dawn_archive`, `reconstruction`, `ready_for_final_assembly` |
 | Flag | `dawn_entered`, `dawn_checkpoint`, `typing_tutorial_seen`, `sky_remnant_defeated`, `dawn_archive_restored`, `workshop_unlocked`, `return_simulation_passed`, `ready_for_final_assembly` |
-| World object | `dawn_memory`, `dawn_checkpoint`, `dawn_terminal`, `dawn_boss_gate` |
+| World object | `dawn_memory`, `dawn_checkpoint`, `dawn_terminal`, `dawn_boss_gate`, `dawn_shield_drop` |
+| Dialogue | `dawn_victory`, `shield_collected`, `workshop_intro` (Phase 3 additions and edits) |
 | Salvage | `salvage_dawn_frame`, `salvage_dawn_cells`, `salvage_dawn_seal` |
 | Vocabulary | `v_<text>` for every entry in `vocabulary.json` |
 | Workshop options | `repair_original`, `rebuilt_cluster`; `protection_none`, `armor_plating`, `shield_amplifier`; `storage_none`, `storage_compact`, `storage_array`; `bill_memory_core`, `evidence_archive`, `environmental_samples`, `additional_records`; `fast_corridor`, `extended_arc` |
@@ -1476,12 +1584,14 @@ None of the earlier ids are renamed. `return_home` keeps its id and changes from
 
 - Dawn Tower exploration: dead forest, survey projector with the healthy-forest
   memory, boardwalk checkpoint, defense console, salvage, and the tower gate.
-- The Sky Remnant typing encounter with a 199-entry library, 30-word staged
-  deck, learning panel, journal, first-time tutorial, bounded pacing, pause and
-  retry.
-- `shield_emitter` awarded once; the Dawn Project archive restored.
-- The full reconstruction workshop and the return-mission simulation, ending at
-  READY_FOR_FINAL_ASSEMBLY. Save version 3 (version 4 in Phase 4).
+- The Sky Remnant typing encounter with a 203-entry library, 30-word staged
+  deck, one shot per correct letter with per-position damage credit, a changed
+  word order on every attempt, a bottom-right definition panel, journal,
+  first-time tutorial, bounded pacing, pause and retry.
+- The `shield_emitter` drops onto the slope on victory and is awarded once when
+  collected; the Dawn Project archive restored.
+- The full reconstruction workshop with visible component installation and the
+  return-mission simulation, ending at READY_FOR_FINAL_ASSEMBLY.
 
 ### Phase 4 completed scope
 
@@ -1500,14 +1610,15 @@ None of the earlier ids are renamed. `return_home` keeps its id and changes from
 - **QA stage skip.** `I + O + P`, enabled in debug/editor builds and with
   `--qa`, edge-triggered with a cooldown, one milestone per press, with valid
   designs, rewards, saves and checkpoints at every step.
-- **Save version 4** with one new field; versions 1-3 still load.
+- **Save version 5** (Phase 4's snapshot on top of the merged version 4);
+  versions 1-4 still load.
 - **Reduced motion setting.** Removes screen shake and lowers flashes in both
   boss fights and in the launch transition without changing any rule.
 
 ### Phase 4 known limitations
 
 - Visuals and audio of the cinematic have been checked only through the
-  screenshot tool (`tests/star_fall/capture.gd`, shots 35-45), not by playing it
+  screenshot tool (`tests/star_fall/capture.gd`, shots 46-56), not by playing it
   on a real display with a person watching. Whether it *reads* well is untested.
 - The cinematic is drawn from primitives and generated sprites; it is deliberately
   stylised, not a rendered animation.
@@ -1526,4 +1637,9 @@ None of the earlier ids are renamed. `return_home` keeps its id and changes from
 - The Dawn Tower ground uses the existing ruin theme with new dead-tree and
   tower sprites, not a dedicated forest ground.
 - The workshop is keyboard only (no mouse support), unlike the title menu.
+- The Dawn Tower site has no exit, so "leaving and returning" is exercised by
+  re-entering the world screen and by save/continue, not by walking out.
+- Shots that deal no damage (already-credited letters) are drawn dimmer but
+  share the hit sound's rate limit; whether that distinction reads well needs
+  a playtest.
 - The vocabulary has not been reviewed by an educator (`docs/vocabulary.md`).

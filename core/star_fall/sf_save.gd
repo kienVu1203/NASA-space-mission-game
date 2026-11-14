@@ -10,9 +10,10 @@ const SAVE_PATH := "user://star_fall_save.json"
 ## Version 2 adds Phase 2 progression (recovered components, restored archives,
 ## the active mission). Version 1 documents still load: missing fields fall back
 ## to safe defaults in SFCampaign.apply_save_dict(). Version 3 adds the Phase 3
-## vocabulary journal and reconstruction record. Version 4 adds the frozen
-## Phase 4 finale snapshot. Versions 1, 2 and 3 still load.
-const SCHEMA_VERSION := 4
+## vocabulary journal and reconstruction record. Version 4 adds the installed
+## components and the typing attempt history. Version 5 adds the frozen Phase 4
+## finale snapshot. Versions 1 to 4 still load.
+const SCHEMA_VERSION := 5
 const MIN_COMPATIBLE_VERSION := 1
 
 ## Load result codes.

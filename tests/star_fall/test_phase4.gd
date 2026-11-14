@@ -287,13 +287,13 @@ func _finale_save_rules() -> void:
 	check("the chapter is return_home", camp.chapter_id == camp.CHAPTER_RETURN)
 
 	var write: Dictionary = SFSave.write_save(camp, SAVE_PATH)
-	check("a version 4 save writes", bool(write.get("ok", false)), String(write.get("error", "")))
+	check("a version 5 save writes", bool(write.get("ok", false)), String(write.get("error", "")))
 	var written: Dictionary = SFSave.read_save(SAVE_PATH)
-	check("the document is stamped version 4", int((written.get("data", {}) as Dictionary).get("version", 0)) == 4, str((written.get("data", {}) as Dictionary).get("version", 0)))
+	check("the document is stamped version 5", int((written.get("data", {}) as Dictionary).get("version", 0)) == 5, str((written.get("data", {}) as Dictionary).get("version", 0)))
 
 	var loaded = SFCampaign.new()
 	var res: Dictionary = SFSave.load_into(loaded, SAVE_PATH)
-	check("the version 4 save loads", bool(res.get("ok", false)))
+	check("the version 5 save loads", bool(res.get("ok", false)))
 	check("the save restores the ending stage", loaded.stage == loaded.STAGE_CREDITS)
 	check("the save restores the return chapter", loaded.chapter_id == loaded.CHAPTER_RETURN)
 	check("the save restores the snapshot", loaded.has_final_assembly_snapshot())
@@ -302,16 +302,16 @@ func _finale_save_rules() -> void:
 	check("the save restores the report record", loaded.has_flag(SFCampaign.FLAG_MISSION_REPORT_SEEN))
 	check("loading twice does not duplicate components", loaded.recovered_component_ids().size() == 3)
 
-	# A version 3 save (no finale field) must still load, at the ready point.
+	# A version 4 save (no finale field) must still load, at the ready point.
 	var v3: Dictionary = camp.to_save_dict()
-	v3["version"] = 3
+	v3["version"] = 4
 	v3.erase("finale")
 	v3["stage"] = SFCampaign.STAGE_READY
 	var old = SFCampaign.new()
 	var warnings: Array = old.apply_save_dict(v3)
-	check("a version 3 save still loads", old.stage == old.STAGE_READY)
-	check("a version 3 save has no finale record", not old.has_final_assembly_snapshot())
-	check("a version 3 save keeps its components", old.recovered_component_ids().size() == 3)
+	check("a version 4 save still loads", old.stage == old.STAGE_READY)
+	check("a version 4 save has no finale record", not old.has_final_assembly_snapshot())
+	check("a version 4 save keeps its components", old.recovered_component_ids().size() == 3)
 
 	# Contradictory documents are corrected, not trusted.
 	var forged: Dictionary = camp.to_save_dict()
@@ -399,6 +399,7 @@ func _qa_full_run() -> void:
 	check("the QA run had a valid design", main.campaign.has_confirmed_design())
 	check("the QA run recovered all three components", main.campaign.recovered_component_ids().size() == 3)
 	check("the QA run fabricated a design", main.campaign.reconstruction.has("committed"))
+	check("the QA run installed all three components", main.campaign.all_required_installed())
 	check("the QA run has a frozen snapshot", main.campaign.has_final_assembly_snapshot())
 	check("the QA run completed the return", main.campaign.is_return_complete())
 	check("the QA run produced a report", main.campaign.has_flag(SFCampaign.FLAG_MISSION_REPORT_SEEN))

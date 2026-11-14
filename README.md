@@ -60,13 +60,15 @@ godot --headless --path . --script res://tests/star_fall/test_flow.gd
 godot --headless --path . --script res://tests/star_fall/test_encounter.gd
 godot --headless --path . --script res://tests/star_fall/test_phase3.gd
 godot --headless --path . --script res://tests/star_fall/test_phase4.gd
+godot --headless --path . --script res://tests/star_fall/test_debug_jump.gd
 ```
 
-`test_flow.gd`, `test_phase4.gd` and `capture.gd` delete
+`test_flow.gd`, `test_phase4.gd`, `test_debug_jump.gd` and `capture.gd` delete
 `user://star_fall_save.json`; back up a real save first.
-`tests/star_fall/capture.gd` renders 46 key screens (including the Phase 4
-finale) to `user://captures/` and needs a real display (`-- --shots=17,18`
-re-renders just those screens). Full commands and acceptance steps are in
+`tests/star_fall/capture.gd` renders 48 key screens (including the
+Phase 4 finale and the debug help) to `user://captures/` and needs a real display
+(`-- --shots=17,18` re-renders just those screens). Full commands and
+acceptance steps are in
 [docs/star_fall_contract.md](docs/star_fall_contract.md).
 
 ### Controls
@@ -79,6 +81,33 @@ re-renders just those screens). Full commands and acceptance steps are in
 | Esc | Pause, back, skip a cutscene |
 | Enter / Space | Confirm, advance dialogue |
 | Left / Right, Q / E, V | Construction console: cycle part, adjust fuel, run preflight |
+
+### Debug hotkeys (testing only)
+
+Hold **Ctrl + Shift + Alt** and press a key. They exist only in debug builds
+(the editor, or `godot --path .`); an exported release has none of them.
+
+| Key | Jumps to / does |
+|---|---|
+| 1 | Phase 1: construction console (briefing read, a valid design pre-filled) |
+| 2 | Phase 1: crash site, just after the launch |
+| 3 | Phase 2: Forgotten City (Phase 1 complete, Bill awake) |
+| 4 | Phase 2: Scrap King fight |
+| 5 | Phase 2: Silent Coast (navigation chip recovered, reveal done) |
+| 6 | Phase 2: Toxic Tide fight |
+| 7 | Phase 3: Dawn Tower gate (memory and checkpoint done; E starts the fight) |
+| 8 | Phase 3: Sky Remnant typing fight |
+| 9 | Phase 3: shield emitter drop waiting on the slope |
+| 0 | Phase 3: reconstruction workshop (all three parts collected, none fitted) |
+| V | Win the current boss fight (shield duel or typing); Enter continues as usual |
+| K | Heal Nick to full in the current fight |
+| M | +10 scrap metal, circuitry and polymer |
+| H | Show / hide this list on screen |
+
+A jump builds a consistent campaign through the same rules as real play, then
+resumes like **Continue**, so intros, rewards and autosaves behave normally.
+Autosaves will overwrite your save, so the first jump of a session copies it to
+`user://star_fall_save.before_debug.json`.
 
 **In a Phase 2 boss fight** (Nick is fixed in place):
 
@@ -96,15 +125,21 @@ counterattack and consumes the whole meter.
 
 | Input | Action |
 |---|---|
-| A–Z | Type the falling words. The first letter selects a word; finishing it fires a pulse (no Enter) |
+| A–Z | Type the falling words. The first letter selects a word; every correct letter fires one shot (no Enter) |
 | Backspace | Release the selected word |
 | Esc | Pause: resume, vocabulary journal, restart, main menu |
 
-A wrong letter restarts that word from its first letter and never hurts Nick.
+A wrong letter restarts that word from its first letter, fires nothing and
+never hurts Nick. Retyping letters that already hit still fires a (dimmer)
+shot but deals no damage, so the boss falls exactly when every word is done.
 A word that reaches the red danger line costs health and comes back later.
+The selected word's meaning is shown in the panel at the bottom right. Every attempt
+uses the same words in a new order, easy words first.
 
-**In the reconstruction workshop:** Up/Down choose a row, Left/Right change it
-(Shift: 100 kg of propellant at a time), Enter toggles optional payload,
+**In the reconstruction workshop:** Up/Down choose a row (the first row is the
+component tray: Left/Right choose a part, Enter installs it on the VELA),
+Left/Right change other rows (Shift: 100 kg of propellant at a time), Enter
+toggles optional payload,
 **V** runs the simulation, **F** fabricates, **C** scavenges common materials,
 Esc leaves (the selection is kept; press E at the wreck to return).
 
@@ -154,9 +189,12 @@ and in any build launched with `--qa`; it is inert in a release build.
    time, a five-line typing tutorial play over a frozen arena; then the
    **Sky Remnant** fight starts. A win takes about 3–4 minutes at a casual
    typing pace (estimated, not playtested).
-5. Win, press **Enter**, read the Dawn Project archive, and the **reconstruction
-   workshop** opens at the crash-site base.
-6. Set the propellant (the preview shows how much the design needs), press **V**
+5. Win and press **Enter**. Nick is back on the slope: the **shield emitter**
+   glows just below the gate. Walk to it and press **E** to collect it (it
+   stays there across save/continue until you do). The Dawn Project archive
+   follows, then the **reconstruction workshop** opens at the crash-site base.
+6. On the component tray, choose each part (Left/Right) and press **Enter** to
+   fit it to the VELA; all three must be fitted. Then set the propellant (the preview shows how much the design needs), press **V**
    to simulate, revise until it passes, press **C** if salvage is short, then
    **F** to fabricate. The quickest passing design is the default selection on
    the Extended Arc with the propellant set to the "propellant needed" value.

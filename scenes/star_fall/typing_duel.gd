@@ -6,7 +6,8 @@ extends Node2D
 ## signal, and the controller records them exactly once.
 ##
 ## Controls
-##   LETTERS    type the falling words (first letter selects, finish to fire)
+##   LETTERS    type the falling words (first letter selects; every correct
+##              letter fires one shot at the boss)
 ##   BACKSPACE  release the selected word
 ##   ESC        pause: resume, vocabulary journal, restart, main menu
 ##
@@ -18,6 +19,9 @@ extends Node2D
 signal duel_finished(outcome: String)
 signal duel_aborted
 signal word_learned(entry_id: String)
+## A new attempt began with this play order; the controller persists it so the
+## next attempt (even after leaving or reloading) gets a changed order.
+signal attempt_started(attempt: int, order: Array)
 
 const SFPalette := preload("res://core/star_fall/sf_palette.gd")
 const SFTyping := preload("res://core/star_fall/sf_typing.gd")
@@ -26,6 +30,9 @@ const SFMenu := preload("res://core/star_fall/sf_menu.gd")
 
 const VW := 640
 const VH := 360
+## The learning panel, bottom right, below the danger line and right of Nick,
+## so it never covers a falling word.
+const PANEL := Rect2(352, 290, 280, 62)
 
 enum State { FIGHT, VICTORY, DEFEAT, PAUSED, JOURNAL }
 
@@ -60,17 +67,25 @@ var no_match_letter: String = ""
 var last_learned: Dictionary = {}
 var last_learned_timer: float = 0.0
 var hurt_flash: float = 0.0
+## Rate limit for impact audio and flashes, so fast typing never stacks them.
+var hit_cooldown: float = 0.0
 var _shake_offset: Vector2 = Vector2.ZERO
 
 
-func setup(skin_ref, ui_ref, typing_ref: Dictionary, deck: Array, seed_value: int, vocab_ref, campaign_ref) -> void:
+func setup(skin_ref, ui_ref, typing_ref: Dictionary, deck: Array, seed_value: int, vocab_ref, campaign_ref,
+		attempts_before: int = 0, previous_order: Array = []) -> void:
 	skin = skin_ref
 	ui = ui_ref
 	typing_data = typing_ref
 	vocab = vocab_ref
 	campaign = campaign_ref
 	encounter = SFTypingEncounter.new()
-	encounter.setup(typing_data, deck, seed_value)
+	encounter.setup(typing_data, deck, seed_value, attempts_before, previous_order)
+	# setup() builds a provisional order; begin_attempt() starts the first real
+	# attempt, so rewind the history to the campaign's record. That attempt is
+	# then attempts_before + 1 and differs from the persisted previous order.
+	encounter.attempt = maxi(0, attempts_before)
+	encounter.last_order = previous_order.duplicate()
 
 
 func _ready() -> void:
@@ -86,9 +101,12 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- lifecycle
 
-## A fresh attempt with the same deck. The fight itself starts with start_fight().
+## A fresh attempt with the same words in a changed order. Every shot in
+## flight and every effect is discarded. The fight itself starts with
+## start_fight().
 func begin_attempt() -> void:
 	encounter.reset()
+	attempt_started.emit(encounter.attempt, encounter.last_order.duplicate())
 	state = State.FIGHT
 	finished = false
 	effects.clear()
@@ -98,6 +116,8 @@ func begin_attempt() -> void:
 	no_match_flash = 0.0
 	last_learned = {}
 	last_learned_timer = 0.0
+	hurt_flash = 0.0
+	hit_cooldown = 0.0
 	queue_redraw()
 
 
@@ -107,7 +127,7 @@ func start_fight() -> void:
 
 ## Retry after a defeat (or from the pause menu): campaign progress, earlier
 ## rewards and the journal are untouched; the encounter restarts at the easy
-## stage with the same deck.
+## stage with the same words in a changed order.
 func retry() -> void:
 	skin.audio.sfx_back()
 	begin_attempt()
@@ -275,6 +295,10 @@ func _consume(events: Array) -> void:
 	for e in events:
 		var ev: Dictionary = e
 		match String(ev["kind"]):
+			"shot":
+				# One quiet tick per letter; the shot itself is drawn from
+				# encounter.attacks. Selection and completion add their own cue.
+				pass
 			"select":
 				skin.audio.sfx_select()
 			"advance":
@@ -296,10 +320,16 @@ func _consume(events: Array) -> void:
 				_effect("word_burst", Vector2(float(ev["x"]), float(ev["y"])), "7ef2c8", 0.45, String(ev["text"]).to_upper())
 				word_learned.emit(String(ev["id"]))
 			"attack_hit":
-				skin.audio.sfx_counter_hit()
-				boss_flash = 1.0
-				shake = maxf(shake, 3.0)
-				_effect("burst", _boss_point(), "e5c04a", 0.5)
+				# Rate-limited so a fast typist gets a steady patter, not a
+				# wall of overlapping flashes and sounds.
+				var credit := bool(ev.get("credit", true))
+				_effect("spark", _boss_point() + Vector2(randf_range(-8.0, 8.0), randf_range(-6.0, 6.0)), "f2d35a" if credit else "8a8494", 0.25)
+				if hit_cooldown <= 0.0:
+					hit_cooldown = 0.12
+					if credit:
+						skin.audio.sfx_counter_hit()
+						boss_flash = maxf(boss_flash, 0.6)
+						shake = maxf(shake, 1.5)
 			"spawn":
 				spawn_pulse = 0.5
 			"miss":
@@ -335,6 +365,7 @@ func _update_effects(dt: float) -> void:
 	no_match_flash = maxf(0.0, no_match_flash - dt)
 	last_learned_timer = maxf(0.0, last_learned_timer - dt)
 	hurt_flash = maxf(0.0, hurt_flash - dt)
+	hit_cooldown = maxf(0.0, hit_cooldown - dt)
 
 
 # ---------------------------------------------------------------- geometry
@@ -399,7 +430,7 @@ func _draw_backdrop() -> void:
 	rng.seed = 7711
 	for i in 26:
 		var x := rng.randf_range(0.0, VW)
-		if x > 120.0 and x < 520.0:
+		if x > _field_left() - 10.0 and x < _field_right() + 10.0:
 			continue
 		var h := rng.randf_range(60.0, 150.0)
 		draw_rect(Rect2(round(x), 300 - h, 4, h), Color("1c1820"), true)
@@ -502,10 +533,23 @@ func _glow(center: Vector2, radius: float, color: Color) -> void:
 		draw_rect(Rect2(center.x - r, center.y - r * 0.6, r * 2.0, maxf(1.0, r * 1.2)), Color(color.r, color.g, color.b, (1.0 - f) * 0.14 * color.a), true)
 
 
+## The word field spans the lanes plus room for the longest label.
+func _field_left() -> float:
+	var lanes: Array = _arena().get("lanes_x", [320]) as Array
+	return float(lanes[0]) - 58.0
+
+
+func _field_right() -> float:
+	var lanes: Array = _arena().get("lanes_x", [320]) as Array
+	return float(lanes[lanes.size() - 1]) + 58.0
+
+
 ## A calm, darkened band behind the falling words and a visible danger line.
 func _draw_lane_field() -> void:
 	var top := _spawn_y() - 10.0
-	draw_rect(Rect2(110, top, 420, _danger_y() - top), Color(0.04, 0.03, 0.06, 0.55), true)
+	var fl := _field_left()
+	var fr := _field_right()
+	draw_rect(Rect2(fl, top, fr - fl, _danger_y() - top), Color(0.04, 0.03, 0.06, 0.55), true)
 	# Faint lane guides.
 	for x in _arena().get("lanes_x", []) as Array:
 		var lx := float(x)
@@ -516,13 +560,13 @@ func _draw_lane_field() -> void:
 	# Danger line: hazard dashes and a label.
 	var dy := _danger_y()
 	var pulse := 0.6 + 0.4 * sin(time * 5.0)
-	var x2 := 110.0
+	var x2 := fl
 	var n := 0
-	while x2 < 530.0:
+	while x2 < fr:
 		draw_rect(Rect2(x2, dy, 8, 2), Color(SFPalette.RED.r, SFPalette.RED.g, SFPalette.RED.b, (0.55 + 0.4 * pulse) if n % 2 == 0 else 0.25), true)
 		x2 += 8.0
 		n += 1
-	skin.text(self, Vector2(112, dy + 4), "DANGER LINE", Color(SFPalette.RED.r, SFPalette.RED.g, SFPalette.RED.b, 0.8))
+	skin.text(self, Vector2(fl + 2, dy + 4), "DANGER LINE", Color(SFPalette.RED.r, SFPalette.RED.g, SFPalette.RED.b, 0.8))
 
 
 func _draw_words() -> void:
@@ -556,6 +600,9 @@ func _draw_words() -> void:
 		skin.text(self, Vector2(x0 + skin.font.text_width(text.substr(0, typed)), box.position.y + 3), text.substr(typed), SFPalette.PAPER)
 
 
+## One small bolt per correct letter, from Nick's console to the boss's skull.
+## A shot whose letter position was already credited flies dimmer: it is still
+## visible feedback, but it deals no damage.
 func _draw_attacks() -> void:
 	var from := _nick_point() + Vector2(0, -16)
 	var to := _boss_point()
@@ -563,10 +610,11 @@ func _draw_attacks() -> void:
 		var attack: Dictionary = a
 		var t := clampf(float(attack["t"]) / maxf(0.01, float(attack["flight"])), 0.0, 1.0)
 		var head := from.lerp(to, t)
-		var tail := from.lerp(to, maxf(0.0, t - 0.18))
-		draw_line(tail, head, Color(0.49, 0.95, 0.78, 0.9), 4.0)
-		draw_line(tail, head, SFPalette.PAPER, 1.0)
-		draw_rect(Rect2(head - Vector2(3, 3), Vector2(6, 6)), Color(0.8, 1.0, 0.92, 0.9), true)
+		var tail := from.lerp(to, maxf(0.0, t - 0.08))
+		var credit := bool(attack.get("credit", true))
+		var core := Color(0.49, 0.95, 0.78, 0.95) if credit else Color(0.6, 0.62, 0.7, 0.6)
+		draw_line(tail, head, core, 2.0)
+		draw_rect(Rect2(round(head.x) - 1, round(head.y) - 1, 3, 3), SFPalette.PAPER if credit else core, true)
 
 
 func _draw_nick() -> void:
@@ -601,6 +649,11 @@ func _draw_effects() -> void:
 				for i in 3:
 					var r := 10.0 + f * (40.0 + float(i) * 14.0)
 					_ring(at, r, Color(c.r, c.g, c.b, (1.0 - f) * (0.5 - float(i) * 0.12)))
+			"spark":
+				# The impact point: a small cross that fades on the skull.
+				var r := 2.0 + f * 5.0
+				draw_rect(Rect2(at.x - r, at.y, r * 2.0, 1), Color(c.r, c.g, c.b, 1.0 - f), true)
+				draw_rect(Rect2(at.x, at.y - r, 1, r * 2.0), Color(c.r, c.g, c.b, 1.0 - f), true)
 			"hurt":
 				draw_rect(Rect2(at.x - 20, at.y - 3, 40, 6), Color(c.r, c.g, c.b, (1.0 - f) * 0.6), true)
 				skin.text_c(self, at.x, at.y - 16.0 - f * 10.0, String(entry["text"]), Color(1.0, 0.8, 0.8, 1.0 - f))
@@ -623,10 +676,7 @@ func _draw_hud() -> void:
 	var bar_x := 196.0
 	var bar_w := 250.0
 	skin.bar(self, Vector2(bar_x, 8), Vector2(bar_w, 10), encounter.health_fraction(), _visual("ember", SFPalette.RUST_LIGHT), SFPalette.INK)
-	# One tick per required word, so the bar visibly equals the deck.
 	var n: int = encounter.deck.size()
-	for i in range(1, n):
-		draw_rect(Rect2(round(bar_x + bar_w * float(i) / float(n)), 8, 1, 10), Color(0, 0, 0, 0.35), true)
 	skin.text_r(self, VW - 10, 5, "WORDS %d / %d" % [encounter.completed_count(), n], SFPalette.PAPER)
 	var stages: Array = (typing_data.get("deck", {}) as Dictionary).get("stages", []) as Array
 	var si: int = encounter.current_stage()
@@ -647,33 +697,32 @@ func _draw_hud() -> void:
 	skin.text(self, Vector2(14, 304), "ESC  PAUSE / JOURNAL", SFPalette.PAPER_DIM)
 
 
-## The compact learning panel: the selected word with its typed prefix and its
-## short meaning, a clear reset notice, and brief success feedback.
+## The learning panel, bottom right. It always shows the selected word's own
+## definition, keeps it through a typing reset, and falls back to a neutral
+## prompt when nothing is selected, so it never describes a word that has
+## completed or fallen.
 func _draw_learning_panel() -> void:
-	var r := Rect2(352, 290, 280, 62)
+	var r := PANEL
 	draw_rect(r, Color(0.03, 0.05, 0.06, 0.94), true)
+	draw_rect(r, SFPalette.RED if reset_flash > 0.0 else SFPalette.CYAN_DIM, false, 1.0)
 	var target: Dictionary = encounter.target_word()
-	var accent := SFPalette.CYAN_DIM
-	if reset_flash > 0.0:
-		accent = SFPalette.RED
-	draw_rect(r, accent, false, 1.0)
 	var x := r.position.x + 8.0
-	if not target.is_empty():
-		var text := String(target["text"])
-		var typed: int = encounter.typing.progress
-		skin.text(self, Vector2(x, r.position.y + 6), text.substr(0, typed).to_upper(), SFPalette.GOLD, 2)
-		skin.text(self, Vector2(x + skin.font.text_width(text.substr(0, typed).to_upper(), 2), r.position.y + 6), text.substr(typed).to_upper(), SFPalette.PAPER, 2)
-		var entry: Dictionary = vocab.entry(String(target["id"])) if vocab != null else {}
-		skin.wrap(self, Vector2(x, r.position.y + 26), r.size.x - 16, String(entry.get("definition", "")), SFPalette.PAPER_DIM, 1, 2 if reset_flash > 0.0 else 3)
-	elif last_learned_timer > 0.0 and not last_learned.is_empty():
-		skin.text(self, Vector2(x, r.position.y + 6), "LEARNED: " + String(last_learned.get("text", "")).to_upper(), SFPalette.GREEN_OK)
-		skin.wrap(self, Vector2(x, r.position.y + 18), r.size.x - 16, String(last_learned.get("definition", "")), SFPalette.PAPER_DIM, 1, 3)
-		skin.text_r(self, r.end.x - 8, r.end.y - 11, "SAVED TO JOURNAL", SFPalette.CYAN_DIM)
-	else:
+	var w := r.size.x - 16.0
+	if target.is_empty():
 		skin.text(self, Vector2(x, r.position.y + 8), "TYPE THE FIRST LETTER", SFPalette.PAPER)
 		skin.text(self, Vector2(x, r.position.y + 20), "OF A FALLING WORD TO SELECT IT.", SFPalette.PAPER_DIM)
 		if no_match_flash > 0.0:
 			skin.text(self, Vector2(x, r.position.y + 38), "NO WORD STARTS WITH '%s'" % no_match_letter.to_upper(), SFPalette.GOLD)
+		elif last_learned_timer > 0.0 and not last_learned.is_empty():
+			skin.text(self, Vector2(x, r.position.y + 38), "+ JOURNAL: " + String(last_learned.get("text", "")).to_upper(), SFPalette.GREEN_OK)
+		return
+	var text := String(target["text"]).to_upper()
+	var typed: int = encounter.typing.progress
+	skin.text(self, Vector2(x, r.position.y + 6), text.substr(0, typed), SFPalette.GOLD, 2)
+	skin.text(self, Vector2(x + skin.font.text_width(text.substr(0, typed), 2), r.position.y + 6), text.substr(typed), SFPalette.PAPER, 2)
+	var entry: Dictionary = vocab.entry(String(target["id"])) if vocab != null else {}
+	# Three lines of definition; two while the reset notice takes the bottom line.
+	skin.wrap(self, Vector2(x, r.position.y + 26), w, String(entry.get("definition", "")), SFPalette.PAPER_DIM, 1, 2 if reset_flash > 0.0 else 3)
 	if reset_flash > 0.0:
 		# Inside the panel, on its bottom line, so it never covers the field.
 		var b := Rect2(r.position.x + 1, r.end.y - 13, r.size.x - 2, 12)
@@ -693,12 +742,12 @@ func _draw_overlay() -> void:
 					"The Sky Remnant has dispersed. %d words typed, %d missed and retried." % [encounter.deck.size(), encounter.misses],
 					SFPalette.PAPER, 1, 3)
 				skin.text_c(self, 320, 196, "ENTER  CONTINUE", SFPalette.GOLD)
-				skin.text_c(self, 320, 214, "THE SHIELD EMITTER IS RECOVERED ON CONTINUE", SFPalette.PAPER_DIM)
+				skin.text_c(self, 320, 214, "THE SHIELD EMITTER FALLS TO THE SLOPE", SFPalette.PAPER_DIM)
 		State.DEFEAT:
 			ui.modal(self, Rect2(150, 100, 340, 160), SFPalette.RED)
 			skin.text_c(self, 320, 114, "NICK IS DOWN", SFPalette.RED, 2)
 			skin.wrap(self, Vector2(172, 142), 296,
-				"The fight restarts from the easy words with the same deck. Your journal, salvage and earlier components are kept.",
+				"The fight restarts from the easy words: the same words in a new order. Your journal, salvage and earlier components are kept.",
 				SFPalette.PAPER, 1, 4)
 			skin.text_c(self, 320, 204, "ENTER / R  RETRY", SFPalette.GOLD)
 			skin.text_c(self, 320, 224, "ESC  PAUSE MENU", SFPalette.PAPER_DIM)

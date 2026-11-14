@@ -55,7 +55,8 @@ godot --path . -- --qa
 - One file: `user://star_fall_save.json`
   (`%APPDATA%\Godot\app_userdata\STAR FALL\star_fall_save.json` on Windows).
 - Written at every checkpoint beat and on demand from the pause menu. Schema
-  **version 4** adds the frozen finale snapshot; versions 1-3 still load.
+  **version 5** adds the frozen finale snapshot on top of version 4's installed
+  components and typing attempt history; versions 1-4 still load.
 - Opening the main menu never writes or deletes a save.
 - A corrupt, empty or newer-version save is reported and left untouched.
 - Continue is enabled only when the file parses and validates.
@@ -117,16 +118,17 @@ Headless, on this machine, with Godot 4.0 stable:
 
 | Suite | Result |
 |---|---|
-| `test_parse.gd` | 45 scripts, 0 failures |
+| `test_parse.gd` | 47 scripts, 0 failures |
 | `test_logic.gd` | 149 checks, 0 failures |
-| `test_flow.gd` | 380 checks, 0 failures |
+| `test_flow.gd` | 415 checks, 0 failures |
 | `test_encounter.gd` | 210 checks, 0 failures |
-| `test_phase3.gd` | 172 checks, 0 failures |
-| `test_phase4.gd` | 144 checks, 0 failures |
+| `test_phase3.gd` | 235 checks, 0 failures |
+| `test_phase4.gd` | 146 checks, 0 failures |
+| `test_debug_jump.gd` | 55 checks, 0 failures |
 
-Presentation: `tests/star_fall/capture.gd` rendered the Phase 4 screens
-(shots 35-45) on a real display, and they were inspected by eye for layout,
-overflow and readability.
+Presentation: `tests/star_fall/capture.gd` rendered 48 screens, including the
+Phase 4 finale (shots 46-56), on a real display, and they were inspected by eye
+for layout, overflow and readability.
 
 ### What remains unverified
 

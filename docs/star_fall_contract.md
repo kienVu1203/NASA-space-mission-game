@@ -656,6 +656,12 @@ fights are *fun* at the intended difficulty. Those require playing it.
   the Green City memory, receive the Forgotten City coordinates.
 - Versioned save at every beat; Continue restores the campaign faithfully and
   a corrupt save is reported rather than overwritten.
+- Audio: dual-layer audio architecture with 43 high-fidelity 16-bit PCM WAV assets
+  covering polyphonic SFX, character dialogue blips, environmental soundscapes,
+  7 full background music themes (Title, Earth, Construction, Flight, Ruin, Memory,
+  Checkpoint), and an instant fallback procedural synthesizer (`AudioStreamGenerator`).
+- Transitions: cinematic scene transitions (smooth black alpha fades, white flash
+  catastrophic rift impact, and retro shutter wipes) accompanied by spatial transition audio.
 - Headless test suites (parse, logic, flow) and a screenshot tool.
 
 ### Phase 2 (this build)

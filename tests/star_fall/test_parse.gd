@@ -40,7 +40,9 @@ const SCRIPTS := [
 var fails: int = 0
 
 
-func _init() -> void:
+# Autoloads (Events, GameState) are only registered once the tree is running,
+# so compile the scripts on the first frame instead of in _init().
+func _process(_delta: float) -> bool:
 	for path in SCRIPTS:
 		var script = load(String(path))
 		# can_instantiate() is false for a script that failed to compile.
@@ -53,3 +55,4 @@ func _init() -> void:
 	print("")
 	print("RESULT: %d script(s), %d failure(s)" % [SCRIPTS.size(), fails])
 	quit(1 if fails > 0 else 0)
+	return true

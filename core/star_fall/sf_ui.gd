@@ -19,6 +19,8 @@ func notify(text: String, tone: String = "info", seconds: float = 2.2) -> void:
 	toast_text = text
 	toast_tone = tone
 	toast_timer = seconds
+	if skin != null and skin.audio != null and skin.audio.has_method("sfx_toast"):
+		skin.audio.sfx_toast()
 
 
 ## Drops any pending toast. Called when the screen changes, so a notice from

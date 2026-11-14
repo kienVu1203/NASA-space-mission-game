@@ -59,8 +59,17 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		_handle_key(event.keycode)
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_handle_click(event.position)
+	elif event is InputEventMouseMotion:
+		_handle_mouse_motion(event.position)
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			_handle_click(event.position)
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_handle_right_click(event.position)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_handle_wheel(-1)
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_handle_wheel(1)
 
 
 func _handle_key(key: int) -> void:
@@ -88,16 +97,172 @@ func _handle_key(key: int) -> void:
 			_logs_key(key)
 
 
-func _handle_click(pos: Vector2) -> void:
+func _to_virtual_pos(pos: Vector2) -> Vector2:
 	var vp := get_viewport_rect().size
 	var scale: float = min(vp.x / VW, vp.y / VH)
-	var origin := (vp - Vector2(VW, VH) * scale) * 0.5
-	var p := (pos - origin) / scale
-	if screen == Screen.MISSION:
-		pass
-	elif screen == Screen.TITLE:
-		_go(Screen.STATION)
-		audio.sfx_blip()
+	if scale >= 2.0:
+		scale = floor(scale)
+	var origin := ((vp - Vector2(VW, VH) * scale) * 0.5).floor()
+	return (pos - origin) / maxf(scale, 0.001)
+
+
+func _handle_mouse_motion(pos: Vector2) -> void:
+	var p := _to_virtual_pos(pos)
+	match screen:
+		Screen.STATION:
+			for i in state.upgrade_defs.size():
+				var row := Rect2(186, 52 + i * 33, 182, 30)
+				if row.has_point(p):
+					if station_index != i:
+						station_index = i
+						audio.sfx_select()
+					return
+			var depart := Rect2(8, 196, VW - 16, 22)
+			if depart.has_point(p) and station_index != state.upgrade_defs.size():
+				station_index = state.upgrade_defs.size()
+				audio.sfx_select()
+		Screen.MAP:
+			var list_x: float = 196.0
+			for i in 3:
+				var box := Rect2(list_x, 30 + i * 57, VW - list_x - 8, 52)
+				if box.has_point(p) and map_index != i:
+					map_index = i
+					audio.sfx_select()
+					return
+		Screen.FINALE:
+			for i in 3:
+				var row := Rect2(34, 135 + i * 30, VW - 68, 27)
+				if row.has_point(p) and finale_index != i:
+					finale_index = i
+					audio.sfx_select()
+					return
+		Screen.MISSION:
+			if mission != null:
+				mission.set_mouse_virtual_pos(p)
+
+
+func _handle_click(pos: Vector2) -> void:
+	var p := _to_virtual_pos(pos)
+	match screen:
+		Screen.TITLE:
+			_go(Screen.STATION)
+			audio.sfx_blip()
+		Screen.STATION:
+			for i in state.upgrade_defs.size():
+				var row := Rect2(186, 52 + i * 33, 182, 30)
+				if row.has_point(p):
+					station_index = i
+					_station_activate(_station_options())
+					return
+			var depart := Rect2(8, 196, VW - 16, 22)
+			if depart.has_point(p):
+				station_index = state.upgrade_defs.size()
+				_station_activate(_station_options())
+				return
+			var archive_box := Rect2(378, 34, 94, 46)
+			if archive_box.has_point(p):
+				_open_logs()
+		Screen.MAP:
+			var list_x: float = 196.0
+			for i in 3:
+				var box := Rect2(list_x, 30 + i * 57, VW - list_x - 8, 52)
+				if box.has_point(p):
+					map_index = i
+					_start_mission()
+					return
+			var earth_c := Vector2(84, 136)
+			for i in 3:
+				var ang: float = -0.9 + float(i) * 0.75
+				var rx2: float = 80.0 + i * 52.0
+				var ry2: float = 30.0 + i * 20.0
+				var marker: Vector2 = earth_c + Vector2(cos(ang) * rx2, sin(ang) * ry2 * 0.55)
+				if p.distance_to(marker) <= 14.0:
+					if map_index == i:
+						_start_mission()
+					else:
+						map_index = i
+						audio.sfx_select()
+					return
+			if state.finale_available() and Rect2(VW - 190, VH - 26, 182, 20).has_point(p):
+				audio.sfx_blip()
+				_go(Screen.FINALE)
+		Screen.MISSION:
+			if mission == null:
+				return
+			mission.set_mouse_virtual_pos(p)
+			if paused:
+				var box := Rect2(VW * 0.5 - 96, VH * 0.5 - 34, 192, 68)
+				if Rect2(box.position.x, box.position.y + 20, box.size.x, 14).has_point(p):
+					paused = false
+					audio.sfx_blip()
+				elif Rect2(box.position.x, box.position.y + 34, box.size.x, 14).has_point(p):
+					mission = null
+					_go(Screen.MAP)
+				elif Rect2(box.position.x, box.position.y + 46, box.size.x, 14).has_point(p):
+					var muted: bool = audio.toggle_muted()
+					_notify("AUDIO MUTED" if muted else "AUDIO ON", Pal.MID)
+				return
+			if p.y >= VH - 26.0 and (mission.ship.disabled or mission.can_dock()):
+				_mission_key(KEY_E)
+		Screen.REPORT:
+			if Rect2(VW * 0.5 - 80, VH - 32, 75, 16).has_point(p):
+				_open_logs()
+			else:
+				_report_key(KEY_ENTER)
+		Screen.FINALE:
+			for i in 3:
+				var row := Rect2(34, 135 + i * 30, VW - 68, 27)
+				if row.has_point(p):
+					finale_index = i
+					_finale_key(KEY_ENTER)
+					return
+		Screen.ENDING:
+			_ending_key(KEY_ENTER)
+		Screen.LOGS:
+			var list_box := Rect2(8, 26, 148, VH - 44)
+			if list_box.has_point(p) and not shown_logs.is_empty():
+				var visible_rows := 21
+				var first: int = clampi(logs_index - visible_rows / 2, 0, maxi(0, shown_logs.size() - visible_rows))
+				var row_idx: int = first + int((p.y - (list_box.position.y + 3.0)) / 10.0)
+				if row_idx >= 0 and row_idx < shown_logs.size():
+					logs_index = row_idx
+					audio.sfx_select()
+			elif p.y >= VH - 20.0:
+				_logs_key(KEY_ESCAPE)
+
+
+func _handle_right_click(pos: Vector2) -> void:
+	var p := _to_virtual_pos(pos)
+	match screen:
+		Screen.STATION:
+			_station_key(KEY_ESCAPE)
+		Screen.MAP:
+			_map_key(KEY_ESCAPE)
+		Screen.MISSION:
+			if mission != null:
+				mission.set_mouse_virtual_pos(p)
+				if paused:
+					paused = false
+					audio.sfx_back()
+		Screen.REPORT:
+			_report_key(KEY_ESCAPE)
+		Screen.FINALE:
+			_finale_key(KEY_ESCAPE)
+		Screen.LOGS:
+			_logs_key(KEY_ESCAPE)
+
+
+func _handle_wheel(dir: int) -> void:
+	var key := KEY_DOWN if dir > 0 else KEY_UP
+	match screen:
+		Screen.STATION:
+			_station_key(key)
+		Screen.MAP:
+			_map_key(key)
+		Screen.FINALE:
+			_finale_key(key)
+		Screen.LOGS:
+			_logs_key(key)
 
 
 func _notify(msg: String, color: Color = Pal.PAPER) -> void:

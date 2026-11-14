@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "_note": "Phase 3 typing encounter tuning (Sky Remnant at the Dawn Tower). Times are seconds, positions are 640x360 canvas pixels, health is health points. The deck is a finite selection from vocabulary.json; boss health is always deck size x damage_per_word. See docs/star_fall_contract.md section 17.",
+  "_note": "Phase 3 typing encounter tuning (Sky Remnant at the Dawn Tower). Times are seconds, positions are 640x360 canvas pixels, health is health points. The deck is a finite selection from vocabulary.json; every correct letter fires one shot; boss health is always (total letters in the deck) x damage_per_letter, and each letter position pays out once per attempt. See docs/star_fall_contract.md section 17.",
   "boss": {
     "id": "sky_remnant",
     "chapter_id": "dawn_tower",
@@ -29,7 +29,7 @@
   "health": {
     "nick_health": 100,
     "miss_damage": 12,
-    "damage_per_word": 10
+    "damage_per_letter": 2
   },
   "attack": {
     "flight_seconds": 0.45

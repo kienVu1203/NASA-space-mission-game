@@ -132,6 +132,7 @@ var _last_world_position: Vector2 = Vector2.ZERO
 var _has_last_world_position: bool = false
 var _last_zone: String = ""
 var pause_open: bool = false
+var debug_jump = null               # scenes/star_fall/debug_jump.gd, debug builds only
 var _transition_busy: bool = false
 
 
@@ -171,6 +172,14 @@ func _ready() -> void:
 	_transition_node.name = "TransitionOverlay"
 	_transition_node.draw.connect(_draw_transition)
 	_transition_layer.add_child(_transition_node)
+
+	# Developer phase hotkeys (Ctrl+Shift+Alt + key). Debug builds only, so an
+	# exported release never contains them.
+	if OS.is_debug_build():
+		debug_jump = load("res://scenes/star_fall/debug_jump.gd").new()
+		debug_jump.name = "DebugJump"
+		debug_jump.main = self
+		add_child(debug_jump)
 
 	_build_menus()
 	_refresh_save_state()
@@ -361,10 +370,15 @@ func _sync_world_actors() -> void:
 	for pid in [
 		"salvage_plate", "salvage_circuit", "salvage_polymer", "scrap_extra",
 		"salvage_city_scrap", "salvage_city_boards", "salvage_city_frame",
-		"salvage_coast_plate", "salvage_coast_cable"
+		"salvage_coast_plate", "salvage_coast_cable",
+		"salvage_dawn_frame", "salvage_dawn_cells", "salvage_dawn_seal"
 	]:
 		if campaign.is_collected(pid):
 			world.remove_prop(pid)
+	# The shield emitter drop exists in the world only between the Sky
+	# Remnant's defeat and the pickup, across revisits and save/load.
+	if _shield_state() != SFCampaign.REWARD_AVAILABLE:
+		world.remove_prop("dawn_shield_drop")
 	if campaign.has_flag(SFCampaign.FLAG_POWER_REPAIRED):
 		world.set_prop_sprite("power_connection", "junction")
 	world.sync_companion(campaign.has_flag(SFCampaign.FLAG_BILL_ACTIVE))
@@ -775,7 +789,13 @@ func _resume_from_campaign() -> void:
 				_show_dawn_intro()
 		SFCampaign.STAGE_DAWN_BOSS:
 			# Never resumed mid-fight: the pre-boss checkpoint is the resume point.
-			_begin_dawn_boss()
+			# A boss already defeated is never fought again: resume on the slope,
+			# where an uncollected shield is still waiting.
+			if campaign.has_flag(SFCampaign.FLAG_SKY_REMNANT_DEFEATED):
+				campaign.advance_to(SFCampaign.STAGE_DAWN_INTRO)
+				_go(Screen.WORLD)
+			else:
+				_begin_dawn_boss()
 		SFCampaign.STAGE_DAWN_ARCHIVE:
 			_enter_archive_scene(SFCampaign.ARCHIVE_DAWN)
 		SFCampaign.STAGE_RECONSTRUCTION:
@@ -919,6 +939,8 @@ func _on_world_interact(object_id: String, prop) -> void:
 			_open_dialogue(campaign.content.dialogue_lines("dawn_terminal"), "DEFENSE CONSOLE")
 		"dawn_boss_gate":
 			_approach_dawn_gate()
+		"dawn_shield_drop":
+			_collect_shield_drop()
 		_:
 			if object_id.begins_with("salvage") or object_id == "scrap_extra":
 				_collect_salvage(object_id)
@@ -1239,13 +1261,10 @@ func _begin_launch() -> void:
 
 
 func _launch_key(key: int) -> void:
+	# The launch sequence cannot be skipped, in any build: Esc does nothing here.
+	# Only the signal minigame takes input. (Testers jump past it with the
+	# debug phase hotkeys instead; see debug_jump.gd.)
 	match key:
-		KEY_ESCAPE:
-			if DisplayServer.get_name() == "headless":
-				_finish_launch_state()
-				var lines: Array = campaign.content.dialogue_lines("crash")
-				_open_dialogue(lines, "IMPACT", Callable(self, "_on_crash_intro_done"))
-		# The launch sequence cannot be skipped; only the signal minigame takes input.
 		KEY_E, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if launch_phase == LaunchPhase.SIGNAL:
 				_signal_lock()
@@ -1832,7 +1851,13 @@ func _use_dawn_checkpoint() -> void:
 ## memory has been seen, and says so in the fiction.
 func _approach_dawn_gate() -> void:
 	if campaign.has_flag(SFCampaign.FLAG_SKY_REMNANT_DEFEATED):
-		_open_dialogue(["The shield is quiet. The archive inside is already restored."], "DAWN TOWER")
+		if _shield_state() == SFCampaign.REWARD_AVAILABLE:
+			_open_dialogue(["Bill: \"The emitter fell onto the slope just below the gate. It is still glowing. Pick it up first.\""], "DAWN TOWER")
+		elif not campaign.has_flag(SFCampaign.FLAG_DAWN_ARCHIVE_RESTORED):
+			_open_dialogue(["The shield is quiet. The archive inside is waking up."], "DAWN TOWER",
+				Callable(self, "_on_shield_collected_done"))
+		else:
+			_open_dialogue(["The shield is quiet. The archive inside is already restored."], "DAWN TOWER")
 		return
 	if not campaign.has_viewed_memory(SFCampaign.MEMORY_HEALTHY_FOREST):
 		audio.sfx_denied()
@@ -1881,10 +1906,14 @@ func _enter_typing() -> void:
 	var deck: Array = vocab.select_deck(stages, seed_value)
 	typing_duel = SFTypingDuel.new()
 	typing_duel.name = "TypingDuel"
-	typing_duel.setup(skin, ui, typing_data, deck, seed_value, vocab, campaign)
+	# The attempt history makes every attempt's word order differ from the
+	# last, including the first attempt after leaving the tower or reloading.
+	typing_duel.setup(skin, ui, typing_data, deck, seed_value, vocab, campaign,
+		campaign.typing_attempts, campaign.typing_last_order)
 	typing_duel.duel_finished.connect(_on_typing_finished)
 	typing_duel.duel_aborted.connect(_on_typing_aborted)
 	typing_duel.word_learned.connect(_on_word_learned)
+	typing_duel.attempt_started.connect(_on_typing_attempt_started)
 	add_child(typing_duel)
 	typing_duel.begin_attempt()
 	audio.set_ambience("none")
@@ -1898,23 +1927,64 @@ func _on_word_learned(entry_id: String) -> void:
 		_save_quietly()
 
 
-## The typing fight was won. The reward is applied here exactly once.
+func _on_typing_attempt_started(attempt: int, order: Array) -> void:
+	campaign.record_typing_attempt(attempt, order)
+
+
+func _typing_reward_flag() -> String:
+	return String((typing_data.get("boss", {}) as Dictionary).get("reward_flag", SFCampaign.FLAG_SKY_REMNANT_DEFEATED))
+
+
+func _typing_reward_component() -> String:
+	return String((typing_data.get("boss", {}) as Dictionary).get("reward_component", SFCampaign.COMPONENT_SHIELD_EMITTER))
+
+
+func _shield_state() -> String:
+	return campaign.reward_state(_typing_reward_flag(), _typing_reward_component())
+
+
+## The typing fight was won. Only the defeat is recorded here: the shield
+## emitter drops onto the slope and is awarded when Nick picks it up.
 func _on_typing_finished(outcome: String) -> void:
 	if outcome != "victory":
 		return
-	var boss: Dictionary = typing_data.get("boss", {}) as Dictionary
-	var first: bool = campaign.complete_boss(String(boss.get("reward_flag", SFCampaign.FLAG_SKY_REMNANT_DEFEATED)),
-		String(boss.get("reward_component", SFCampaign.COMPONENT_SHIELD_EMITTER)))
-	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_ARCHIVE, SFCampaign.CHAPTER_DAWN)
+	campaign.defeat_boss(_typing_reward_flag())
+	# Back to exploration. Resuming this save lands on the slope with the drop.
+	campaign.advance_to(SFCampaign.STAGE_DAWN_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_INTRO, SFCampaign.CHAPTER_DAWN)
 	_save_quietly()
-	if first:
-		ui.notify("SHIELD EMITTER RECOVERED", "good", 4.0)
 	_open_dialogue(campaign.content.dialogue_lines("dawn_victory"), "SKY REMNANT DISPERSED",
 		Callable(self, "_on_dawn_victory_done"))
 
 
+## The encounter screen (and every shot, word and lock in it) is freed here;
+## Nick walks again on the slope with Bill, the emitter glowing nearby.
 func _on_dawn_victory_done() -> void:
+	zone = "dawn_tower"
+	_go(Screen.WORLD)
+	if _shield_state() == SFCampaign.REWARD_AVAILABLE:
+		ui.notify("The shield emitter fell below the gate. E to collect it.", "info", 4.0)
+
+
+## Picks up the shield emitter. The campaign refuses a second pickup, so the
+## reward is granted exactly once; the world prop is removed on success.
+func _collect_shield_drop() -> void:
+	if not campaign.collect_boss_reward(_typing_reward_flag(), _typing_reward_component()):
+		if world != null:
+			world.remove_prop("dawn_shield_drop")
+		return
+	if world != null:
+		world.remove_prop("dawn_shield_drop")
+	audio.sfx_pickup()
+	ui.notify("SHIELD EMITTER RECOVERED", "good", 4.0)
+	_save_quietly()
+	_open_dialogue(campaign.content.dialogue_lines("shield_collected"), "SHIELD EMITTER",
+		Callable(self, "_on_shield_collected_done"))
+
+
+func _on_shield_collected_done() -> void:
 	campaign.advance_to(SFCampaign.STAGE_DAWN_ARCHIVE)
+	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_ARCHIVE, SFCampaign.CHAPTER_DAWN)
 	_save_quietly()
 	_enter_archive_scene(SFCampaign.ARCHIVE_DAWN)
 

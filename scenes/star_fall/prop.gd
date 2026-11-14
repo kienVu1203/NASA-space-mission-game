@@ -62,9 +62,15 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if highlighted or mouse_hovered or is_exit_gate or prop_id.ends_with("checkpoint"):
+	if highlighted or mouse_hovered or is_exit_gate or prop_id.ends_with("checkpoint") or is_pickup():
 		_pulse += delta
 	queue_redraw()
+
+
+## A recovered-component drop: it hovers a little and glows so it reads as
+## something to pick up rather than scenery.
+func is_pickup() -> bool:
+	return prop_id.ends_with("_drop")
 
 
 func configure_gate_state(unlocked: bool, cleared: bool, dest_title: String, subtext: String, next_label: String = "") -> void:
@@ -118,7 +124,15 @@ func _draw() -> void:
 		var h := tex.get_height() + 4
 		draw_rect(Rect2(round(-w * 0.5), round(-h + 2), w, h), glow, false, 1.0)
 
-	draw_texture_rect(tex, Rect2(Vector2(round(-size.x * 0.5), round(-size.y)), size), false)
+	var lift := 0.0
+	if is_pickup():
+		# A slow two-pixel bob over a soft cyan halo; the shadow stays put.
+		lift = round(2.0 + sin(_pulse * 2.6) * 2.0)
+		var a := 0.10 + 0.06 * sin(_pulse * 3.0)
+		for i in 4:
+			var r := 6.0 + float(i) * 3.0
+			draw_rect(Rect2(-r, -size.y * 0.5 - lift - r * 0.6, r * 2.0, r * 1.2), Color(0.37, 0.90, 0.85, a * (1.0 - float(i) * 0.22)), true)
+	draw_texture_rect(tex, Rect2(Vector2(round(-size.x * 0.5), round(-size.y - lift)), size), false)
 
 	if is_exit_gate:
 		_draw_exit_overhead(size)

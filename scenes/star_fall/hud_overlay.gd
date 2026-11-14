@@ -118,6 +118,8 @@ func _objective_text() -> String:
 
 	if campaign.chapter_id == SFCampaign.CHAPTER_DAWN:
 		if campaign.has_flag(SFCampaign.FLAG_SKY_REMNANT_DEFEATED):
+			if not campaign.has_component(SFCampaign.COMPONENT_SHIELD_EMITTER):
+				return "Collect the shield emitter below the gate [E]"
 			return "Restore the Dawn Project archive"
 		if not campaign.has_viewed_memory(SFCampaign.MEMORY_HEALTHY_FOREST):
 			return "View the survey projector on the boardwalk"
@@ -128,6 +130,8 @@ func _objective_text() -> String:
 	if campaign.is_ready_for_final_assembly():
 		return "Ready for final assembly"
 	if campaign.has_flag(SFCampaign.FLAG_WORKSHOP_UNLOCKED):
+		if not campaign.all_required_installed():
+			return "Install the recovered parts at the wreck [E]"
 		return "Rebuild the VELA at the wreck [E]"
 	if not campaign.has_flag(SFCampaign.FLAG_VELA_INSPECTED):
 		return "Inspect the wreck [E]"

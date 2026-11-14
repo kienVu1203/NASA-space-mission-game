@@ -32,6 +32,7 @@ const SCRIPTS := [
 	"res://core/star_fall/sf_typing_encounter.gd",
 	"res://core/star_fall/sf_return_sim.gd",
 	"res://core/star_fall/sf_reconstruction.gd",
+	"res://core/star_fall/sf_debug_presets.gd",
 	"res://scenes/star_fall/player.gd",
 	"res://scenes/star_fall/bill_companion.gd",
 	"res://scenes/star_fall/prop.gd",
@@ -43,6 +44,7 @@ const SCRIPTS := [
 	"res://scenes/star_fall/progression_screen.gd",
 	"res://scenes/star_fall/typing_duel.gd",
 	"res://scenes/star_fall/reconstruction_screen.gd",
+	"res://scenes/star_fall/debug_jump.gd",
 	"res://scenes/star_fall/main.gd",
 ]
 

@@ -128,7 +128,8 @@ func entries_for_band(band: String) -> Array:
 ## Builds one attempt's deck. Each stage draws `count` distinct entries from its
 ## band with a seeded shuffle, preferring unused first letters and categories so
 ## a deck is varied, then orders the stage from shorter to longer words. The
-## result is deterministic for a seed and never repeats an entry.
+## result is deterministic for a seed and never repeats an entry. The play
+## order of each attempt then comes from order_for_attempt().
 ##
 ## Returns Array of {"id", "text", "stage", "index"} in play order.
 func select_deck(stages: Array, seed_value: int) -> Array:
@@ -171,6 +172,59 @@ func select_deck(stages: Array, seed_value: int) -> Array:
 				"index": deck.size(),
 			})
 	return deck
+
+
+## One attempt's play order for an already selected deck. Entries are shuffled
+## only inside their own stage, so the easy-to-hard band progression is kept
+## and advanced words can never open the fight. The same ids are returned, each
+## once, re-indexed by play position.
+##
+## If the shuffle reproduces `previous_ids` exactly, the first stage with more
+## than one entry is rotated by one place: a bounded fallback (no reshuffle
+## loop) that always yields a different order whenever one exists.
+static func order_for_attempt(deck: Array, seed_value: int, previous_ids: Array = []) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var stage_ids: Array = []
+	var groups: Dictionary = {}
+	for e in deck:
+		var stage := int((e as Dictionary)["stage"])
+		if not groups.has(stage):
+			groups[stage] = []
+			stage_ids.append(stage)
+		(groups[stage] as Array).append(e)
+	stage_ids.sort()
+	for s in stage_ids:
+		_shuffle(groups[s] as Array, rng)
+	if _flatten_ids(groups, stage_ids) == previous_ids:
+		for s in stage_ids:
+			var g: Array = groups[s]
+			if g.size() > 1:
+				g.push_back(g.pop_front())
+				break
+	var out: Array = []
+	for s in stage_ids:
+		for e in groups[s] as Array:
+			var item: Dictionary = (e as Dictionary).duplicate()
+			item["index"] = out.size()
+			out.append(item)
+	return out
+
+
+static func _flatten_ids(groups: Dictionary, stage_ids: Array) -> Array:
+	var ids: Array = []
+	for s in stage_ids:
+		for e in groups[s] as Array:
+			ids.append(String((e as Dictionary)["id"]))
+	return ids
+
+
+## The ids of a deck in play order, for order comparisons and persistence.
+static func deck_ids(deck: Array) -> Array:
+	var ids: Array = []
+	for e in deck:
+		ids.append(String((e as Dictionary)["id"]))
+	return ids
 
 
 func _shorter_first(a: Dictionary, b: Dictionary) -> bool:

@@ -161,6 +161,8 @@ func build_spec(recovered_ids: Array) -> Dictionary:
 	}
 
 
+## `recovered_ids` are the components fitted to the VELA: the workshop passes
+## the installed list, so an uninstalled part counts as missing.
 func simulate(recovered_ids: Array, seed_value: int) -> Dictionary:
 	return SFReturnSim.simulate(build_spec(recovered_ids), data, seed_value)
 
@@ -218,6 +220,8 @@ func commit(campaign, report: Dictionary) -> Dictionary:
 	for id in SFReturnSim.REQUIRED_COMPONENTS:
 		if not campaign.has_component(String(id)):
 			return {"ok": false, "message": "Missing recovered component: %s." % String(id).replace("_", " ")}
+		if not campaign.is_component_installed(String(id)):
+			return {"ok": false, "message": "Install the %s on the VELA first." % String(id).replace("_", " ")}
 	if fabrication_units() > fabrication_capacity():
 		return {"ok": false, "message": "The design needs %d fabrication units; the workshop has %d." % [fabrication_units(), fabrication_capacity()]}
 	var short := shortfall(campaign)

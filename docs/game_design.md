@@ -40,7 +40,7 @@ Phase 3 (shipped):
   projector holding a memory of the healthy forest, a boardwalk checkpoint, a
   defense console and salvage.
 - **Sky Remnant**: a typing battle against a smog-born guardian. Environmental
-  vocabulary falls from the boss; typing a word fires a pulse back. Reward:
+  vocabulary falls from the boss; every correct letter fires a shot back. Reward:
   `shield_emitter`.
 - **Vocabulary journal**: every word typed is kept with its meaning, readable in
   the paused fight and from the exploration pause menu.
@@ -134,12 +134,12 @@ signatures. The game says this is how the facility was built, not how real
 machines work.
 
 **The loop.** The Sky Remnant sheds words that fall toward a red danger line.
-Typing a word's first letter selects it; finishing it fires one pulse, which
+Typing a word's first letter selects it; every correct letter fires one shot, which
 damages the boss once when it lands. A wrong letter only restarts that word,
 with a clear notice and no damage. A word that reaches the line costs health
 and returns to the queue a few seconds later, so nothing required is ever lost.
 
-**Library versus deck.** The library has 199 entries; one fight uses a
+**Library versus deck.** The library has 203 entries; one fight uses a
 30-word deck in four stages from familiar to advanced. Boss health is exactly
 30 pulses, so the health bar is the deck: the boss falls when the last word
 lands, never earlier, and the fight can never stall with every word done.

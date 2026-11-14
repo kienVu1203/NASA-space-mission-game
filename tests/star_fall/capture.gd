@@ -48,8 +48,10 @@ var plan: Array = [
 	{"name": "29_sky_remnant", "setup": "_setup_sky_remnant", "wait": 30},
 	{"name": "30_typing_reset", "setup": "_setup_typing_reset", "wait": 4},
 	{"name": "31_typing_journal", "setup": "_setup_typing_journal", "wait": 6},
+	{"name": "35_shield_drop", "setup": "_setup_shield_drop", "wait": 20},
 	{"name": "32_dawn_archive", "setup": "_setup_dawn_archive", "wait": 20},
 	{"name": "33_workshop", "setup": "_setup_workshop", "wait": 10},
+	{"name": "36_workshop_fitted", "setup": "_setup_workshop_fitted", "wait": 12},
 	{"name": "34_ready_summary", "setup": "_setup_ready_summary", "wait": 10},
 ]
 var hold: int = 0
@@ -441,6 +443,18 @@ func _setup_typing_journal() -> void:
 		duel.handle_key(KEY_ENTER)
 
 
+func _setup_shield_drop() -> void:
+	_phase3_campaign()
+	main.campaign.defeat_boss("sky_remnant_defeated")
+	main.campaign.advance_to(main.campaign.STAGE_DAWN_INTRO)
+	main.campaign.set_flag(main.campaign.FLAG_DAWN_ENTERED)
+	main.zone = "dawn_tower"
+	_clear_dialogue()
+	main._go(main.Screen.WORLD)
+	if main.world != null:
+		main.world.set_player_position(Vector2(392, 168))
+
+
 func _setup_dawn_archive() -> void:
 	_phase3_campaign()
 	main.campaign.complete_boss("sky_remnant_defeated", "shield_emitter")
@@ -452,7 +466,10 @@ func _setup_dawn_archive() -> void:
 
 func _setup_workshop() -> void:
 	_phase3_campaign()
-	main.campaign.complete_boss("sky_remnant_defeated", "shield_emitter")
+	main.campaign.defeat_boss("sky_remnant_defeated")
+	main.campaign.collect_boss_reward("sky_remnant_defeated", "shield_emitter")
+	main.campaign.install_component("navigation_chip")
+	main.campaign.install_component("power_core")
 	main.campaign.complete_dawn_tower()
 	main.campaign.advance_to(main.campaign.STAGE_RECONSTRUCTION)
 	main.zone = "crash_site"
@@ -465,13 +482,25 @@ func _setup_workshop() -> void:
 		ws.workshop.set_choice("protection", "shield_amplifier")
 		ws.workshop.set_fuel(float(ws.workshop.simulate(main.campaign.recovered_component_ids(), 1)["totals"]["propellant_needed_kg"]))
 		ws._design_changed()
-		ws.row = 2
+		ws.run_simulation()
+		# Previewing the shield's socket before installing it.
+		ws.row = 0
+		ws.tray_index = 2
+
+
+func _setup_workshop_fitted() -> void:
+	var ws = main.workshop_screen
+	if ws != null:
+		ws.install("shield_emitter")
+		ws.row = 1
 		ws.run_simulation()
 
 
 func _setup_ready_summary() -> void:
 	var ws = main.workshop_screen
 	if ws != null:
+		for id in ["navigation_chip", "power_core", "shield_emitter"]:
+			main.campaign.install_component(String(id))
 		ws.scavenge()
 		main.campaign.add_material("circuitry", 6)
 		main.campaign.add_material("polymer", 2)

@@ -1,0 +1,26 @@
+{
+  "base": {
+    "fuel": 170.0,
+    "power": 120.0,
+    "storage": 40.0,
+    "beam_radius": 58.0,
+    "dry_mass": 18.0,
+    "accel": 265.0,
+    "max_speed": 330.0,
+    "drag": 0.2,
+    "fuel_burn": 1.5,
+    "beam_drain": 2.2,
+    "passive_power": 0.08,
+    "pickup_radius": 14.0,
+    "beam_pull": 560.0,
+    "start_budget": 110.0
+  },
+  "world": {
+    "width": 2400.0,
+    "height": 1800.0,
+    "dock_radius": 76.0
+  },
+  "mass_factor": 46.0,
+  "impact_power_loss": 4.0,
+  "impact_speed": 95.0
+}

@@ -1,0 +1,86 @@
+{
+  "scrap": {
+    "name": "SCRAP FRAGMENT",
+    "sprite": "scrap",
+    "mass": 1.4,
+    "value": 4.0,
+    "storage": 1.4,
+    "power_cost": 1.0,
+    "radius": 7.0,
+    "log": "log_ticket",
+    "blurb": "Hull shard, 4 cm to 2 m. Filed as a retired orbital asset."
+  },
+  "panel": {
+    "name": "CRACKED SOLAR PANEL",
+    "sprite": "panel",
+    "mass": 3.2,
+    "value": 11.0,
+    "storage": 3.2,
+    "power_cost": 2.5,
+    "radius": 12.0,
+    "log": "log_panel",
+    "blurb": "Gold edges, dark cells, no return address."
+  },
+  "satellite": {
+    "name": "DERELICT AD SATELLITE",
+    "sprite": "satellite",
+    "mass": 7.5,
+    "value": 26.0,
+    "storage": 7.0,
+    "power_cost": 5.0,
+    "radius": 15.0,
+    "log": "log_refresh",
+    "blurb": "Still broadcasting. Audience: zero. Engagement: strong.",
+    "logs": [
+      "log_refresh",
+      "log_audit",
+      "log_meeting",
+      "log_protocol"
+    ]
+  },
+  "billboard": {
+    "name": "'ZERO-WASTE FUTURE' BILLBOARD",
+    "sprite": "billboard",
+    "mass": 5.0,
+    "value": 15.0,
+    "storage": 5.0,
+    "power_cost": 4.0,
+    "radius": 14.0,
+    "log": "log_billboard",
+    "blurb": "Slogan intact. Product discontinued. Company dissolved."
+  },
+  "packaging": {
+    "name": "SINGLE-USE PACKAGING CLUSTER",
+    "sprite": "packaging",
+    "mass": 2.2,
+    "value": 6.0,
+    "storage": 2.8,
+    "power_cost": 1.5,
+    "radius": 8.0,
+    "log": "log_leaflet",
+    "blurb": "Eco-certified. Biodegradable in conditions it never meets."
+  },
+  "trophy": {
+    "name": "'SUSTAINABILITY PIONEER' TROPHY",
+    "sprite": "trophy",
+    "mass": 1.0,
+    "value": 22.0,
+    "storage": 1.0,
+    "power_cost": 1.0,
+    "radius": 7.0,
+    "log": "log_trophy",
+    "blurb": "Gold tier. Currently doing the job of a doorstop."
+  },
+  "specimen": {
+    "name": "SEALED RESEARCH POD",
+    "sprite": "specimen",
+    "mass": 6.0,
+    "value": 32.0,
+    "storage": 4.0,
+    "power_cost": 4.0,
+    "radius": 10.0,
+    "log": "log_specimen",
+    "blurb": "Manifest classification: non-essential cargo. There is something green inside.",
+    "special": true
+  }
+}

@@ -33,11 +33,13 @@ func configure(combat: Dictionary, types: Dictionary) -> void:
 
 
 ## Adds one projectile travelling from `position` along `direction`.
+## Hostile and beneficial projectiles use the same authoritative speed at a
+## given difficulty band (`speed`), without per-category speed multipliers.
 ## Returns the new entry so callers can tag it (for example with its emitter).
 func spawn(type_id: String, position: Vector2, direction: Vector2, speed: float) -> Dictionary:
 	var spec: Dictionary = _as_dict(_types.get(type_id, {}))
 	var dir := direction.normalized() if direction.length_squared() > 0.000001 else Vector2(0.0, 1.0)
-	var speed_scale: float = float(spec.get("speed_scale", 1.0))
+	var authoritative_speed: float = maxf(1.0, speed)
 	var p := {
 		"id": _next_id,
 		"type": type_id,
@@ -45,7 +47,7 @@ func spawn(type_id: String, position: Vector2, direction: Vector2, speed: float)
 		"pos": position,
 		"prev": position,
 		"dir": dir,
-		"speed": speed * speed_scale,
+		"speed": authoritative_speed,
 		"damage": int(spec.get("damage", 0)),
 		"charge": int(spec.get("charge", 0)),
 		"radius": float(spec.get("radius", 4.0)),
@@ -60,6 +62,17 @@ func spawn(type_id: String, position: Vector2, direction: Vector2, speed: float)
 	_next_id += 1
 	projectiles.append(p)
 	return p
+
+
+## Synchronises all active projectiles (both hostile and beneficial) to the
+## encounter's current authoritative band speed so difficulty transitions keep
+## 100% speed parity across in-flight projectiles.
+func sync_speeds(target_speed: float) -> void:
+	var s := maxf(1.0, target_speed)
+	for entry in projectiles:
+		var p: Dictionary = entry
+		if bool(p.get("alive", false)):
+			p["speed"] = s
 
 
 func clear() -> void:
@@ -116,6 +129,8 @@ func update(delta: float, nick_position: Vector2, shield, body_radius: float, ar
 				elif not _inside_arena(p1, arena):
 					p["alive"] = false
 	_prune()
+	if shield != null and shield.has_method("commit_step"):
+		shield.commit_step()
 	return events
 
 
@@ -133,29 +148,68 @@ func _prune() -> void:
 ## {"kind": "shield"|"body"|"fly", "point": Vector2}.
 ##
 ## This is the whole collision contract and it is public so tests can feed it
-## arbitrary segments without running a frame loop.
+## arbitrary segments without running a frame loop. Both linear projectile
+## travel and angular shield sweeps (`prev_direction` -> `direction`) are
+## resolved continuously within the shield's radial reach `[r_inner, r_outer]`.
 func _resolve_segment(p: Dictionary, p0: Vector2, p1: Vector2, nick_position: Vector2, shield, body_radius: float) -> Dictionary:
 	var a: Vector2 = p0 - nick_position
 	var b: Vector2 = p1 - p0
 	var projectile_radius: float = float(p.get("radius", 4.0))
-
-	var shield_t := -1.0
-	var shield_point := Vector2.ZERO
-	if shield != null:
-		var hit: Dictionary = _segment_circle(a, b, float(shield.radius))
-		if bool(hit.get("ok", false)) and float(hit.get("t", -1.0)) >= 0.0:
-			var t: float = float(hit["t"])
-			var point: Vector2 = p0 + b * t
-			if shield.covers_point(nick_position, point):
-				shield_t = t
-				shield_point = point
+	var body_hit_r: float = maxf(1.0, body_radius) + projectile_radius
 
 	var body_t := -1.0
 	var body_point := Vector2.ZERO
-	var body_hit: Dictionary = _segment_circle(a, b, maxf(1.0, body_radius) + projectile_radius)
-	if bool(body_hit.get("ok", false)) and float(body_hit.get("t", -1.0)) >= 0.0:
-		body_t = float(body_hit["t"])
-		body_point = p0 + b * body_t
+	if a.length() <= body_hit_r:
+		body_t = 0.0
+		body_point = p0
+	else:
+		var body_hit: Dictionary = _segment_circle(a, b, body_hit_r)
+		if bool(body_hit.get("ok", false)) and float(body_hit.get("t", -1.0)) >= 0.0:
+			body_t = float(body_hit["t"])
+			body_point = p0 + b * body_t
+
+	var shield_t := -1.0
+	var shield_point := Vector2.ZERO
+	if shield != null and body_t != 0.0:
+		var shield_r: float = float(shield.radius)
+		var half_thick: float = float(shield.thickness) * 0.5
+		var tol: float = float(shield.contact_tolerance)
+		var r_outer: float = shield_r + half_thick + projectile_radius + tol
+		var r_inner: float = maxf(body_hit_r + 1.0, shield_r - half_thick - projectile_radius - tol)
+		var a_len: float = a.length()
+
+		# Only projectiles outside or inside the shield's physical shell [r_inner, r_outer]
+		# can be intercepted; a projectile already past r_inner is inside the shield orbit.
+		if a_len >= r_inner - 0.001:
+			var outer_iv: Dictionary = _segment_ball_interval(a, b, r_outer)
+			if bool(outer_iv.get("ok", false)):
+				var t_shell_0: float = float(outer_iv["t0"])
+				var t_shell_1: float = float(outer_iv["t1"])
+				var inner_iv: Dictionary = _segment_ball_interval(a, b, r_inner)
+				if bool(inner_iv.get("ok", false)):
+					var inner_enter: float = float(inner_iv["t0"])
+					if inner_enter >= t_shell_0:
+						t_shell_1 = minf(t_shell_1, inner_enter)
+				if body_t >= 0.0:
+					t_shell_1 = minf(t_shell_1, body_t)
+
+				if t_shell_0 <= t_shell_1:
+					var ang_pad: float = float(shield.angular_tolerance_radians()) if shield.has_method("angular_tolerance_radians") else 0.0
+					var started_outside: bool = a_len > r_outer
+					var vacated_lane: bool = started_outside and shield.prev_covers_vector(a, ang_pad) and not shield.covers_vector_with_pad(a, ang_pad)
+					var substeps: int = 24
+					for i in range(substeps + 1):
+						var u: float = float(i) / float(substeps)
+						var t: float = lerpf(t_shell_0, t_shell_1, u)
+						var v: Vector2 = a + b * t
+						var blocked: bool = shield.covers_vector_with_pad(v, ang_pad)
+						if not blocked and not vacated_lane and shield.has_swept():
+							blocked = shield.swept_covers_vector(v, ang_pad)
+						if blocked:
+							shield_t = t
+							var dir_norm: Vector2 = v.normalized() if v.length_squared() > 0.000001 else (shield.direction as Vector2)
+							shield_point = nick_position + dir_norm * shield_r
+							break
 
 	# Travel order: whichever the projectile reaches first wins, and a shield
 	# interception always removes the projectile before the body can be hit.
@@ -164,6 +218,29 @@ func _resolve_segment(p: Dictionary, p0: Vector2, p1: Vector2, nick_position: Ve
 	if body_t >= 0.0:
 		return {"kind": "body", "point": body_point}
 	return {"kind": "fly", "point": p1}
+
+
+## Interval [t0, t1] subset of [0, 1] where |a + t*b| <= r.
+## Returns {"ok": bool, "t0": float, "t1": float}.
+func _segment_ball_interval(a: Vector2, b: Vector2, r: float) -> Dictionary:
+	var qa: float = b.dot(b)
+	var c: float = a.dot(a) - r * r
+	if qa < 0.0000001:
+		if c <= 0.0:
+			return {"ok": true, "t0": 0.0, "t1": 1.0}
+		return {"ok": false, "t0": -1.0, "t1": -1.0}
+	var qb: float = 2.0 * a.dot(b)
+	var disc: float = qb * qb - 4.0 * qa * c
+	if disc < 0.0:
+		return {"ok": false, "t0": -1.0, "t1": -1.0}
+	var sq := sqrt(disc)
+	var r0: float = (-qb - sq) / (2.0 * qa)
+	var r1: float = (-qb + sq) / (2.0 * qa)
+	var t0: float = maxf(0.0, r0)
+	var t1: float = minf(1.0, r1)
+	if t0 <= t1:
+		return {"ok": true, "t0": t0, "t1": t1}
+	return {"ok": false, "t0": -1.0, "t1": -1.0}
 
 
 ## Earliest intersection of segment a + t*b (t in [0,1]) with a circle of

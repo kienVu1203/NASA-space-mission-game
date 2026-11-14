@@ -792,12 +792,12 @@
         "label": "Collect polymer"
       },
       {
-        "sprite": "pump",
-        "x": 646,
-        "y": 96,
+        "sprite": "facility_gate",
+        "x": 592,
+        "y": 186,
         "solid": [
-          18,
-          9
+          28,
+          12
         ],
         "interact": "coast_boss_gate",
         "label": "Enter the cleanup facility"

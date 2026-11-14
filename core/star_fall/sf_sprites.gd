@@ -27,7 +27,10 @@ static func build_all() -> Dictionary:
 	out["waste_pile"] = _tex(_waste_pile())
 	out["board_stack"] = _tex(_board_stack())
 	out["street_lamp"] = _tex(_street_lamp())
-	out["control_door"] = _tex(_control_door())
+	out["control_door"] = _tex(_control_door(false))
+	out["control_door_open"] = _tex(_control_door(true))
+	out["facility_gate"] = _tex(_facility_gate(false))
+	out["facility_gate_open"] = _tex(_facility_gate(true))
 	out["shrine"] = _tex(_shrine())
 	out["checkpoint"] = _tex(_checkpoint())
 	out["harbor_crate"] = _tex(_harbor_crate())
@@ -621,28 +624,83 @@ static func _street_lamp() -> Image:
 	return img
 
 
-## The control-center door: welded, warn, and too important to be a wall.
-static func _control_door() -> Image:
-	var img := _img(30, 34)
+## The control-center door: heavy portal frame with distinct locked/unlocked states.
+static func _control_door(unlocked: bool = false) -> Image:
+	var img := _img(32, 36)
 	var frame: Color = SFPalette.RUIN
 	var panel: Color = SFPalette.STEEL_DARK
 	var light: Color = SFPalette.STEEL_MID
-	var rust: Color = SFPalette.RUST
-	_rect(img, 0, 2, 30, 32, frame)
-	_rect(img, 3, 5, 24, 29, panel)
-	_rect(img, 3, 5, 24, 1, light)
-	# Centre seam, welded over.
-	_rect(img, 14, 6, 2, 28, SFPalette.INK)
-	for i in 6:
-		_rect(img, 13, 8 + i * 4, 4, 1, rust)
-	# Hazard chevrons and a dead panel.
-	_rect(img, 5, 11, 7, 9, SFPalette.INK)
-	_px(img, 6, 12, SFPalette.CYAN_DARK)
-	_rect(img, 19, 11, 6, 9, SFPalette.INK)
-	_rect(img, 20, 13, 4, 1, SFPalette.CYAN_DIM)
-	_rect(img, 20, 16, 4, 1, SFPalette.ASH)
-	# Handle bar.
-	_rect(img, 9, 25, 12, 2, light)
+	var accent: Color = SFPalette.CYAN if unlocked else SFPalette.RUST_LIGHT
+	_rect(img, 0, 2, 32, 34, frame)
+	_rect(img, 1, 2, 30, 2, light)
+	# Overhead portal header bar with status beacon lights.
+	_rect(img, 2, 4, 28, 4, SFPalette.INK)
+	_rect(img, 4, 5, 6, 2, accent)
+	_rect(img, 13, 5, 6, 2, SFPalette.PAPER if unlocked else accent)
+	_rect(img, 22, 5, 6, 2, accent)
+	# Side pillars with lit vertical guide strips.
+	_rect(img, 2, 9, 3, 27, panel)
+	_rect(img, 27, 9, 3, 27, panel)
+	_rect(img, 3, 11, 1, 22, accent)
+	_rect(img, 28, 11, 1, 22, accent)
+	# Blast door panels.
+	_rect(img, 5, 9, 22, 27, panel)
+	_rect(img, 5, 9, 22, 1, light)
+	if unlocked:
+		# Parted blast doors revealing lit interior portal.
+		_rect(img, 12, 10, 8, 26, SFPalette.INK)
+		_rect(img, 14, 12, 4, 22, SFPalette.CYAN_DARK)
+		_rect(img, 15, 14, 2, 18, SFPalette.CYAN)
+		_rect(img, 6, 13, 4, 7, SFPalette.INK)
+		_rect(img, 22, 13, 4, 7, SFPalette.INK)
+		_rect(img, 7, 15, 2, 3, SFPalette.CYAN)
+		_rect(img, 23, 15, 2, 3, SFPalette.CYAN)
+	else:
+		# Welded centre seam and lockdown bars.
+		_rect(img, 15, 10, 2, 26, SFPalette.INK)
+		for i in 6:
+			_rect(img, 13, 11 + i * 4, 6, 1, SFPalette.RUST)
+		_rect(img, 6, 13, 7, 9, SFPalette.INK)
+		_rect(img, 7, 15, 5, 2, SFPalette.RUST_LIGHT)
+		_rect(img, 19, 13, 7, 9, SFPalette.INK)
+		_rect(img, 20, 15, 5, 2, SFPalette.RUST_LIGHT)
+		_rect(img, 9, 26, 14, 2, light)
+	return img
+
+
+## Cleanup-facility portal gate on the Silent Coast: unmistakable industrial
+## bulkhead arch with locked/unlocked beacon framing (distinct from pumps).
+static func _facility_gate(unlocked: bool = false) -> Image:
+	var img := _img(32, 36)
+	var shell: Color = Color("243b3e")
+	var metal: Color = Color("3e6b70")
+	var light: Color = Color("6fa3a8")
+	var accent: Color = SFPalette.CYAN if unlocked else SFPalette.GOLD
+	# Heavy arch frame.
+	_rect(img, 0, 3, 32, 33, shell)
+	_rect(img, 1, 3, 30, 2, light)
+	_rect(img, 2, 5, 28, 4, SFPalette.INK)
+	_rect(img, 4, 6, 7, 2, accent)
+	_rect(img, 13, 6, 6, 2, SFPalette.PAPER if unlocked else accent)
+	_rect(img, 21, 6, 7, 2, accent)
+	# Twin intake columns.
+	_rect(img, 2, 10, 5, 26, metal)
+	_rect(img, 25, 10, 5, 26, metal)
+	_rect(img, 4, 12, 1, 21, accent)
+	_rect(img, 27, 12, 1, 21, accent)
+	# Central airlock hatch.
+	_rect(img, 7, 10, 18, 26, SFPalette.STEEL_DARK)
+	_rect(img, 7, 10, 18, 1, light)
+	if unlocked:
+		_rect(img, 11, 12, 10, 24, SFPalette.INK)
+		_rect(img, 13, 14, 6, 20, SFPalette.CYAN_DARK)
+		_rect(img, 15, 16, 2, 16, SFPalette.CYAN)
+		_rect(img, 7, 34, 18, 2, SFPalette.CYAN)
+	else:
+		_rect(img, 9, 14, 14, 18, SFPalette.INK)
+		_rect(img, 10, 18, 12, 2, SFPalette.RUST_LIGHT)
+		_rect(img, 10, 24, 12, 2, SFPalette.GOLD)
+		_rect(img, 15, 14, 2, 18, metal)
 	return img
 
 

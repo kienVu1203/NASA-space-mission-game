@@ -261,6 +261,7 @@ func _start_boss(boss_id: String) -> void:
 
 func _setup_scrap_king() -> void:
 	main.campaign.reset_campaign()
+	main.campaign.set_flag(main.campaign.FLAG_BILL_ACTIVE)
 	main.campaign.set_flag(main.campaign.FLAG_CITY_CHECKPOINT)
 	_start_boss("scrap_king")
 	if main.duel != null:
@@ -308,6 +309,7 @@ func _setup_coast_memory() -> void:
 
 
 func _setup_silent_coast() -> void:
+	main.campaign.set_flag(main.campaign.FLAG_BILL_ACTIVE)
 	main.campaign.reveal_future_earth()
 	main.campaign.set_flag(main.campaign.FLAG_COAST_CHECKPOINT)
 	main.campaign.set_checkpoint(main.campaign.STAGE_COAST_BOSS, main.campaign.CHAPTER_COAST)

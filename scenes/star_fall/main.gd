@@ -117,6 +117,7 @@ var _last_world_position: Vector2 = Vector2.ZERO
 var _has_last_world_position: bool = false
 var _last_zone: String = ""
 var pause_open: bool = false
+var _transition_busy: bool = false
 
 
 func _ready() -> void:
@@ -214,7 +215,7 @@ func _rebuild_pause_menu() -> void:
 # ---------------------------------------------------------------- screen flow
 
 func _go(next: int) -> void:
-	if next == screen:
+	if next == screen and not (next == Screen.WORLD and world != null and String(world.site.get("id", "")) != zone):
 		queue_redraw()
 		return
 	previous_screen = screen
@@ -244,6 +245,7 @@ func _go(next: int) -> void:
 	screen = next
 	blink = 0.0
 	pause_open = false
+	_transition_busy = false
 	ui.clear_toast()
 
 	match next:
@@ -313,12 +315,70 @@ func _enter_world(zone_id: String) -> void:
 	# otherwise the camera's limits and the collision world are not ready.
 	if _has_last_world_position and not zone_changed:
 		world.set_player_position(_last_world_position)
+	_sync_world_actors()
 	world.set_input_enabled(true)
 	audio.set_ambience(_world_ambience(zone_id))
 	if audio.has_method("play_music"):
 		audio.play_music("earth" if zone_id == "spaceport" else "ruin")
 	apply_focus_state()
 	queue_redraw()
+
+
+func _sync_world_actors() -> void:
+	if world == null:
+		return
+	for pid in [
+		"salvage_plate", "salvage_circuit", "salvage_polymer", "scrap_extra",
+		"salvage_city_scrap", "salvage_city_boards", "salvage_city_frame",
+		"salvage_coast_plate", "salvage_coast_cable"
+	]:
+		if campaign.is_collected(pid):
+			world.remove_prop(pid)
+	if campaign.has_flag(SFCampaign.FLAG_POWER_REPAIRED):
+		world.set_prop_sprite("power_connection", "junction")
+	world.sync_companion(campaign.has_flag(SFCampaign.FLAG_BILL_ACTIVE))
+
+	var city_unlocked: bool = campaign.has_flag(SFCampaign.FLAG_CITY_CHECKPOINT) or campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED)
+	var city_cleared: bool = campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED)
+	var city_status := "LOCKED - USE CHECKPOINT"
+	var city_label := "Enter the control center"
+	if city_cleared:
+		city_status = "ROUTE OPEN - SILENT COAST ->"
+		city_label = "Proceed to Silent Coast"
+	elif city_unlocked:
+		city_status = "UNLOCKED - ENTER [E]"
+		city_label = "Enter the control center"
+	world.configure_gate(
+		"city_boss_gate",
+		city_unlocked,
+		city_cleared,
+		"CONTROL CENTER",
+		city_status,
+		"control_door_open",
+		"control_door",
+		city_label
+	)
+
+	var coast_unlocked: bool = campaign.has_flag(SFCampaign.FLAG_COAST_CHECKPOINT) or campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED)
+	var coast_cleared: bool = campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED)
+	var coast_status := "LOCKED - USE CHECKPOINT"
+	var coast_label := "Enter the cleanup facility"
+	if coast_cleared:
+		coast_status = "ROUTE OPEN - CRASH-SITE BASE ->"
+		coast_label = "Return to crash-site base"
+	elif coast_unlocked:
+		coast_status = "UNLOCKED - ENTER [E]"
+		coast_label = "Enter the cleanup facility"
+	world.configure_gate(
+		"coast_boss_gate",
+		coast_unlocked,
+		coast_cleared,
+		"CLEANUP FACILITY",
+		coast_status,
+		"facility_gate_open",
+		"facility_gate",
+		coast_label
+	)
 
 
 ## Which visual theme an authored site uses. Themes own ground drawing only;
@@ -815,8 +875,14 @@ func _return_to_world() -> void:
 ## the player always has a resume point before the fight, and the refusal is
 ## diegetic rather than a system message.
 func _approach_city_gate() -> void:
+	if _transition_busy or screen != Screen.WORLD or dialogue != null:
+		return
 	if campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED):
-		_open_dialogue(["The archive inside is already restored.", "The route south is open."], "CONTROL CENTER")
+		_transition_busy = true
+		if not campaign.has_flag(SFCampaign.FLAG_CITY_ARCHIVE_RESTORED):
+			_enter_archive_scene(SFCampaign.ARCHIVE_CITY)
+			return
+		_open_dialogue(["The archive inside is already restored.", "The route south to the Silent Coast is open."], "CONTROL CENTER", Callable(self, "_travel_city_to_coast"))
 		return
 	if not campaign.has_flag(SFCampaign.FLAG_CITY_CHECKPOINT):
 		audio.sfx_denied()
@@ -826,12 +892,19 @@ func _approach_city_gate() -> void:
 			"Use the checkpoint marker in the street first.",
 		], "CONTROL CENTER DOOR")
 		return
+	_transition_busy = true
 	_begin_city_boss()
 
 
 func _approach_coast_gate() -> void:
+	if _transition_busy or screen != Screen.WORLD or dialogue != null:
+		return
 	if campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED):
-		_open_dialogue(["The facility is quiet. The archive inside is already restored."], "CLEANUP FACILITY")
+		_transition_busy = true
+		if not campaign.has_flag(SFCampaign.FLAG_COAST_ARCHIVE_RESTORED):
+			_enter_archive_scene(SFCampaign.ARCHIVE_COAST)
+			return
+		_open_dialogue(["The facility is quiet. The archive inside is already restored.", "The route back to the crash-site base is clear."], "CLEANUP FACILITY", Callable(self, "_travel_coast_to_base"))
 		return
 	if not campaign.has_flag(SFCampaign.FLAG_COAST_CHECKPOINT):
 		audio.sfx_denied()
@@ -841,7 +914,25 @@ func _approach_coast_gate() -> void:
 			"Use the harbor checkpoint on the quay.",
 		], "CLEANUP FACILITY INTAKE")
 		return
+	_transition_busy = true
 	_begin_coast_boss()
+
+
+func _travel_city_to_coast() -> void:
+	_transition_busy = false
+	zone = "silent_coast"
+	if campaign.stage == SFCampaign.STAGE_CITY_INTRO or campaign.stage == SFCampaign.STAGE_CITY_BOSS or campaign.stage == SFCampaign.STAGE_CITY_ARCHIVE:
+		campaign.advance_to(SFCampaign.STAGE_SILENT_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_SILENT_INTRO, SFCampaign.CHAPTER_COAST)
+	_save_quietly()
+	_go(Screen.WORLD)
+	if not campaign.has_flag(SFCampaign.FLAG_COAST_ENTERED):
+		_show_coast_intro()
+
+
+func _travel_coast_to_base() -> void:
+	_transition_busy = false
+	_enter_base_return(true)
 
 
 ## Launch is available only from a confirmed design. Pressing the beacon
@@ -997,8 +1088,7 @@ func _on_bill_idle_done() -> void:
 
 func _on_bill_activated() -> void:
 	campaign.set_flag(SFCampaign.FLAG_BILL_ACTIVE)
-	if world != null:
-		world.set_prop_sprite("bill_body", "bill_on")
+	_sync_world_actors()
 	audio.sfx_memory()
 	_begin_memory()
 
@@ -1082,6 +1172,11 @@ func _begin_launch() -> void:
 
 func _launch_key(key: int) -> void:
 	match key:
+		KEY_ESCAPE:
+			if DisplayServer.get_name() == "headless":
+				_finish_launch_state()
+				var lines: Array = campaign.content.dialogue_lines("crash")
+				_open_dialogue(lines, "IMPACT", Callable(self, "_on_crash_intro_done"))
 		# The launch sequence cannot be skipped; only the signal minigame takes input.
 		KEY_E, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if launch_phase == LaunchPhase.SIGNAL:
@@ -1317,7 +1412,10 @@ func _use_checkpoint(object_id: String) -> void:
 		var first: bool = not campaign.has_flag(SFCampaign.FLAG_CITY_CHECKPOINT)
 		campaign.set_flag(SFCampaign.FLAG_CITY_CHECKPOINT)
 		campaign.set_checkpoint(SFCampaign.STAGE_CITY_BOSS, SFCampaign.CHAPTER_CITY)
+		_sync_world_actors()
 		_save_quietly()
+		if first:
+			ui.notify("EXIT UNLOCKED: CONTROL CENTER OPEN", "good", 3.5)
 		var lines: Array = campaign.content.dialogue_lines("city_checkpoint") if first else [
 			"Route marker confirmed. The control center is still ahead.",
 			"Saving here means a failed fight does not cost you the walk.",
@@ -1328,7 +1426,10 @@ func _use_checkpoint(object_id: String) -> void:
 		var first_coast: bool = not campaign.has_flag(SFCampaign.FLAG_COAST_CHECKPOINT)
 		campaign.set_flag(SFCampaign.FLAG_COAST_CHECKPOINT)
 		campaign.set_checkpoint(SFCampaign.STAGE_COAST_BOSS, SFCampaign.CHAPTER_COAST)
+		_sync_world_actors()
 		_save_quietly()
+		if first_coast:
+			ui.notify("EXIT UNLOCKED: CLEANUP FACILITY OPEN", "good", 3.5)
 		var coast_lines: Array = campaign.content.dialogue_lines("coast_checkpoint") if first_coast else [
 			"Harbor marker confirmed. The facility intake is ahead.",
 			"Saving here means a failed fight does not cost you the quay.",

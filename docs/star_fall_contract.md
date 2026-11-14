@@ -43,6 +43,7 @@ scenes/star_fall/
   main.tscn / main.gd           Campaign controller: screen flow, input, launch
   world.gd                      One authored exploration area (props, ground, camera)
   player.gd                     Nick: movement and collision
+  bill_companion.gd             Bill: active companion follower during exploration
   prop.gd                       One authored world prop with a ground footprint
   hud_overlay.gd                In-world HUD, drawn on a CanvasLayer above the world
   construction_screen.gd        Spacecraft construction + preflight
@@ -421,16 +422,21 @@ is_fighting() / is_over() / result() / phase() / health_fraction()
 
 # SfShield: one authoritative direction, used by drawing and collision.
 configure(config: Dictionary) -> void
+begin_step() -> void
 aim(nick_position: Vector2, cursor_position: Vector2) -> bool
 set_direction(v: Vector2) -> bool
 covers_point(nick_position: Vector2, point: Vector2) -> bool
+outer_extent() -> float
+charge_meter_offset() -> float
+sweep_segments() -> Array
 arc_points(nick_position: Vector2, segments: int, extra_radius: float) -> PackedVector2Array
 arc_endpoints(nick_position: Vector2, extra_radius: float) -> Array
 static canvas_point(mouse: Vector2, window_size: Vector2, base_size := Vector2(640, 360)) -> Vector2
 
-# SfProjectileField: swept motion, one resolution per projectile.
+# SfProjectileField: swept linear + angular motion, speed parity, one resolution per projectile.
 configure(combat: Dictionary, types: Dictionary) -> void
 spawn(type_id: String, position: Vector2, direction: Vector2, speed: float) -> Dictionary
+sync_speeds(speed: float) -> void
 update(delta: float, nick_position: Vector2, shield, body_radius: float, arena: Rect2) -> Array
 active_count() -> int
 clear() -> void
@@ -765,12 +771,14 @@ All tuning lives here. No script contains a balance value.
 {
   "arena":      {"width": 640, "height": 360,
                  "nick": {"x": 320, "y": 244}, "ground_y": 300},
-  "shield":     {"radius": 44.0, "coverage_degrees": 84.0, "thickness": 5.0,
+  "shield":     {"radius": 44.0, "coverage_degrees": 72.0, "thickness": 6.0,
+                 "contact_tolerance": 3.5, "angular_tolerance_degrees": 3.5,
+                 "charge_meter_margin": 16.0,
                  "min_cursor_distance": 14.0, "body_radius": 8.0,
                  "initial_direction": {"x": 0.0, "y": 1.0}},
   "combat":     {"counterattack_lock_seconds": 0.55, "victory_hold_seconds": 1.6,
                  "projectile_life_seconds": 14.0, "offscreen_margin": 48.0,
-                 "min_telegraph_seconds": 0.5, "max_telegraph_seconds": 1.6},
+                 "min_telegraph_seconds": 0.35, "max_telegraph_seconds": 0.85},
   "projectile_types": {
     "<type_id>": {"family": "hostile|beneficial", "name": "...", "damage": 0,
                   "charge": 0, "radius": 0.0, "speed_scale": 1.0,

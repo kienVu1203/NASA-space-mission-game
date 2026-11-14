@@ -1,0 +1,34 @@
+[
+  {
+    "id": "cargo",
+    "name": "CARGO BAY",
+    "desc": "Reinforced hold plating. More room for certified material.",
+    "stat": "storage",
+    "costs": [90, 170, 280],
+    "values": [54.0, 68.0, 86.0]
+  },
+  {
+    "id": "thruster",
+    "name": "THRUSTER TUNING",
+    "desc": "Cleaner burn. Lower fuel draw under acceleration.",
+    "stat": "fuel_burn_mult",
+    "costs": [80, 150, 260],
+    "values": [0.84, 0.72, 0.6]
+  },
+  {
+    "id": "magnet",
+    "name": "TRACTOR ARRAY",
+    "desc": "A wider magnetic capture field around the hull.",
+    "stat": "beam_radius",
+    "costs": [70, 140, 230],
+    "values": [76.0, 96.0, 118.0]
+  },
+  {
+    "id": "cell",
+    "name": "POWER CELL",
+    "desc": "Extra reserve for the beam and the station's bad decisions.",
+    "stat": "power",
+    "costs": [60, 120, 200],
+    "values": [130.0, 165.0, 205.0]
+  }
+]

@@ -1,0 +1,90 @@
+[
+  {
+    "id": "s1",
+    "act": 1,
+    "designation": "SECTOR A-1",
+    "name": "NEAR-STATION ORBIT",
+    "tagline": "THE LAST LIGHT",
+    "distance": "180 KM",
+    "hazard": "LOW",
+    "quota": 80.0,
+    "bonus": 60.0,
+    "spawn_radius": [
+      150.0,
+      620.0
+    ],
+    "spawn": {
+      "scrap": 16,
+      "panel": 6,
+      "packaging": 3
+    },
+    "brief": [
+      "SECTOR A-1 SITS INSIDE THE STATION'S SALVAGE ENVELOPE.",
+      "INVENTORY IS SMALL: SHARDS, SOLAR ARRAYS, PACKAGING.",
+      "RECOVERY TARGET IS 80 CREDITS OF CERTIFIED MATERIAL.",
+      "THE HOLD WILL NOT TAKE EVERYTHING. CHOOSE WHAT YOU HAUL."
+    ],
+    "report": "REPORT FILED. UNCOLLECTED MATERIAL REMAINS OUT OF SCOPE. HAVE A COMPLIANT SHIFT."
+  },
+  {
+    "id": "s2",
+    "act": 2,
+    "designation": "SECTOR B-7",
+    "name": "CORPORATE AD GRAVEYARD",
+    "tagline": "THE LOOP OF HOPE",
+    "distance": "14,800 KM",
+    "hazard": "MEDIUM",
+    "quota": 140.0,
+    "bonus": 120.0,
+    "spawn_radius": [
+      180.0,
+      720.0
+    ],
+    "spawn": {
+      "scrap": 8,
+      "panel": 6,
+      "satellite": 4,
+      "billboard": 5,
+      "packaging": 5,
+      "trophy": 2
+    },
+    "brief": [
+      "THE BILLBOARDS HERE ARE STILL BROADCASTING DISCOUNTS.",
+      "THE CUSTOMERS LEFT NINE YEARS AGO. THE BEACONS DID NOT.",
+      "RECOVERY TARGET: 150 CREDITS. LARGE MASS, WIDE DENSITY.",
+      "WATCH YOUR HOLD. A FULL BAY COLLECTS NOTHING."
+    ],
+    "report": "QUOTA CERTIFIED. THE ADVERTISING DEPARTMENT HAS BEEN INFORMED OF YOUR CONTRIBUTION."
+  },
+  {
+    "id": "s3",
+    "act": 3,
+    "designation": "SECTOR K-9",
+    "name": "DENSE KESSLER RING",
+    "tagline": "THE COST OF IT ALL",
+    "distance": "41,200 KM",
+    "hazard": "SEVERE",
+    "quota": 180.0,
+    "bonus": 180.0,
+    "spawn_radius": [
+      150.0,
+      700.0
+    ],
+    "spawn": {
+      "scrap": 10,
+      "panel": 6,
+      "satellite": 7,
+      "billboard": 6,
+      "packaging": 8,
+      "trophy": 3,
+      "specimen": 1
+    },
+    "brief": [
+      "OBJECT DENSITY IS HIGH. IMPACTS COST POWER. KEEP MOVING.",
+      "ONE SEALED POD IS LOGGED AS NON-ESSENTIAL CARGO.",
+      "RECOVERY TARGET: 240 CREDITS. SPECIMEN RECOVERY: ADVISED.",
+      "PROTOCOL STARFALL AWAITS OPERATOR CONFIRMATION."
+    ],
+    "report": "SECTOR CLEARED. PROTOCOL STARFALL IS AUTHORIZED PENDING OPERATOR CONFIRMATION. THIS IS NOW A DECISION, NOT A TASK."
+  }
+]

@@ -61,6 +61,7 @@ func _initialize() -> void:
 	_test_victory_and_rewards()
 	_test_save_load()
 	_test_phase_one_untouched()
+	_test_phase_two_repairs()
 
 	print("")
 	print("RESULT: %d check(s), %d failure(s)" % [checks_run, fails])
@@ -820,3 +821,88 @@ func _test_phase_one_untouched() -> void:
 	check("the junction still repairs", bool(campaign.repair_junction()["ok"]))
 	check("the boss data does not reference the shield emitter",
 		String(data.boss("scrap_king").get("reward_component", "")) != "shield_emitter")
+
+
+func _test_phase_two_repairs() -> void:
+	section("Phase 2 repair verification (meter, arc, sweep, speed parity)")
+
+	var enc = _new_encounter("scrap_king")
+	var s = enc.shield
+	var arena := Rect2(0, 0, 640, 360)
+
+	# 1. Charge meter clearance above the shield envelope and below top HUD.
+	var plate: Rect2 = enc.charge_plate_rect()
+	var shield_top_y: float = nick.y - s.outer_extent(enc.shield_thickness)
+	check("charge meter plate sits completely above the shield envelope",
+		plate.end.y <= shield_top_y - 6.0,
+		"plate_bottom=%.1f shield_top=%.1f" % [plate.end.y, shield_top_y])
+	check("charge meter plate stays clear of top boss HUD bar",
+		plate.position.y >= 34.0,
+		"plate_top=%.1f" % plate.position.y)
+
+	# 2. Shield arc slightly reduced from 84 deg to 72 deg.
+	check("shield arc reduced from 84 to 72 degrees",
+		is_equal_approx(s.coverage_degrees, 72.0) and is_equal_approx(s.previous_coverage_degrees, 84.0),
+		"%.1f -> %.1f deg" % [s.previous_coverage_degrees, s.coverage_degrees])
+
+	# 3. Swept angular shield blocking during rapid rotation.
+	# Projectile sits near the shield orbit on the top-left (angle -135 deg).
+	# Shield starts pointing right (0 deg) and sweeps through -90 deg (up) to left (180 deg).
+	enc.field.clear()
+	s.snap_direction(Vector2(1, 0))
+	var orbit_pt := nick + Vector2(0, -1) * s.radius
+	enc.field.spawn("bolt", orbit_pt + Vector2(0, -4), Vector2(0, 1), 60.0)
+	s.aim(nick, nick + Vector2(0, -100))
+	s.aim(nick, nick + Vector2(-100, 0))
+	var sweep_events: Array = enc.field.update(0.05, nick, s, 8.0, arena)
+	check("hostile projectile swept by rotating shield is blocked",
+		sweep_events.size() == 1 and String(sweep_events[0]["kind"]) == "block")
+	check("swept hostile projectile is removed", enc.field.active_count() == 0)
+
+	# Swept rotation across the -PI / +PI wraparound boundary (left side) blocks a projectile at (-1, 0)
+	# without blocking a projectile on the opposite side (1, 0).
+	enc.field.clear()
+	s.snap_direction(Vector2(-0.5, -0.866).normalized())
+	s.set_direction(Vector2(-0.5, 0.866).normalized())
+	check("wraparound sweep covers the short path across (-1, 0)", s.swept_covers_vector(Vector2(-1, 0)))
+	check("wraparound sweep never covers the opposite side (1, 0)", not s.swept_covers_vector(Vector2(1, 0)))
+
+	# Beneficial projectile swept by the rotating shield is blocked and grants no charge.
+	var enc_b = _new_encounter("scrap_king")
+	enc_b.shield.snap_direction(Vector2(1, 0))
+	enc_b.field.spawn("memory_mote", nick + Vector2(0, -1) * enc_b.shield.radius, Vector2(0, 1), 60.0)
+	enc_b.shield.aim(nick, nick + Vector2(0, -100))
+	enc_b.shield.aim(nick, nick + Vector2(-100, 0))
+	var b_events: Array = enc_b.field.update(0.05, nick, enc_b.shield, 8.0, arena)
+	check("beneficial projectile swept by rotating shield is blocked",
+		b_events.size() == 1 and String(b_events[0]["kind"]) == "block")
+	check("swept beneficial projectile grants zero charge", enc_b.model.charge == 0)
+
+	# 4. Hostile and beneficial speed parity across all bands and difficulty transitions.
+	for boss_id in ["scrap_king", "toxic_tide"]:
+		var e_speed = _new_encounter(String(boss_id))
+		for frac in [1.0, 0.7, 0.45, 0.2]:
+			var f_val: float = float(frac)
+			var h_ev: Array = e_speed.scheduler._schedule_pattern(f_val)
+			var b_ev: Array = e_speed.scheduler._schedule_beneficial(f_val)
+			var pending: Array = e_speed.scheduler._pending
+			var all_match := true
+			var expected_spd: float = e_speed.scheduler.projectile_speed_for(f_val)
+			for item in pending:
+				var ev: Dictionary = (item as Dictionary).get("event", {})
+				if not is_equal_approx(float(ev.get("speed", -1.0)), expected_spd):
+					all_match = false
+			check("%s at %.0f%% HP: hostile and beneficial speeds match (%.1f)" % [boss_id, f_val * 100.0, expected_spd],
+				all_match and not h_ev.is_empty() and not b_ev.is_empty())
+			e_speed.scheduler.reset()
+
+		# Active projectiles synchronize speed when boss health drops to a faster band.
+		var p_hostile: Dictionary = e_speed.field.spawn("bolt", Vector2(100, 100), Vector2(1, 0), 92.0)
+		var p_benef: Dictionary = e_speed.field.spawn("memory_mote", Vector2(100, 120), Vector2(1, 0), 92.0)
+		check("%s spawn speed parity holds between bolt and mote" % boss_id,
+			is_equal_approx(float(p_hostile["speed"]), float(p_benef["speed"])))
+		e_speed.model.boss_health = int(float(e_speed.model.boss_health_max) * 0.25)
+		var band_spd: float = e_speed.authoritative_projectile_speed()
+		e_speed.field.sync_speeds(band_spd)
+		check("%s active projectiles synchronize identically on band transition" % boss_id,
+			is_equal_approx(float(p_hostile["speed"]), band_spd) and is_equal_approx(float(p_benef["speed"]), band_spd))

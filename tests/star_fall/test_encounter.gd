@@ -850,7 +850,7 @@ func _test_phase_two_repairs() -> void:
 	# Shield starts pointing right (0 deg) and sweeps through -90 deg (up) to left (180 deg).
 	enc.field.clear()
 	s.snap_direction(Vector2(1, 0))
-	var orbit_pt := nick + Vector2(0, -1) * s.radius
+	var orbit_pt: Vector2 = nick + Vector2(0, -1) * s.radius
 	enc.field.spawn("bolt", orbit_pt + Vector2(0, -4), Vector2(0, 1), 60.0)
 	s.aim(nick, nick + Vector2(0, -100))
 	s.aim(nick, nick + Vector2(-100, 0))

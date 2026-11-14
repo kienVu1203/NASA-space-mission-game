@@ -65,8 +65,8 @@ func seed_value() -> int:
 ## state across a retry lives here and is cleared.
 func reset() -> void:
 	_clock = 0.0
-	_fire_timer = 0.0
-	_beneficial_timer = maxf(0.0, beneficial_interval_for(1.0) * 0.5)
+	_fire_timer = maxf(0.0, fire_interval_for(1.0) - 0.15)
+	_beneficial_timer = maxf(0.0, beneficial_interval_for(1.0) * 0.65)
 	_pattern_cursor = 0
 	_emitter_cursor = 0
 	_pending = []
@@ -167,8 +167,10 @@ func tick(delta: float, health_fraction: float, active_count: int) -> Array:
 	_beneficial_timer += delta
 
 	var cap := max_active_for(fraction)
+	var interval := fire_interval_for(fraction)
+	if active_count == 0 and _pending.is_empty():
+		_fire_timer = maxf(_fire_timer, interval - 0.20)
 	if active_count + _pending_count() < cap:
-		var interval := fire_interval_for(fraction)
 		while _fire_timer >= interval and active_count + _pending_count() < cap:
 			_fire_timer -= interval
 			events.append_array(_schedule_pattern(fraction))
@@ -181,7 +183,7 @@ func tick(delta: float, health_fraction: float, active_count: int) -> Array:
 		_beneficial_timer -= b_interval
 		events.append_array(_schedule_beneficial(fraction))
 
-	events.append_array(_flush_pending())
+	events.append_array(_flush_pending(fraction))
 	return events
 
 
@@ -193,9 +195,10 @@ func _pending_count() -> int:
 	return _pending.size()
 
 
-func _flush_pending() -> Array:
+func _flush_pending(fraction: float) -> Array:
 	var events: Array = []
 	var due: Array = []
+	var authoritative_speed := projectile_speed_for(fraction)
 	for entry in _pending:
 		if float(entry.get("at", 0.0)) <= _clock:
 			due.append(entry)
@@ -203,6 +206,7 @@ func _flush_pending() -> Array:
 		_pending.erase(e)
 		var event: Dictionary = e["event"]
 		event["kind"] = "spawn"
+		event["speed"] = authoritative_speed
 		events.append(event)
 	return events
 
@@ -297,7 +301,7 @@ func _schedule_beneficial(fraction: float) -> Array:
 	var telegraph: float = clampf(float(_beneficial.get("telegraph", 1.0)),
 		float(_combat.get("min_telegraph_seconds", 0.5)),
 		float(_combat.get("max_telegraph_seconds", 1.6)))
-	var speed := projectile_speed_for(fraction) * 0.9
+	var speed := projectile_speed_for(fraction)
 	var heading := _heading_to_nick(pos)
 	var event := {
 		"kind": "spawn", "emitter": pick, "type": type_id, "family": "beneficial",

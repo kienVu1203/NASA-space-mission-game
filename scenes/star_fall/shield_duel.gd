@@ -51,10 +51,17 @@ var input_locked: bool = false
 ## The robot's draw scale. The spec asks for a large, threatening presence in
 ## the rear layer; this keeps it a backdrop rather than a small sprite.
 const BOSS_SCALE := 1.32
+const MAX_SHIELD_RECOIL := 3.2
+const BILL_SUPPORT_POS := Vector2(82.0, 296.0)
 var _shake_offset: Vector2 = Vector2.ZERO
 
 var _cursor_canvas: Vector2 = Vector2(320.0, 360.0)
 var _ready_chime_played: bool = false
+var shield_recoil: float = 0.0
+var shield_impact_flash: float = 0.0
+var shield_jitter_phase: float = 0.0
+var last_impact_point: Vector2 = Vector2.ZERO
+var reduced_motion: bool = false
 
 
 func setup(skin_ref, ui_ref, boss_data: Dictionary, all_data) -> void:
@@ -82,6 +89,10 @@ func begin_attempt() -> void:
 	effects.clear()
 	shake = 0.0
 	strike_flash = 0.0
+	shield_recoil = 0.0
+	shield_impact_flash = 0.0
+	shield_jitter_phase = 0.0
+	last_impact_point = Vector2.ZERO
 	intro_banner = 6.0
 	_ready_chime_played = false
 	encounter.begin()
@@ -100,6 +111,13 @@ func retry() -> void:
 
 
 # ---------------------------------------------------------------- input
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		if state == State.FIGHT and not input_locked and encounter != null:
+			_update_cursor()
+			queue_redraw()
+
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey):
@@ -261,6 +279,8 @@ func _process(delta: float) -> void:
 	_update_effects(dt)
 	shake = maxf(0.0, shake - dt * 6.0)
 	strike_flash = maxf(0.0, strike_flash - dt * 3.0)
+	shield_recoil = maxf(0.0, shield_recoil - dt * 18.0)
+	shield_impact_flash = maxf(0.0, shield_impact_flash - dt * 6.5)
 	ui.tick(dt)
 	queue_redraw()
 
@@ -271,6 +291,8 @@ func _process(delta: float) -> void:
 func _advance(dt: float) -> void:
 	if state == State.PAUSED:
 		return
+	shield_recoil = maxf(0.0, shield_recoil - dt * 18.0)
+	shield_impact_flash = maxf(0.0, shield_impact_flash - dt * 6.5)
 	var events: Array = encounter.tick(dt)
 	_consume(events)
 	_sync_state_from_model()
@@ -308,7 +330,17 @@ func _consume(events: Array) -> void:
 		match String(event.get("kind", "")):
 			"block":
 				skin.audio.sfx_shield_block()
-				_effect("spark", event.get("point", Vector2.ZERO), "f2a05a", 0.22)
+				var pt: Vector2 = event.get("point", Vector2.ZERO)
+				var proj: Dictionary = event.get("projectile", {})
+				var is_beneficial: bool = String(proj.get("family", "hostile")) == "beneficial"
+				var spark_col := "7ef2c8" if is_beneficial else "f2a05a"
+				last_impact_point = pt
+				shield_impact_flash = 1.0
+				shield_jitter_phase += 1.7
+				if not reduced_motion:
+					shield_recoil = minf(MAX_SHIELD_RECOIL, shield_recoil + 1.85)
+				_effect("spark", pt, spark_col, 0.22)
+				_effect("shield_impact", pt, spark_col, 0.18)
 			"hit":
 				skin.audio.sfx_player_hurt()
 				shake = maxf(shake, 3.0)
@@ -318,7 +350,8 @@ func _consume(events: Array) -> void:
 				_effect("absorb", event.get("point", Vector2.ZERO), "7ef2c8", 0.5)
 				var gained := int(event.get("gained", 0))
 				if gained > 0:
-					_effect("charge_text", Vector2(encounter.nick_position.x, encounter.nick_position.y - 46), "7ef2c8", 0.7, "+%d" % gained)
+					var plate_top: float = encounter.charge_plate_rect().position.y
+					_effect("charge_text", Vector2(encounter.nick_position.x, plate_top - 4.0), "7ef2c8", 0.7, "+%d" % gained)
 			"counter_strike":
 				skin.audio.sfx_counter_hit()
 				strike_flash = 1.0
@@ -390,6 +423,7 @@ func _draw() -> void:
 	_draw_emitters()
 	_draw_telegraphs()
 	_draw_projectiles()
+	_draw_bill_support()
 	_draw_nick()
 	_draw_shield()
 	_draw_effects()
@@ -745,15 +779,8 @@ func _draw_emitters() -> void:
 			var pulse: float = 0.5 + 0.5 * sin(time * 24.0)
 			base_col = glow.lerp(SFPalette.PAPER, 0.25 + 0.35 * pulse)
 			# Charge ring, growing as the projectile is about to launch.
-			var r: float = 4.0 + level * 12.0
+			var r: float = 4.0 + level * 10.0
 			_draw_ring(draw_p, r, Color(base_col.r, base_col.g, base_col.b, 0.35 + 0.4 * level))
-			# Aim line from the emitter toward Nick, dim so it never hides a
-			# projectile.
-			var dir: Vector2 = (encounter.nick_position - draw_p)
-			if dir.length_squared() > 1.0:
-				dir = dir.normalized()
-				var a_end: Vector2 = draw_p + dir * (58.0 + level * 26.0)
-				draw_line(draw_p, a_end, Color(base_col.r, base_col.g, base_col.b, 0.18 + 0.22 * level), 1.0)
 		if on_screen:
 			# Machinery housing for emitters that sit inside the frame.
 			draw_rect(Rect2(draw_p - Vector2(9, 9), Vector2(18, 18)), SFPalette.STEEL_DARK.darkened(0.25), true)
@@ -768,27 +795,11 @@ func _draw_telegraphs() -> void:
 		var duration: float = maxf(0.001, float(t.get("duration", 1.0)))
 		var progress: float = clampf(float(t.get("elapsed", 0.0)) / duration, 0.0, 1.0)
 		var from: Vector2 = t.get("position", Vector2.ZERO)
-		var to: Vector2 = encounter.nick_position
 		var beneficial := String(t.get("family", "hostile")) == "beneficial"
 		var c: Color = SFPalette.CYAN if beneficial else SFPalette.RED
-		# The lane fills in as the warning completes, so the direction is legible
-		# even on a small window.
-		var dir := to - from
-		if dir.length_squared() < 1.0:
-			continue
-		var length: float = dir.length()
-		var segments := 18
-		for i in segments:
-			var f0: float = float(i) / float(segments)
-			if f0 > progress:
-				break
-			var f1: float = minf(progress, float(i + 1) / float(segments))
-			var a := from.lerp(to, f0)
-			var b := from.lerp(to, f1)
-			var alpha: float = 0.10 + 0.22 * progress
-			draw_line(a, b, Color(c.r, c.g, c.b, alpha), 2.0)
-		# The emitter itself pulses harder.
-		_draw_ring(from, 10.0 + 6.0 * progress, Color(c.r, c.g, c.b, 0.30 + 0.5 * progress))
+		# Localized charge ring on the firing emitter only (no fake beam lines).
+		var draw_p := Vector2(clampf(from.x, 10.0, VW - 10.0), clampf(from.y, 34.0, VH - 14.0))
+		_draw_ring(draw_p, 8.0 + 5.0 * progress, Color(c.r, c.g, c.b, 0.30 + 0.5 * progress))
 
 
 func _draw_ring(center: Vector2, radius: float, color: Color) -> void:
@@ -930,7 +941,22 @@ func _diamond(pos: Vector2, r: float) -> PackedVector2Array:
 	])
 
 
-# ---------------------------------------------------------------- nick / shield
+# ---------------------------------------------------------------- bill / nick / shield
+
+func _draw_bill_support() -> void:
+	var pos := BILL_SUPPORT_POS
+	var bob: float = round(sin(time * 2.6) * 1.0)
+	skin.contact_shadow(self, pos, 18.0, 0.30)
+	var pulse: float = 0.45 + 0.35 * sin(time * 4.2)
+	_draw_ring(pos + Vector2(0.0, -2.0), 11.0, Color(SFPalette.CYAN.r, SFPalette.CYAN.g, SFPalette.CYAN.b, 0.22 * pulse))
+	var tex: Texture2D = skin.sprites.get("bill_on", null)
+	if tex != null:
+		var size := tex.get_size()
+		draw_texture_rect(tex, Rect2(pos.x - size.x * 0.5, pos.y - size.y + bob, size.x, size.y), false)
+	var tag_rect := Rect2(pos.x - 14.0, pos.y - 36.0 + bob, 28.0, 9.0)
+	draw_rect(tag_rect, Color(0.02, 0.05, 0.06, 0.82), true)
+	skin.text_c(self, pos.x, tag_rect.position.y + 2.0, "BILL", SFPalette.CYAN)
+
 
 func _draw_nick() -> void:
 	var pos: Vector2 = encounter.nick_position
@@ -953,30 +979,38 @@ func _draw_shield() -> void:
 	var shield = encounter.shield
 	var pos: Vector2 = encounter.nick_position
 	var locked: bool = encounter.model.shield_locked()
-	var points: PackedVector2Array = shield.arc_points(pos, 26, 0.0)
+	var dir: Vector2 = shield.direction
+	var visual_center: Vector2 = pos
+	var radial_offset: float = 0.0
+	if shield_recoil > 0.0 and not reduced_motion:
+		var tangent := Vector2(-dir.y, dir.x)
+		var jitter: float = sin(time * 58.0 + shield_jitter_phase) * shield_recoil * 0.45
+		visual_center = pos - dir * (shield_recoil * 0.75) + tangent * jitter
+		radial_offset = -shield_recoil * 0.35
+	var points: PackedVector2Array = shield.arc_points(visual_center, 26, radial_offset)
 	var thickness: float = encounter.shield_thickness
-	var inner: PackedVector2Array = shield.arc_points(pos, 26, -thickness)
-	var col := SFPalette.CYAN if not locked else SFPalette.GOLD
+	var inner: PackedVector2Array = shield.arc_points(visual_center, 26, radial_offset - thickness)
+	var base_col := SFPalette.CYAN if not locked else SFPalette.GOLD
+	var flash_t: float = clampf(shield_impact_flash, 0.0, 1.0)
+	var col: Color = base_col.lerp(SFPalette.PAPER, flash_t * 0.58)
 	# Outer glow band.
 	for i in points.size() - 1:
-		draw_line(points[i], points[i + 1], Color(col.r, col.g, col.b, 0.10), 11.0)
+		draw_line(points[i], points[i + 1], Color(col.r, col.g, col.b, 0.10 + 0.14 * flash_t), 11.0)
 	# Main band.
 	for i in points.size() - 1:
-		draw_line(points[i], points[i + 1], Color(col.r, col.g, col.b, 0.65), thickness)
+		draw_line(points[i], points[i + 1], Color(col.r, col.g, col.b, 0.68 + 0.24 * flash_t), thickness + flash_t * 1.2)
 	# Inner highlight, offset half a pixel so the edge stays crisp.
 	for i in points.size() - 1:
 		var a: Vector2 = points[i].lerp(inner[i], 0.72)
 		var b: Vector2 = points[i + 1].lerp(inner[i + 1], 0.72)
-		draw_line(a, b, Color(col.r, col.g, col.b, 0.30), 1.0)
+		draw_line(a, b, Color(col.r, col.g, col.b, 0.32 + 0.30 * flash_t), 1.0)
 	# Endpoint posts make the coverage limit explicit.
-	for p in shield.arc_endpoints(pos, 0.0):
+	for p in shield.arc_endpoints(visual_center, radial_offset):
 		draw_rect(Rect2((p as Vector2) - Vector2(2, 2), Vector2(4, 4)), SFPalette.PAPER, true)
 	# A short direction tick from Nick, matching the authoritative direction.
-	var dir: Vector2 = shield.direction
 	draw_line(pos + dir * 12.0, pos + dir * (float(shield.radius) - 2.0), Color(col.r, col.g, col.b, 0.22), 1.0)
 	# The cursor crosshair, drawn in the same space the shield reads.
 	draw_rect(Rect2(_cursor_canvas - Vector2(1, 1), Vector2(2, 2)), Color(1, 1, 1, 0.5), true)
-
 
 
 # ---------------------------------------------------------------- effects
@@ -996,6 +1030,21 @@ func _draw_effects() -> void:
 					var d: float = 4.0 + f * 16.0
 					var p := at + Vector2(cos(ang), sin(ang)) * d
 					draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), Color(c.r, c.g, c.b, (1.0 - f) * 0.9), true)
+			"shield_impact":
+				var nick_p: Vector2 = encounter.nick_position
+				var normal: Vector2 = (at - nick_p).normalized()
+				if normal.length_squared() < 0.001:
+					normal = encounter.shield.direction as Vector2
+				var tangent := Vector2(-normal.y, normal.x)
+				var alpha: float = (1.0 - f)
+				_draw_ring(at, 3.0 + f * 9.0, Color(1.0, 0.98, 0.92, alpha * 0.85))
+				draw_line(at - tangent * (5.0 + f * 5.0), at + tangent * (5.0 + f * 5.0), Color(c.r, c.g, c.b, alpha * 0.9), 2.0)
+				for side in [-1.0, 0.0, 1.0]:
+					var side_f: float = float(side)
+					var ray_dir: Vector2 = (normal + tangent * (side_f * 0.55)).normalized()
+					var p0: Vector2 = at + ray_dir * (2.0 + f * 3.0)
+					var p1: Vector2 = at + ray_dir * (6.0 + f * 10.0)
+					draw_line(p0, p1, Color(1.0, 0.96, 0.86, alpha * 0.85), 1.0)
 			"hurt":
 				draw_rect(Rect2(at - Vector2(7, 7), Vector2(14, 14)), Color(c.r, c.g, c.b, (1.0 - f) * 0.45), true)
 				draw_rect(Rect2(at - Vector2(11, 1), Vector2(22, 2)), Color(c.r, c.g, c.b, (1.0 - f) * 0.6), true)
@@ -1088,18 +1137,16 @@ func _draw_hud() -> void:
 
 func _draw_charge_meter() -> void:
 	var pos: Vector2 = encounter.nick_position
-	var w := 64.0
-	var h := 8.0
-	var r := Rect2(pos.x - w * 0.5, pos.y - 44.0, w, h)
+	var r: Rect2 = encounter.charge_meter_rect()
 	var ratio: float = encounter.model.charge_fraction()
 	var full: bool = encounter.model.charge_full()
-	# A plate behind the label and the meter: the charge readout must never be
-	# confused with the robot's own screens behind Nick.
-	var plate := Rect2(r.position.x - 8.0, r.position.y - 14.0, r.size.x + 16.0, r.size.y + 18.0)
+	# A plate behind the label and the meter: anchored above Nick and
+	# completely outside the shield's visible and collision envelope.
+	var plate: Rect2 = encounter.charge_plate_rect()
 	draw_rect(plate, Color(0.02, 0.05, 0.05, 0.9), true)
 	draw_rect(plate, Color(SFPalette.CYAN_DIM.r, SFPalette.CYAN_DIM.g, SFPalette.CYAN_DIM.b, 0.7), false, 1.0)
 	skin.bar(self, r.position, r.size, ratio, SFPalette.CYAN if not full else SFPalette.GOLD, SFPalette.INK)
-	skin.text_c(self, pos.x, r.position.y - 12.0, "CHARGE", SFPalette.PAPER_DIM)
+	skin.text_c(self, pos.x, r.position.y - 11.0, "CHARGE", SFPalette.PAPER_DIM)
 	# No text inside the meter itself: it must never look like a health bar.
 	for i in 4:
 		var tx := r.position.x + r.size.x * (float(i + 1) / 5.0)

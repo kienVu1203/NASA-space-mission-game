@@ -9,6 +9,7 @@ extends Node2D
 
 const SFProp := preload("res://scenes/star_fall/prop.gd")
 const SFPlayer := preload("res://scenes/star_fall/player.gd")
+const SFBillCompanion := preload("res://scenes/star_fall/bill_companion.gd")
 const SFPalette := preload("res://core/star_fall/sf_palette.gd")
 
 signal interact_requested(object_id: String, prop)
@@ -18,6 +19,7 @@ var skin
 var site: Dictionary = {}
 var theme_name: String = "earth"
 var player
+var bill_companion = null
 var camera: Camera2D
 var props: Array = []
 var _interactables: Array = []
@@ -176,6 +178,67 @@ func set_player_position(p: Vector2) -> void:
 		player.position = p
 		if camera != null:
 			camera.reset_smoothing()
+	if bill_companion != null and is_instance_valid(bill_companion):
+		bill_companion.snap_behind(p)
+
+
+## Synchronises Bill's active companion node with the campaign state.
+## Idempotent: never creates duplicate Bill instances, and removes the static
+## dormant `bill_body` prop in `crash_site` once Bill is active so Bill follows
+## Nick cleanly while remaining interactable.
+func sync_companion(bill_active: bool) -> void:
+	var site_id := String(site.get("id", ""))
+	if not bill_active or site_id == "spaceport":
+		if bill_companion != null and is_instance_valid(bill_companion):
+			if _focused == bill_companion:
+				_clear_focus()
+			_interactables.erase(bill_companion)
+			bill_companion.queue_free()
+		bill_companion = null
+		return
+
+	# Remove static dormant Bill prop if present so there is only one Bill.
+	var static_bill = prop_by_id("bill_body")
+	if static_bill != null:
+		remove_prop("bill_body")
+
+	if bill_companion == null or not is_instance_valid(bill_companion):
+		bill_companion = SFBillCompanion.new()
+		bill_companion.name = "Bill"
+		bill_companion.setup(skin, self, player)
+		if _sorted_root != null:
+			_sorted_root.add_child(bill_companion)
+		else:
+			add_child(bill_companion)
+		if not _interactables.has(bill_companion):
+			_interactables.append(bill_companion)
+		if player != null:
+			bill_companion.snap_behind(player.position)
+
+
+## Ground-level solid footprints for companion obstacle avoidance.
+func solid_rects() -> Array:
+	var out: Array = []
+	for p in props:
+		if not is_instance_valid(p):
+			continue
+		var sz: Vector2 = p.solid_size
+		if sz != Vector2.ZERO:
+			var h: float = maxf(4.0, sz.y)
+			out.append(Rect2(p.position.x - sz.x * 0.5, p.position.y - h, sz.x, h))
+	return out
+
+
+func configure_gate(object_id: String, unlocked: bool, cleared: bool, dest_title: String, status_text: String, unlocked_sprite: String = "", locked_sprite: String = "", next_label: String = "") -> void:
+	var prop = prop_by_id(object_id)
+	if prop == null:
+		return
+	if unlocked and unlocked_sprite != "":
+		prop.set_sprite(unlocked_sprite)
+	elif not unlocked and locked_sprite != "":
+		prop.set_sprite(locked_sprite)
+	if prop.has_method("configure_gate_state"):
+		prop.configure_gate_state(unlocked, cleared, dest_title, status_text, next_label)
 
 
 func prop_by_id(object_id: String):
@@ -245,10 +308,16 @@ func _update_focus() -> void:
 	var best = null
 	var best_dist := 34.0
 	for p in _interactables:
+		if p == bill_companion:
+			continue
 		var d: float = player.position.distance_to(p.position)
 		if d < best_dist:
 			best_dist = d
 			best = p
+	if best == null and bill_companion != null and is_instance_valid(bill_companion):
+		var bd: float = player.position.distance_to(bill_companion.position)
+		if bd <= 21.0:
+			best = bill_companion
 	if best != _focused:
 		if _focused != null:
 			_focused.highlighted = false

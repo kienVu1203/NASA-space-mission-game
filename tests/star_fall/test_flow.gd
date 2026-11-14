@@ -352,8 +352,29 @@ func _forgotten_city() -> void:
 	check("the city has a green memory shrine", main.world.prop_by_id("memory_city_green") != null)
 	check("the city has the control-center door", main.world.prop_by_id("city_boss_gate") != null)
 	check("the city has optional salvage", main.world.prop_by_id("salvage_city_scrap") != null)
+	check("Bill companion is present in Forgotten City", main.world.bill_companion != null)
+	check("Bill trails Nick without overlapping him",
+		main.world.bill_companion.position.distance_to(main.world.player.position) >= 16.0
+		and main.world.bill_companion.position.distance_to(main.world.player.position) <= 42.0)
 
-	# The gate must refuse entry until the checkpoint has been used.
+	# Move Nick and verify Bill follows and stops naturally.
+	var bill_start: Vector2 = main.world.bill_companion.position
+	main.world.player.position += Vector2(60.0, -24.0)
+	main.world.player.velocity = Vector2(58.0, -20.0)
+	for i in 12:
+		main.world.bill_companion.step_follow(0.05)
+	check("Bill moves to follow Nick during exploration",
+		main.world.bill_companion.position.distance_to(bill_start) > 10.0)
+	main.world.player.velocity = Vector2.ZERO
+	for i in 20:
+		main.world.bill_companion.step_follow(0.05)
+	check("Bill stops naturally behind Nick when Nick stops",
+		not main.world.bill_companion._moving
+		and main.world.bill_companion.position.distance_to(main.world.player.position) >= 16.0)
+
+	# The gate must start locked and refuse entry until the checkpoint has been used.
+	var city_gate = main.world.prop_by_id("city_boss_gate")
+	check("the control-center door starts in locked visual state", not city_gate.gate_unlocked and city_gate.sprite_key == "control_door")
 	main._on_world_interact("city_boss_gate", main.world.prop_by_id("city_boss_gate"))
 	check("the gate refuses entry before the checkpoint", main.screen == main.Screen.WORLD and main.dialogue != null)
 	finish_dialogue()
@@ -362,6 +383,7 @@ func _forgotten_city() -> void:
 	main._on_world_interact("city_checkpoint", main.world.prop_by_id("city_checkpoint"))
 	finish_dialogue()
 	check("the city checkpoint is set", main.campaign.has_flag("city_checkpoint"))
+	check("the checkpoint unlocks the control-center door", city_gate.gate_unlocked and city_gate.sprite_key == "control_door_open")
 	check("the checkpoint marks the pre-boss stage", main.campaign.checkpoint_stage == main.campaign.STAGE_CITY_BOSS)
 	check("the checkpoint saves", SFSave.has_valid_save())
 
@@ -503,6 +525,9 @@ func _silent_coast() -> void:
 	check("the records are recorded", main.campaign.is_collected("coast_records_read"))
 
 	# The facility refuses entry without the checkpoint.
+	check("Bill companion persists into Silent Coast", main.world.bill_companion != null)
+	var coast_gate = main.world.prop_by_id("coast_boss_gate")
+	check("the cleanup facility gate starts locked with dedicated gate sprite", not coast_gate.gate_unlocked and coast_gate.sprite_key == "facility_gate")
 	main._on_world_interact("coast_boss_gate", main.world.prop_by_id("coast_boss_gate"))
 	check("the facility refuses entry before the checkpoint", main.dialogue != null)
 	finish_dialogue()
@@ -511,6 +536,7 @@ func _silent_coast() -> void:
 	main._on_world_interact("coast_checkpoint", main.world.prop_by_id("coast_checkpoint"))
 	finish_dialogue()
 	check("the coast checkpoint is set", main.campaign.has_flag("coast_checkpoint"))
+	check("the coast checkpoint unlocks the cleanup facility gate", coast_gate.gate_unlocked and coast_gate.sprite_key == "facility_gate_open")
 	check("the coast checkpoint marks the pre-boss stage", main.campaign.checkpoint_stage == main.campaign.STAGE_COAST_BOSS)
 
 	# The coastal memory is optional and returns to the world.

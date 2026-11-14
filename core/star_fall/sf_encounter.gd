@@ -106,11 +106,42 @@ func reset() -> void:
 func shield_config() -> Dictionary:
 	var cfg: Dictionary = {
 		"radius": shield.radius,
+		"thickness": shield.thickness,
 		"coverage_degrees": shield.coverage_degrees,
+		"previous_coverage_degrees": shield.previous_coverage_degrees,
 		"min_cursor_distance": shield.min_cursor_distance,
+		"contact_tolerance": shield.contact_tolerance,
+		"angular_tolerance_degrees": shield.angular_tolerance_degrees,
+		"charge_meter_margin": shield.charge_meter_margin,
 		"initial_direction": {"x": 0.0, "y": 1.0},
 	}
 	return cfg
+
+
+## Authoritative travel speed shared by both hostile and beneficial energy at
+## the current boss health band.
+func authoritative_projectile_speed() -> float:
+	if scheduler == null or model == null:
+		return 100.0
+	return scheduler.projectile_speed_for(model.health_fraction())
+
+
+## Screen-space rectangle of the charge meter bar anchored above Nick and
+## completely outside the shield's visible and collision envelope.
+func charge_meter_rect() -> Rect2:
+	var w := 64.0
+	var h := 6.0
+	var bottom_offset: float = shield.charge_meter_bottom_offset(shield_thickness)
+	var bar_bottom_y: float = nick_position.y - bottom_offset
+	var bar_top_y: float = bar_bottom_y - h
+	return Rect2(nick_position.x - w * 0.5, bar_top_y, w, h)
+
+
+## Full outer plate bounds of the charge meter (including label and frame),
+## used to verify clearance from the shield and top HUD.
+func charge_plate_rect() -> Rect2:
+	var bar := charge_meter_rect()
+	return Rect2(bar.position.x - 10.0, bar.position.y - 16.0, bar.size.x + 20.0, bar.size.y + 20.0)
 
 
 func begin() -> void:
@@ -231,13 +262,22 @@ func tick(delta: float) -> Array:
 		elif kind == "spawn":
 			var type_id := String(e.get("type", ""))
 			var family := String(e.get("family", "hostile"))
-			field.spawn(type_id, e.get("position", Vector2.ZERO), e.get("heading", Vector2(0, 1)), float(e.get("speed", 100.0)))
+			var spawn_speed := authoritative_projectile_speed()
+			field.spawn(type_id, e.get("position", Vector2.ZERO), e.get("heading", Vector2(0, 1)), spawn_speed)
 			last_spawn_at = clock
-			# The forwarded event keeps the family and type, so a listener (the
-			# HUD, a test) can tell a beneficial mote from a hostile bolt without
-			# reaching into the projectile field.
-			events.append({"kind": "spawn", "emitter": String(e.get("emitter", "")), "type": type_id, "family": family})
+			# The forwarded event keeps the family, type, position, and speed so a
+			# listener (the HUD, a test) can inspect spawned projectiles directly.
+			events.append({
+				"kind": "spawn",
+				"emitter": String(e.get("emitter", "")),
+				"type": type_id,
+				"family": family,
+				"position": e.get("position", Vector2.ZERO),
+				"speed": spawn_speed,
+			})
 
+	# Enforce speed parity across active projectiles when difficulty bands change.
+	field.sync_speeds(authoritative_projectile_speed())
 	var collisions: Array = field.update(delta, nick_position, shield, body_radius, arena)
 	for c in collisions:
 		var collision: Dictionary = c

@@ -13,6 +13,10 @@ drive are fictional story devices, not claims about real technology.
 **Everything is documented in [docs/star_fall_contract.md](docs/star_fall_contract.md)** —
 architecture, data schemas, stable IDs, save format, units and test commands.
 
+> **The repo also still contains Operation: Starfall**, a complete orbital-salvage
+> satire under `scenes/starfall/`, `core/starfall/` and `data/starfall/`. It stays
+> runnable (see [docs/starfall.md](docs/starfall.md)) but STAR FALL is the main scene.
+
 ## Quick facts (read this first, humans and Claude sessions)
 
 | Item | Value |
@@ -24,7 +28,8 @@ architecture, data schemas, stable IDs, save format, units and test commands.
 | Resolution | 640x360 base, window opens at 1280x720, `canvas_items`, nearest filtering |
 | Game type | 2D angled top-down exploration, Y-sorted, generated art and audio |
 | Flow | Menu -> Earth -> Briefing -> Construction -> Preflight -> Launch -> Rift -> Crash Site -> Salvage -> Bill -> Memory -> Checkpoint |
-| Status | Chapter 1 complete and playable; later chapters deferred |
+| Status | **STAR FALL Chapter 1** complete and playable; later chapters deferred |
+| Also in repo | **Operation: Starfall**, a complete orbital-salvage satire in `scenes/starfall/` (see [docs/starfall.md](docs/starfall.md)) |
 
 ## Getting started
 
@@ -76,10 +81,14 @@ scenes/star_fall/ main.tscn + main.gd (flow controller), world.gd, player.gd,
                   prop.gd, hud_overlay.gd, construction_screen.gd
 data/star_fall/   ship_parts.json, campaign.json, sites.json: all tuning and prose
 tests/star_fall/  test_parse.gd, test_logic.gd, test_flow.gd, capture.gd
-docs/             star_fall_contract.md (source of truth), test_checklist.md, roles.md
+docs/             star_fall_contract.md (source of truth), starfall.md, test_checklist.md, roles.md
+core/starfall/    Operation: Starfall: palette, font, sprites, synth, ship and debris models
+scenes/starfall/  Operation: Starfall: its own 480x270 screens
+data/starfall/    Operation: Starfall: balance, debris, sectors, logs, endings, upgrades
+tests/            Operation: Starfall suites (playtest, flow, botrun), synth check, capture tool
 core/             Legacy mission-planner skeleton: calculations.gd, mission_rules.gd
 data/             Legacy empty JSON files, untouched
-assets/           Placeholder folders and CREDITS.md (the game loads no asset files)
+assets/           Placeholder folders and CREDITS.md (neither game loads asset files)
 ```
 
 ## Roles and folder ownership
@@ -150,6 +159,9 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
 - **Chapter 2 onward:** combat, crafting, the Forgotten City, Silent Coast,
   Dawn Tower and Return Home are declared in `data/star_fall/campaign.json` and
   are not implemented. See `docs/star_fall_contract.md` section 11.
+- **Combined test runner:** there is no single script that runs both games'
+  suites. Run STAR FALL's three from the "Run it" section and Operation:
+  Starfall's from [docs/starfall.md](docs/starfall.md).
 
 ## Event-day timeline (48h)
 

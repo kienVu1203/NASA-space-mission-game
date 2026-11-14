@@ -27,6 +27,13 @@ const SFTypingDuel := preload("res://scenes/star_fall/typing_duel.gd")
 const SFWorkshop := preload("res://scenes/star_fall/reconstruction_screen.gd")
 const SFVocabulary := preload("res://core/star_fall/sf_vocabulary.gd")
 const SFContent := preload("res://core/star_fall/sf_content.gd")
+# Phase 4.
+const SFFinale := preload("res://core/star_fall/sf_finale.gd")
+const SFQA := preload("res://core/star_fall/sf_qa.gd")
+const SFFinalAssembly := preload("res://scenes/star_fall/final_assembly_screen.gd")
+const SFCinematic := preload("res://scenes/star_fall/cinematic_screen.gd")
+const SFReport := preload("res://scenes/star_fall/mission_report_screen.gd")
+const SFCredits := preload("res://scenes/star_fall/credits_screen.gd")
 
 enum Screen {
 	TITLE,
@@ -43,6 +50,10 @@ enum Screen {
 	TYPING,
 	WORKSHOP,
 	JOURNAL,
+	FINAL_ASSEMBLY,
+	CINEMATIC,
+	REPORT,
+	CREDITS,
 }
 
 enum LaunchPhase {COUNTDOWN, ASCENT, SIGNAL, RIFT, CRASH, DONE}
@@ -93,6 +104,19 @@ var typing_data: Dictionary = {}
 var journal_index: int = 0
 var journal_return: int = Screen.WORLD
 
+# Phase 4 screens and content.
+var assembly_screen = null
+var cinematic_screen = null
+var report_screen = null
+var credits_screen = null
+var finale_data: Dictionary = {}
+var reconstruction_data: Dictionary = {}
+var _finale_started: bool = false
+
+# QA stage-skip hotkey (I + O + P). Enabled in debug builds, or with --qa.
+var qa
+var qa_enabled: bool = false
+
 # Encounter dialogue is read over a frozen arena; the duel checks this.
 var encounter_input_locked: bool = false
 
@@ -115,6 +139,9 @@ var memory_next: Callable = Callable()
 # Settings.
 var setting_ambience: bool = true
 var setting_text_speed: float = 52.0
+## Reduces screen shake and full-screen flashes without changing any rule. An
+## accessibility preference: it never affects the score, the report or progress.
+var setting_reduced_motion: bool = false
 
 # Save status for the menu.
 var save_available: bool = false
@@ -144,6 +171,15 @@ func _ready() -> void:
 	if not vocab.load_all():
 		push_error("STAR FALL: the vocabulary library failed validation")
 	typing_data = SFContent.read_json("res://data/star_fall/typing.json") as Dictionary
+	finale_data = SFContent.read_json("res://data/star_fall/finale.json") as Dictionary
+	if finale_data.is_empty():
+		push_error("STAR FALL: finale.json failed to load")
+	reconstruction_data = SFContent.read_json("res://data/star_fall/reconstruction.json") as Dictionary
+	qa = SFQA.new()
+	qa_enabled = SFQA.is_enabled()
+	if qa_enabled and not finale_data.is_empty():
+		var qa_data: Dictionary = finale_data.get("qa", {}) as Dictionary
+		qa.cooldown_seconds = float(qa_data.get("cooldown_seconds", 0.45))
 
 	audio = SFAudio.new()
 	audio.name = "SFAudio"
@@ -213,6 +249,7 @@ func _rebuild_settings_menu() -> void:
 	settings_menu.set_items([
 		{"id": "ambience", "label": "AMBIENT SOUND", "detail": "ON" if setting_ambience else "OFF", "enabled": true},
 		{"id": "text_speed", "label": "TEXT SPEED", "detail": "FAST" if setting_text_speed > 60.0 else ("SLOW" if setting_text_speed < 40.0 else "NORMAL"), "enabled": true},
+		{"id": "reduced_motion", "label": "REDUCED MOTION", "detail": "ON" if setting_reduced_motion else "OFF", "enabled": true},
 		{"id": "back", "label": "BACK", "enabled": true},
 	], String(settings_menu.current_id()))
 
@@ -268,12 +305,30 @@ func _go(next: int) -> void:
 	if workshop_screen != null:
 		workshop_screen.queue_free()
 		workshop_screen = null
+	if assembly_screen != null:
+		assembly_screen.queue_free()
+		assembly_screen = null
+	if cinematic_screen != null:
+		cinematic_screen.queue_free()
+		cinematic_screen = null
+	if report_screen != null:
+		report_screen.queue_free()
+		report_screen = null
+	if credits_screen != null:
+		credits_screen.queue_free()
+		credits_screen = null
 
 	screen = next
 	blink = 0.0
 	pause_open = false
 	_transition_busy = false
 	ui.clear_toast()
+	# The finale latch belongs to one attempt. Returning to the title (a new game,
+	# a quit, or the end of the credits) clears it, so a later run can confirm
+	# final assembly again. `begin_final_assembly()` still refuses a second
+	# snapshot inside one run.
+	if next == Screen.TITLE:
+		_finale_started = false
 
 	match next:
 		Screen.TITLE:
@@ -316,7 +371,28 @@ func _go(next: int) -> void:
 			_enter_typing()
 		Screen.WORKSHOP:
 			_enter_workshop()
+		Screen.FINAL_ASSEMBLY:
+			if audio.has_method("play_music"):
+				audio.play_music("construction")
+			_enter_final_assembly()
+		Screen.CINEMATIC:
+			_enter_cinematic()
+		Screen.REPORT:
+			if audio.has_method("play_music"):
+				audio.play_music("checkpoint")
+			_enter_report()
+		Screen.CREDITS:
+			_enter_credits()
 	queue_redraw()
+
+
+## Pushes the accessibility preference to every screen that can shake or flash.
+## Safe to call at any time; screens that are not open are simply skipped.
+func apply_reduced_motion() -> void:
+	if duel != null:
+		duel.reduced_motion = setting_reduced_motion
+	if typing_duel != null:
+		typing_duel.reduced_motion = setting_reduced_motion
 
 
 func _enter_world(zone_id: String) -> void:
@@ -444,6 +520,10 @@ func trigger_transition(style: int = 0, duration: float = 0.28) -> void:
 	if DisplayServer.get_name() == "headless":
 		transition_alpha = 0.0
 		return
+	if setting_reduced_motion:
+		# A short fade only: no full-screen white flash, no shutter wipe.
+		style = 0
+		duration = minf(duration, 0.18)
 	transition_style = style
 	transition_duration = maxf(0.05, duration)
 	transition_timer = 0.0
@@ -497,6 +577,8 @@ func apply_focus_state() -> void:
 		typing_duel.input_locked = encounter_input_locked
 	if workshop_screen != null:
 		workshop_screen.input_locked = encounter_input_locked
+	if assembly_screen != null:
+		assembly_screen.input_locked = encounter_input_locked
 
 
 # ---------------------------------------------------------------- input
@@ -540,6 +622,26 @@ func _unhandled_input(event: InputEvent) -> void:
 	if dialogue != null:
 		_handle_dialogue_key(key_event.keycode)
 		return
+
+	# Screens that own their whole keyboard take it before the global match, so a
+	# letter can never leak into the campaign shortcuts below.
+	match screen:
+		Screen.FINAL_ASSEMBLY:
+			if assembly_screen != null:
+				assembly_screen.handle_key(key_event.keycode)
+			return
+		Screen.CINEMATIC:
+			if cinematic_screen != null:
+				cinematic_screen.handle_key(key_event.keycode)
+			return
+		Screen.REPORT:
+			if report_screen != null:
+				report_screen.handle_key(key_event.keycode)
+			return
+		Screen.CREDITS:
+			if credits_screen != null:
+				credits_screen.handle_key(key_event.keycode)
+			return
 
 	match screen:
 		Screen.TITLE:
@@ -782,6 +884,18 @@ func _resume_from_campaign() -> void:
 			_go(Screen.WORKSHOP)
 		SFCampaign.STAGE_READY:
 			_go(Screen.CHECKPOINT)
+		SFCampaign.STAGE_FINAL_ASSEMBLY:
+			# The design is frozen and the snapshot is safe. Resuming here reopens
+			# the gate, which continues into the installation and the escape.
+			_go(Screen.FINAL_ASSEMBLY)
+		SFCampaign.STAGE_ESCAPE:
+			# A cinematic is never resumed mid-flight: the pre-finale checkpoint
+			# (final_assembly) is the documented safe resume point.
+			_replay_escape()
+		SFCampaign.STAGE_RETURN_HOME, SFCampaign.STAGE_MISSION_REPORT:
+			_go(Screen.REPORT)
+		SFCampaign.STAGE_CREDITS:
+			_go(Screen.CREDITS)
 		_:
 			_go(Screen.WORLD)
 
@@ -824,6 +938,10 @@ func _settings_adjust(direction: int) -> void:
 				setting_text_speed = 90.0 if setting_text_speed >= 90.0 else (90.0 if setting_text_speed > 45.0 else 52.0)
 			else:
 				setting_text_speed = 30.0 if setting_text_speed <= 45.0 else 52.0
+			audio.sfx_select()
+		"reduced_motion":
+			setting_reduced_motion = not setting_reduced_motion
+			apply_reduced_motion()
 			audio.sfx_select()
 	_rebuild_settings_menu()
 	queue_redraw()
@@ -1241,11 +1359,12 @@ func _begin_launch() -> void:
 func _launch_key(key: int) -> void:
 	match key:
 		KEY_ESCAPE:
-			if DisplayServer.get_name() == "headless":
-				_finish_launch_state()
-				var lines: Array = campaign.content.dialogue_lines("crash")
-				_open_dialogue(lines, "IMPACT", Callable(self, "_on_crash_intro_done"))
-		# The launch sequence cannot be skipped; only the signal minigame takes input.
+			# The launch sequence cannot be skipped, in headless runs as well as
+			# windowed ones: the sequence always plays to the crash on its own.
+			# (Automated tests advance it by calling _process_launch() directly,
+			# so no test-only branch is needed here.)
+			pass
+		# Only the signal minigame takes input.
 		KEY_E, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if launch_phase == LaunchPhase.SIGNAL:
 				_signal_lock()
@@ -1420,11 +1539,11 @@ func _checkpoint_key(key: int) -> void:
 			# summary is the stopping point, so it returns to the title with the
 			# save intact. After Phase 1 it leads into the Forgotten City, which
 			# is where Bill's coordinates point.
-			# Phase 3 ends at READY_FOR_FINAL_ASSEMBLY: that summary is the
-			# stopping point and returns to the title with the save intact.
+			# Phase 3 ends at READY_FOR_FINAL_ASSEMBLY: that summary now opens the
+			# Phase 4 final-assembly gate rather than returning to the title.
 			if campaign.is_ready_for_final_assembly():
 				_save_quietly()
-				_go(Screen.TITLE)
+				_go(Screen.FINAL_ASSEMBLY)
 				return
 			# The Phase 2 summary now continues into the Dawn Tower.
 			if campaign.has_flag(SFCampaign.FLAG_PHASE_TWO_COMPLETE):
@@ -1607,6 +1726,7 @@ func _enter_duel() -> void:
 	duel = SFDuel.new()
 	duel.name = "Duel"
 	duel.setup(skin, ui, boss_data, all_data)
+	duel.reduced_motion = setting_reduced_motion
 	duel.duel_finished.connect(_on_duel_finished)
 	duel.duel_aborted.connect(_on_duel_aborted)
 	add_child(duel)
@@ -1882,6 +2002,7 @@ func _enter_typing() -> void:
 	typing_duel = SFTypingDuel.new()
 	typing_duel.name = "TypingDuel"
 	typing_duel.setup(skin, ui, typing_data, deck, seed_value, vocab, campaign)
+	typing_duel.reduced_motion = setting_reduced_motion
 	typing_duel.duel_finished.connect(_on_typing_finished)
 	typing_duel.duel_aborted.connect(_on_typing_aborted)
 	typing_duel.word_learned.connect(_on_word_learned)
@@ -1966,6 +2087,359 @@ func _on_ready_dialogue_done() -> void:
 	_go(Screen.CHECKPOINT)
 
 
+# ---------------------------------------------------------------- phase 4
+#
+# Final assembly, the escape cinematic, the report and the credits. The stage
+# machine is unchanged; these are four more screens. Every persistent change is
+# applied here, exactly once, and saved before the next screen opens.
+
+## A save written during the escape resumes at the start of the escape, not in
+## the middle of a scene. Watching it again and skipping it leave the same state,
+## because every outcome is idempotent.
+func _replay_escape() -> void:
+	if not campaign.has_final_assembly_snapshot():
+		# A contradictory save (escape stage, no snapshot) falls back to the gate.
+		campaign.advance_to(SFCampaign.STAGE_READY)
+		_go(Screen.CHECKPOINT)
+		return
+	_go(Screen.CINEMATIC)
+
+
+## The pre-finale gate. Reached from the ready summary, and revalidated on entry.
+func _enter_final_assembly() -> void:
+	assembly_screen = SFFinalAssembly.new()
+	assembly_screen.name = "FinalAssembly"
+	assembly_screen.setup(skin, ui, campaign, finale_data, reconstruction_data)
+	assembly_screen.assembly_started.connect(_on_assembly_started)
+	assembly_screen.installation_done.connect(_on_installation_done)
+	assembly_screen.closed.connect(_on_assembly_closed)
+	add_child(assembly_screen)
+	assembly_screen.refresh()
+	audio.set_ambience("ruin")
+	queue_redraw()
+
+
+func _on_assembly_closed() -> void:
+	# Back to the ready summary. Nothing has been frozen, so no finale flag has
+	# been written and the run can be left there or resumed later. (The design
+	# itself stays locked: fabrication is already committed, and the workshop's
+	# own rule refuses changes once it is assembled.)
+	_go(Screen.CHECKPOINT)
+
+
+## The player confirmed final assembly. This is the one irreversible transition:
+## snapshot, pre-finale checkpoint, save, then the installation animation. The
+## gate latches on its own too, so a double activation can never reach here twice.
+func _on_assembly_started() -> void:
+	if _finale_started:
+		return
+	_finale_started = true
+	var snapshot: Dictionary = SFFinale.snapshot(campaign, reconstruction_data)
+	if not campaign.begin_final_assembly(snapshot):
+		# Already assembled by an earlier run: continue the sequence rather than
+		# starting a second one. Watching, skipping and reloading all converge.
+		if assembly_screen != null:
+			assembly_screen.play_installation()
+		return
+	campaign.advance_to(SFCampaign.STAGE_FINAL_ASSEMBLY)
+	campaign.set_checkpoint(SFCampaign.STAGE_FINAL_ASSEMBLY, SFCampaign.CHAPTER_CRASH)
+	_save_quietly()
+	if audio.has_method("play_music"):
+		audio.play_music("flight")
+	if assembly_screen != null:
+		assembly_screen.play_installation()
+	queue_redraw()
+
+
+## The installation animation finished or was skipped. Start the escape.
+func _on_installation_done() -> void:
+	campaign.advance_to(SFCampaign.STAGE_ESCAPE)
+	campaign.set_checkpoint(SFCampaign.STAGE_ESCAPE, SFCampaign.CHAPTER_RETURN)
+	_save_quietly()
+	_go(Screen.CINEMATIC)
+
+
+func _enter_cinematic() -> void:
+	cinematic_screen = SFCinematic.new()
+	cinematic_screen.name = "Cinematic"
+	cinematic_screen.setup(skin, ui, campaign, finale_data, reconstruction_data)
+	cinematic_screen.cinematic_finished.connect(_on_cinematic_finished)
+	add_child(cinematic_screen)
+	audio.set_ambience("none")
+	if audio.has_method("play_music"):
+		audio.play_music("flight")
+	queue_redraw()
+
+
+## The cinematic ended, naturally or by skip. Both paths land here exactly once,
+## and every persistent outcome is applied here rather than in the screen, so
+## watching and skipping cannot diverge.
+func _on_cinematic_finished(skipped: bool) -> void:
+	campaign.set_cinematic_skipped(skipped)
+	campaign.complete_return()
+	campaign.advance_to(SFCampaign.STAGE_RETURN_HOME)
+	campaign.set_checkpoint(SFCampaign.STAGE_RETURN_HOME, SFCampaign.CHAPTER_RETURN)
+	_save_quietly()
+	_go(Screen.REPORT)
+
+
+func _enter_report() -> void:
+	report_screen = SFReport.new()
+	report_screen.name = "MissionReport"
+	report_screen.setup(skin, ui, campaign, finale_data, reconstruction_data)
+	report_screen.closed.connect(_on_report_closed)
+	add_child(report_screen)
+	audio.set_ambience("none")
+	queue_redraw()
+
+
+func _on_report_closed() -> void:
+	campaign.mark_report_seen()
+	campaign.advance_to(SFCampaign.STAGE_MISSION_REPORT)
+	campaign.set_checkpoint(SFCampaign.STAGE_MISSION_REPORT, SFCampaign.CHAPTER_RETURN)
+	_save_quietly()
+	_go(Screen.CREDITS)
+
+
+func _enter_credits() -> void:
+	credits_screen = SFCredits.new()
+	credits_screen.name = "Credits"
+	credits_screen.setup(skin, ui, campaign, finale_data)
+	credits_screen.closed.connect(_on_credits_closed)
+	add_child(credits_screen)
+	audio.set_ambience("none")
+	if audio.has_method("play_music"):
+		audio.play_music("title")
+	queue_redraw()
+
+
+## The campaign is complete. The save keeps the ending state, so Continue brings
+## the player back to the credits rather than to a dead screen.
+func _on_credits_closed() -> void:
+	campaign.advance_to(SFCampaign.STAGE_CREDITS)
+	campaign.set_checkpoint(SFCampaign.STAGE_CREDITS, SFCampaign.CHAPTER_RETURN)
+	_save_quietly()
+	_go(Screen.TITLE)
+
+
+# ---------------------------------------------------------------- QA stage skip
+
+## Polled every frame. Only the chord triggers anything; individual I, O or P
+## presses fall through to whatever screen owns input, so normal controls are
+## unaffected. The controller applies exactly one milestone per press.
+func _poll_qa_skip(delta: float) -> void:
+	if not qa_enabled or qa == null:
+		return
+	var fired: bool = qa.poll(Input.is_key_pressed(KEY_I), Input.is_key_pressed(KEY_O), Input.is_key_pressed(KEY_P), delta)
+	if not fired:
+		return
+	_apply_qa_skip()
+
+
+## Advances one campaign milestone, using the same campaign methods the normal
+## flow uses. Returns true when something changed. Public so the tests can drive
+## it directly without simulating key state.
+func _apply_qa_skip() -> bool:
+	# A dialogue or a running cinematic is finished cleanly first, so a skip
+	# never strands input in a callback that expected another screen.
+	if dialogue != null:
+		var cb := dialogue_next
+		dialogue = null
+		dialogue_next = Callable()
+		apply_focus_state()
+		if cb.is_valid():
+			cb.call()
+		return true
+	var milestone: String = SFQA.next_milestone(campaign)
+	if milestone == SFQA.MILESTONE_DONE:
+		ui.notify("QA: CAMPAIGN COMPLETE", "good", 2.5)
+		return false
+	campaign.mark_qa_stage_skip_used()
+	match milestone:
+		SFQA.MILESTONE_BRIEFING:
+			_qa_briefing()
+		SFQA.MILESTONE_CONSTRUCTION:
+			_qa_construction()
+		SFQA.MILESTONE_BILL:
+			_qa_bill()
+		SFQA.MILESTONE_PHASE_ONE:
+			_qa_phase_one()
+		SFQA.MILESTONE_CITY:
+			_qa_city()
+		SFQA.MILESTONE_COAST:
+			_qa_coast()
+		SFQA.MILESTONE_PHASE_TWO:
+			_qa_phase_two()
+		SFQA.MILESTONE_DAWN:
+			_qa_dawn()
+		SFQA.MILESTONE_WORKSHOP:
+			_qa_workshop()
+		SFQA.MILESTONE_READY:
+			_qa_ready()
+		SFQA.MILESTONE_FINALE:
+			_qa_finale()
+		SFQA.MILESTONE_REPORT:
+			_qa_report()
+	_save_quietly()
+	ui.notify("QA: %s" % SFQA.milestone_label(milestone), "info", 2.5)
+	queue_redraw()
+	return true
+
+
+## Clears any overlay so a skip always starts from a live, unlocked screen. Every
+## skip helper calls this before moving the campaign on.
+func _qa_clear_overlay() -> void:
+	pause_open = false
+	_transition_busy = false
+	dialogue = null
+	dialogue_next = Callable()
+	transition_alpha = 0.0
+	ui.clear_toast()
+	# Releasing the lock here matters when a skip lands on the screen it was
+	# already on: without it, a cleared dialogue could leave the world frozen.
+	apply_focus_state()
+
+
+func _qa_briefing() -> void:
+	_qa_clear_overlay()
+	campaign.set_flag(SFCampaign.FLAG_BRIEFING_READ)
+	campaign.advance_to(SFCampaign.STAGE_CONSTRUCTION)
+	campaign.set_checkpoint(SFCampaign.STAGE_CONSTRUCTION, SFCampaign.CHAPTER_PRESENT)
+	zone = "spaceport"
+	_go(Screen.WORLD)
+
+
+func _qa_construction() -> void:
+	_qa_clear_overlay()
+	# A valid day-one design from the shipped data, so the crash-stage salvage
+	# bonus, surviving data and the repaired-engine stats all stay meaningful.
+	SFQA.apply_valid_day_one_design(campaign)
+	campaign.set_flag(SFCampaign.FLAG_LAUNCHED)
+	campaign.set_flag(SFCampaign.FLAG_RIFT_SEEN)
+	campaign.set_flag(SFCampaign.FLAG_CRASHED)
+	campaign.advance_to(SFCampaign.STAGE_CRASH_INTRO)
+	campaign.advance_to(SFCampaign.STAGE_CRASH_SITE)
+	campaign.set_checkpoint(SFCampaign.STAGE_CRASH_SITE, SFCampaign.CHAPTER_CRASH)
+	zone = "crash_site"
+	_go(Screen.WORLD)
+
+
+func _qa_bill() -> void:
+	_qa_clear_overlay()
+	campaign.set_flag(SFCampaign.FLAG_VELA_INSPECTED)
+	campaign.set_flag(SFCampaign.FLAG_POWER_REPAIRED)
+	campaign.view_memory(SFCampaign.MEMORY_GREEN_CITY)
+	campaign.set_flag(SFCampaign.FLAG_BILL_ACTIVE)
+	campaign.set_flag(SFCampaign.FLAG_COORDINATES_RECEIVED)
+	campaign.advance_to(SFCampaign.STAGE_CHECKPOINT)
+	campaign.set_checkpoint(SFCampaign.STAGE_CHECKPOINT, SFCampaign.CHAPTER_CRASH)
+	_go(Screen.CHECKPOINT)
+
+
+func _qa_phase_one() -> void:
+	_qa_clear_overlay()
+	campaign.set_flag(SFCampaign.FLAG_CITY_ENTERED)
+	campaign.advance_to(SFCampaign.STAGE_CITY_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_CITY_INTRO, SFCampaign.CHAPTER_CITY)
+	zone = "forgotten_city"
+	_go(Screen.WORLD)
+
+
+func _qa_city() -> void:
+	_qa_clear_overlay()
+	campaign.set_flag(SFCampaign.FLAG_CITY_CHECKPOINT)
+	_award_boss_victory("scrap_king")
+	campaign.restore_archive(SFCampaign.ARCHIVE_CITY)
+	campaign.reveal_future_earth()
+	campaign.advance_to(SFCampaign.STAGE_SILENT_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_SILENT_INTRO, SFCampaign.CHAPTER_COAST)
+	zone = "silent_coast"
+	_go(Screen.WORLD)
+
+
+func _qa_coast() -> void:
+	_qa_clear_overlay()
+	campaign.set_flag(SFCampaign.FLAG_COAST_CHECKPOINT)
+	_award_boss_victory("toxic_tide")
+	campaign.restore_archive(SFCampaign.ARCHIVE_COAST)
+	campaign.complete_silent_coast()
+	campaign.set_flag(SFCampaign.FLAG_BASE_RETURNED)
+	campaign.advance_to(SFCampaign.STAGE_BASE_RETURN)
+	campaign.set_checkpoint(SFCampaign.STAGE_BASE_RETURN, SFCampaign.CHAPTER_CRASH)
+	zone = "crash_site"
+	_go(Screen.PROGRESSION)
+
+
+func _qa_phase_two() -> void:
+	_qa_clear_overlay()
+	campaign.complete_silent_coast()
+	campaign.set_flag(SFCampaign.FLAG_BASE_RETURNED)
+	campaign.set_flag(SFCampaign.FLAG_PHASE_TWO_COMPLETE)
+	campaign.advance_to(SFCampaign.STAGE_PHASE_TWO_COMPLETE)
+	campaign.advance_to(SFCampaign.STAGE_DAWN_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_INTRO, SFCampaign.CHAPTER_DAWN)
+	zone = "dawn_tower"
+	_go(Screen.WORLD)
+
+
+func _qa_dawn() -> void:
+	_qa_clear_overlay()
+	campaign.set_flag(SFCampaign.FLAG_DAWN_ENTERED)
+	campaign.set_flag(SFCampaign.FLAG_DAWN_CHECKPOINT)
+	campaign.view_memory(SFCampaign.MEMORY_HEALTHY_FOREST)
+	var boss: Dictionary = typing_data.get("boss", {}) as Dictionary
+	campaign.complete_boss(String(boss.get("reward_flag", SFCampaign.FLAG_SKY_REMNANT_DEFEATED)),
+		String(boss.get("reward_component", SFCampaign.COMPONENT_SHIELD_EMITTER)))
+	campaign.complete_dawn_tower()
+	campaign.advance_to(SFCampaign.STAGE_RECONSTRUCTION)
+	campaign.set_checkpoint(SFCampaign.STAGE_RECONSTRUCTION, SFCampaign.CHAPTER_CRASH)
+	zone = "crash_site"
+	_go(Screen.WORKSHOP)
+
+
+func _qa_workshop() -> void:
+	_qa_clear_overlay()
+	var result: Dictionary = SFQA.apply_valid_reconstruction(campaign, reconstruction_data)
+	if not bool(result.get("ok", false)):
+		ui.notify("QA: workshop design failed", "bad", 3.0)
+		return
+	campaign.advance_to(SFCampaign.STAGE_READY)
+	campaign.set_checkpoint(SFCampaign.STAGE_READY, SFCampaign.CHAPTER_CRASH)
+	_go(Screen.CHECKPOINT)
+
+
+## Freezes the snapshot exactly as the real gate does, then opens the gate so the
+## next press continues into the installation and the escape.
+func _qa_ready() -> void:
+	_qa_clear_overlay()
+	if not campaign.has_final_assembly_snapshot():
+		var snapshot: Dictionary = SFFinale.snapshot(campaign, reconstruction_data)
+		campaign.begin_final_assembly(snapshot)
+	campaign.advance_to(SFCampaign.STAGE_FINAL_ASSEMBLY)
+	campaign.set_checkpoint(SFCampaign.STAGE_FINAL_ASSEMBLY, SFCampaign.CHAPTER_CRASH)
+	_go(Screen.FINAL_ASSEMBLY)
+
+
+func _qa_finale() -> void:
+	_qa_clear_overlay()
+	if not campaign.has_final_assembly_snapshot():
+		campaign.begin_final_assembly(SFFinale.snapshot(campaign, reconstruction_data))
+	campaign.set_cinematic_skipped(true)
+	campaign.complete_return()
+	campaign.advance_to(SFCampaign.STAGE_RETURN_HOME)
+	campaign.set_checkpoint(SFCampaign.STAGE_RETURN_HOME, SFCampaign.CHAPTER_RETURN)
+	_go(Screen.REPORT)
+
+
+func _qa_report() -> void:
+	_qa_clear_overlay()
+	campaign.mark_report_seen()
+	campaign.advance_to(SFCampaign.STAGE_MISSION_REPORT)
+	campaign.advance_to(SFCampaign.STAGE_CREDITS)
+	campaign.set_checkpoint(SFCampaign.STAGE_CREDITS, SFCampaign.CHAPTER_RETURN)
+	_go(Screen.CREDITS)
+
+
 func journal_entries() -> Array:
 	var out: Array = []
 	for id in campaign.vocabulary_journal:
@@ -2008,8 +2482,8 @@ func _draw_ready_summary() -> void:
 		y = skin.wrap(self, Vector2(panel.position.x + 20, y), panel.size.x - 40, String(line), SFPalette.PAPER, 1, 3) + 5.0
 	skin.text_c(self, VW * 0.5, panel.end.y - 18, "PHASE 3 COMPLETE - CHECKPOINT SAVED", SFPalette.GREEN_OK)
 	draw_rect(Rect2(0, VH - 30, VW, 30), Color(0.03, 0.05, 0.05, 0.9), true)
-	skin.text_c(self, VW * 0.5, VH - 23, "ENTER  RETURN TO MAIN MENU", SFPalette.PAPER)
-	skin.text_c(self, VW * 0.5, VH - 12, "THE ESCAPE IS PHASE 4 - NOT PART OF THIS BUILD", SFPalette.ASH_LIGHT)
+	skin.text_c(self, VW * 0.5, VH - 23, "ENTER  FINAL ASSEMBLY", SFPalette.PAPER)
+	skin.text_c(self, VW * 0.5, VH - 12, "PHASE 4: COMPLETE ASSEMBLY AND LAUNCH", SFPalette.ASH_LIGHT)
 
 
 ## The healthy Dawn forest: layered trunks, a full canopy, birds, a boardwalk.
@@ -2077,8 +2551,10 @@ func _manual_save() -> void:
 func _process(delta: float) -> void:
 	time += delta
 	blink += delta
+	campaign.play_seconds += delta
 	skin.tick(delta)
 	ui.tick(delta)
+	_poll_qa_skip(delta)
 	if transition_alpha > 0.0:
 		if DisplayServer.get_name() == "headless":
 			transition_alpha = 0.0
@@ -2208,7 +2684,7 @@ func _draw_settings() -> void:
 	skin.text(self, panel.position + Vector2(14, 14), "SETTINGS", SFPalette.CYAN)
 	ui.menu_list(self, settings_menu, panel.position + Vector2(24, 40), panel.size.x - 48, 22.0)
 	skin.wrap(self, panel.position + Vector2(24, 130), panel.size.x - 48,
-		"Ambient sound toggles the synthesised wind and machinery. Text speed changes how quickly dialogue appears.",
+		"Ambient sound toggles the synthesised wind and machinery. Text speed changes how quickly dialogue appears. Reduced motion removes screen shake and screen flashes; it never changes progress, the report or the score.",
 		SFPalette.PAPER_DIM, 1, 4)
 	ui.footer(self, ["UP/DOWN:SELECT", "LEFT/RIGHT:CHANGE", "ESC:BACK"])
 

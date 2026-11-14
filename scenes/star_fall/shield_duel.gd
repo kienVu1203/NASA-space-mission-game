@@ -568,8 +568,9 @@ func _draw_boss() -> void:
 	draw_set_transform(_shake_offset, 0.0, Vector2.ONE)
 
 	# Damage flash over the chassis when a counterattack lands.
+	# Reduced motion lowers the flash alpha without changing any combat value.
 	if strike_flash > 0.0:
-		var a: float = clampf(strike_flash, 0.0, 1.0) * 0.5
+		var a: float = clampf(strike_flash, 0.0, 1.0) * (0.18 if reduced_motion else 0.5)
 		var flash_w := 216.0 * BOSS_SCALE
 		var flash_h := 140.0 * BOSS_SCALE
 		draw_rect(Rect2(VW * 0.5 - flash_w * 0.5, base_y - 132.0 * BOSS_SCALE, flash_w, flash_h), Color(1.0, 0.94, 0.78, a * 0.35), true)
@@ -972,7 +973,7 @@ func _draw_nick() -> void:
 		draw_rect(Rect2(pos.x - 14, pos.y - 26, 28, 28), Color(0.49, 0.95, 0.78, a), true)
 	if encounter.model.damage_flash > 0.0:
 		var a2 := clampf(encounter.model.damage_flash / 0.35, 0.0, 1.0)
-		draw_rect(Rect2(0, 0, VW, VH), Color(0.85, 0.20, 0.20, 0.16 * a2), true)
+		draw_rect(Rect2(0, 0, VW, VH), Color(0.85, 0.20, 0.20, 0.06 * a2 if reduced_motion else 0.16 * a2), true)
 
 
 func _draw_shield() -> void:

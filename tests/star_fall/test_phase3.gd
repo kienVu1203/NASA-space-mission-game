@@ -675,4 +675,4 @@ func _test_campaign_rewards_and_save() -> void:
 		String(camp.content.encounters.boss("scrap_king").get("reward_component", "")) == "navigation_chip"
 		and String(camp.content.encounters.boss("toxic_tide").get("reward_component", "")) == "power_core")
 	check("Dawn Tower is now a playable chapter", String(camp.content.chapter("dawn_tower").get("stage", "")) == "dawn_tower")
-	check("Return Home stays deferred", String(camp.content.chapter("return_home").get("stage", "")) == "deferred")
+	check("Return Home is a playable chapter after Phase 4", String(camp.content.chapter("return_home").get("stage", "")) == "return_home")

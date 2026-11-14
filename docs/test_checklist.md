@@ -3,6 +3,9 @@
 Ticked items are covered by an automated headless suite; the rest need a person
 at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 
+Six suites cover the build: `test_parse`, `test_logic`, `test_flow`,
+`test_encounter`, `test_phase3` and `test_phase4`.
+
 ## Automated (run these first)
 
 - [x] Every script parses and compiles — `tests/star_fall/test_parse.gd`
@@ -125,6 +128,70 @@ at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 - [x] The Phase 2 summary continues into the Dawn Tower and keeps the save
 - [x] Continue restores the Phase 2 stage, components, archives and mission
 
+## Phase 4 automated checks — `test_phase4.gd` (and `test_flow.gd`)
+
+### Finale data and prerequisites
+
+- [x] `finale.json` loads; six cinematic scenes, a final message, score weights, credits and the QA block
+- [x] Every scene has ordered, non-empty subtitles that end inside its duration
+- [x] A complete run meets all six prerequisites
+- [x] A missing boss, a missing component, a stale design or a running sequence each blocks the gate
+
+### Escape cinematic
+
+- [x] Space pauses; a paused scene does not advance and emits no outcome
+- [x] Space resumes; focus loss pauses
+- [x] Skipping emits the outcome exactly once, however many times it is pressed
+- [x] Watching the whole sequence finishes it at the final message with skipped = false
+- [x] Watching and skipping apply the same flags, stage and checkpoint (`test_flow.gd`)
+
+### Mission report and score
+
+- [x] The report carries the objective, memories, components, both designs, mass, route, reserves and decisions
+- [x] The score counts the objective, three components and every archived memory
+- [x] The score equals the sum of its published terms
+- [x] The report is deterministic for the same state
+- [x] Skipping the cinematic never changes the score
+- [x] Stockpiling salvage cannot raise the score
+- [x] The report cites the simulation's debris impact count
+
+### Persistence
+
+- [x] The snapshot is taken once; a second call is refused
+- [x] The return objective completes once
+- [x] A version 4 save round-trips stage, chapter, snapshot, objective, skip record and report record
+- [x] Loading twice never duplicates components
+- [x] A version 3 save still loads, at the ready point, with its components
+- [x] A finale stage without a snapshot is corrected back to the ready point and reported
+- [x] The Phase 3 ready-flag rule still applies
+
+### QA stage skip (`I + O + P`)
+
+- [x] The hotkey is enabled in a debug build
+- [x] A partial chord never fires
+- [x] The chord fires once and holding it never repeats
+- [x] The cooldown comes from `finale.json`
+- [x] Releasing re-arms; a release alone cannot fire
+- [x] A press inside the cooldown is refused; one after it fires
+- [x] The next milestone follows the campaign stage, not the open screen
+- [x] Skip clears a dialogue, pause or transition before acting
+- [x] Skip leaves a live screen, a valid checkpoint and a resumable save at every step
+- [x] Skip releases world input when no dialogue is open
+- [x] Skip never leaves a dangling dialogue callback
+- [x] The skipped run has a valid day-one design, all three components, a fabrication and a snapshot
+- [x] The skipped run completes the return and produces a report
+- [x] The skipped run's report builds with a positive score
+- [x] A QA checkpoint at the workshop and at the finale resumes after Continue
+- [x] `test_flow.gd` walks the whole campaign with the skip from the title to the credits
+
+### End-to-end (headless)
+
+- [x] The real main scene plays from the title through final assembly, the escape, the report and the credits
+- [x] A double confirmation starts exactly one installation
+- [x] Skipping the install animation starts the cinematic exactly once
+- [x] Continue after the ending shows the credits; New Game clears the finale
+- [x] No dead screen or stuck input after any transition
+
 ## Manual (a person must play it)
 
 - [ ] The window opens at 1280x720 and the pixel art is crisp, not blurry
@@ -195,6 +262,29 @@ at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 - [x] Version 1 and 2 saves still load; version 3 keeps the journal and workshop record — `test_phase3.gd`
 - [x] The real main scene plays from the title to READY_FOR_FINAL_ASSEMBLY, and Continue resumes there — `test_flow.gd`
 
+### Phase 4 manual checks
+
+- [ ] The final-assembly gate is readable at 1280x720 and at other window sizes; no prerequisite line overflows
+- [ ] Confirming final assembly feels final: the design visibly locks and the install animation reads
+- [ ] The install animation can be skipped without leaving the screen stuck
+- [ ] The escape reads as six distinct beats, not one long fade
+- [ ] Scene A visibly reflects the repaired junction and the carried memories
+- [ ] Scene C's telemetry is legible and matches the numbers in the report
+- [ ] The debris passage shows shielding and navigation, not invulnerable smashing
+- [ ] The sunlight beat has room to breathe; Bill's three lines land
+- [ ] The portal is clearly a story device, not presented as science
+- [ ] The home scene visually matches the opening Earth and the memories found
+- [ ] The final message is readable and quiet
+- [ ] Space pauses mid-cinematic and Esc skips without a flicker or stuck input
+- [ ] Focus loss during the cinematic pauses it
+- [ ] The mission report scrolls smoothly and nothing overlaps; the "more below" hint is noticed
+- [ ] The score and its formula are understandable without reading the docs
+- [ ] The credits scroll smoothly and the closing card is reached
+- [ ] Continue after the credits returns to the credits; New Game starts clean
+- [ ] The reduced-motion setting visibly removes shake and lowers flashes, and changes no outcome
+- [ ] `I + O + P` skips one milestone per press with the three keys held, in a debug run
+- [ ] `I + O + P` does nothing in a release run built without `--qa`
+
 ### Phase 3 manual checks
 
 - [ ] Falling words are readable at 1280x720 and at other window sizes; no label overlaps another
@@ -218,6 +308,8 @@ at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 - [ ] `autoload/game_state.gd` still exposes `reset()` and the `budget_*` fields
 - [ ] The legacy `data/*.json` files are untouched
 
-## Web export (once a preset exists)
+## Export
 
+- [ ] A Windows export preset exists and the build launches (blocked: no export
+      templates are installed on the delivery machine; see `docs/submission.md`)
 - [ ] Web build loads and plays

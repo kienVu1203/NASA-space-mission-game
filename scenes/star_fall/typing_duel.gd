@@ -45,6 +45,9 @@ var journal_index: int = 0
 ## Set by the controller while a dialogue is open over this screen. The arena
 ## is frozen and every key belongs to the dialogue.
 var input_locked: bool = false
+## Accessibility preference set by the controller: removes screen shake only.
+## It never changes spawning, timing, damage or the fight's outcome.
+var reduced_motion: bool = false
 
 var effects: Array = []
 var shake: float = 0.0
@@ -366,7 +369,7 @@ func _visual(key: String, fallback: Color) -> Color:
 # ---------------------------------------------------------------- drawing
 
 func _draw() -> void:
-	_shake_offset = Vector2(round(sin(time * 91.0) * shake), round(cos(time * 77.0) * shake * 0.6)) if shake > 0.0 else Vector2.ZERO
+	_shake_offset = Vector2(round(sin(time * 91.0) * shake), round(cos(time * 77.0) * shake * 0.6)) if shake > 0.0 and not reduced_motion else Vector2.ZERO
 	draw_set_transform(_shake_offset, 0.0, Vector2.ONE)
 	_draw_backdrop()
 	_draw_boss()
@@ -577,7 +580,8 @@ func _draw_nick() -> void:
 	draw_rect(Rect2(pos.x + 14, pos.y - 12, 16, 12), SFPalette.STEEL_DARK, true)
 	draw_rect(Rect2(pos.x + 16, pos.y - 10, 12, 5), SFPalette.CYAN_DIM if encounter.typing.has_target() else SFPalette.CYAN_DARK, true)
 	if hurt_flash > 0.0:
-		draw_rect(Rect2(0, 0, VW, VH), Color(0.85, 0.2, 0.2, 0.18 * hurt_flash / 0.5), true)
+		var hurt_alpha := 0.07 if reduced_motion else 0.18
+		draw_rect(Rect2(0, 0, VW, VH), Color(0.85, 0.2, 0.2, hurt_alpha * hurt_flash / 0.5), true)
 
 
 func _draw_effects() -> void:

@@ -1,7 +1,7 @@
 extends SceneTree
 ## STAR FALL flow test: boots the real main scene and drives the whole campaign
-## (Phases 1, 2 and 3, up to READY_FOR_FINAL_ASSEMBLY) through the same entry
-## points the keyboard uses.
+## (Phases 1, 2, 3 and 4, from the title to the credits) through the same entry
+## points the keyboard uses, then walks the campaign again with the QA hotkey.
 ##
 ##   Godot --headless --path . --script res://tests/star_fall/test_flow.gd
 ##
@@ -9,6 +9,7 @@ extends SceneTree
 ## prove anything about what the game looks like; do that by running it.
 
 const SFSave := preload("res://core/star_fall/sf_save.gd")
+const SFCampaignQA := preload("res://core/star_fall/sf_qa.gd")
 
 var main
 var step: int = 0
@@ -86,6 +87,8 @@ func _process(_delta: float) -> bool:
 		60:
 			_ready_and_continue()
 		64:
+			_phase_four()
+		68:
 			_finish()
 	return false
 
@@ -157,7 +160,7 @@ func _boot_and_briefing() -> void:
 	# Settings round trip must not touch the campaign.
 	main._go(main.Screen.SETTINGS)
 	check("settings opens", main.screen == main.Screen.SETTINGS)
-	check("settings lists three rows", main.settings_menu.size() == 3)
+	check("settings lists four rows", main.settings_menu.size() == 4)
 	main._settings_adjust(1)
 	main._settings_adjust(-1)
 	main._go(main.Screen.TITLE)
@@ -901,16 +904,172 @@ func _ready_and_continue() -> void:
 	print("-- READY_FOR_FINAL_ASSEMBLY, save and continue " + "-".repeat(11))
 	check("a save exists at the ready point", SFSave.has_valid_save())
 	main._checkpoint_key(KEY_ENTER)
-	check("the ready summary returns to the title", main.screen == main.Screen.TITLE)
+	check("the ready summary opens the final-assembly gate", main.screen == main.Screen.FINAL_ASSEMBLY, str(main.screen))
+	check("the gate is live", main.assembly_screen != null)
+	check("every finale prerequisite is met", main.assembly_screen.prerequisites_met())
+	main._go(main.Screen.CHECKPOINT)
 	main._continue_game()
 	check("continue restores the ready stage", main.campaign.stage == main.campaign.STAGE_READY)
 	check("continue shows the ready summary", main.screen == main.Screen.CHECKPOINT)
 	check("continue keeps all three components once", _component_count("navigation_chip") == 1 and _component_count("power_core") == 1 and _component_count("shield_emitter") == 1)
 	check("continue keeps the journal", main.campaign.vocabulary_journal.size() >= 20)
 	check("continue keeps the committed design", main.campaign.reconstruction.has("committed"))
-	check("the escape is not implemented (Phase 4)", not main.campaign.content.chapter("return_home").is_empty() and String(main.campaign.content.chapter("return_home")["stage"]) == "deferred")
+	check("the return_home chapter is now playable", String(main.campaign.content.chapter("return_home")["stage"]) == "return_home")
+	check("no finale snapshot exists before the gate is confirmed", not main.campaign.has_final_assembly_snapshot())
+
+
+# ---------------------------------------------------------------- phase 4
+
+## Final assembly, the escape, the report, the credits, and the QA hotkey.
+func _phase_four() -> void:
+	print("")
+	print("-- Phase 4: final assembly, escape, report, credits " + "-".repeat(4))
+	check("continue leaves the ready summary on screen", main.screen == main.Screen.CHECKPOINT)
 	main._checkpoint_key(KEY_ENTER)
-	check("the ready summary stays the stopping point", main.screen == main.Screen.TITLE)
+	check("the ready summary reopens the gate", main.screen == main.Screen.FINAL_ASSEMBLY)
+	var gate = main.assembly_screen
+	check("the gate lists six prerequisites", gate.checks.size() == 6, str(gate.checks.size()))
+
+	# A double activation must start exactly one sequence.
+	gate.activate()
+	gate.activate()
+	check("the first confirmation starts the installation", gate.is_installing())
+	check("a double confirmation cannot restart it", gate.has_started() and not main.campaign.finale.is_empty())
+	check("the snapshot is frozen", main.campaign.has_final_assembly_snapshot())
+	check("the assembly flag is set", main.campaign.has_flag("final_assembly_complete"))
+	check("the pre-finale checkpoint is saved", SFSave.has_valid_save())
+	check("the stage is final_assembly", main.campaign.stage == main.campaign.STAGE_FINAL_ASSEMBLY)
+
+	# Esc skips the install animation safely and starts the escape exactly once.
+	gate.handle_key(KEY_ESCAPE)
+	check("skipping the animation starts the cinematic", main.screen == main.Screen.CINEMATIC, str(main.screen))
+	check("the escape stage is recorded", main.campaign.stage == main.campaign.STAGE_ESCAPE)
+	var cine = main.cinematic_screen
+	check("the cinematic has six scenes", cine.scenes.size() == 6)
+	check("the first scene is the crash site", cine.scene_id() == "leaving_crash_site")
+
+	# Pause freezes it; focus loss pauses rather than letting it run unseen.
+	cine.handle_key(KEY_SPACE)
+	check("space pauses the cinematic", cine.is_paused())
+	var at_before: float = cine.scene_time
+	cine.advance_for(4.0)
+	check("a paused cinematic does not advance", cine.scene_time == at_before)
+	cine.handle_key(KEY_SPACE)
+	check("space resumes the cinematic", not cine.is_paused())
+	cine._notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
+	check("focus loss pauses the cinematic", cine.is_paused())
+	cine.handle_key(KEY_SPACE)
+
+	# Skip must produce the same outcome as watching, and be safe repeatedly.
+	var escape_emit_count := [0]
+	cine.cinematic_finished.connect(func(_skip): escape_emit_count[0] += 1)
+	cine.skip()
+	cine.skip()
+	check("skipping emits the outcome exactly once", escape_emit_count[0] == 1, str(escape_emit_count[0]))
+	check("the skip reaches the mission report", main.screen == main.Screen.REPORT, str(main.screen))
+	check("the return objective is complete", main.campaign.is_return_complete())
+	check("the escape flag is set", main.campaign.has_flag("escape_seen"))
+	check("the return-home stage is recorded", main.campaign.stage == main.campaign.STAGE_RETURN_HOME)
+	check("the skip is recorded for the report", main.campaign.cinematic_skipped())
+	check("all three components survived the finale", main.campaign.recovered_component_ids().size() == 3)
+
+	# The report is built from the recorded run.
+	var rep = main.report_screen
+	check("the report screen opens", rep != null and main.screen == main.Screen.REPORT)
+	var data: Dictionary = rep.report
+	check("the report marks the objective complete", bool(data.get("objective_complete", false)))
+	check("the report carries the memories found", int(data.get("memory_count", 0)) > 0)
+	check("the report carries the launch mass", float(data.get("launch_mass_kg", 0.0)) > 0.0)
+	check("the report names the selected route", String(data.get("route_id", "")) != "")
+	check("the report carries the reconstructed design", String(data.get("reconstructed_design", "")) != "")
+	var score: Dictionary = data.get("score", {})
+	check("the score has a published formula", String(score.get("formula", "")) != "")
+	check("the score counts the objective", int(score.get("objective", 0)) == 100)
+	check("the score counts all three components", int(score.get("components", 0)) == 75)
+
+	# Skipping never penalises the score: the formula never reads it.
+	var skipped_total := int(score.get("total", 0))
+	main.campaign.set_cinematic_skipped(false)
+	main.report_screen._ready()
+	var watched_total := int(((main.report_screen.report.get("score", {}) as Dictionary).get("total", 0)))
+	check("the skip does not change the score", watched_total == skipped_total, "%d vs %d" % [skipped_total, watched_total])
+	main.campaign.set_cinematic_skipped(true)
+
+	# Report to credits to title, with state saved each time.
+	rep.handle_key(KEY_ENTER)
+	check("the report continues to the credits", main.screen == main.Screen.CREDITS, str(main.screen))
+	check("the report is recorded as seen", main.campaign.has_flag("mission_report_seen"))
+	var credits = main.credits_screen
+	check("the credits scroll", credits != null and credits.content_height() > 0.0)
+	credits.handle_key(KEY_ENTER)
+	check("the credits return to the title", main.screen == main.Screen.TITLE)
+	check("the campaign ends at the credits stage", main.campaign.stage == main.campaign.STAGE_CREDITS)
+	check("the ending is saved", SFSave.has_valid_save())
+
+	# Continue after the ending must be predictable, not a dead screen.
+	main._continue_game()
+	check("continue after the ending shows the credits", main.screen == main.Screen.CREDITS, str(main.screen))
+	check("continue keeps the return objective", main.campaign.is_return_complete())
+	main._go(main.Screen.TITLE)
+
+	# A new game must start from clean campaign state.
+	main.title_menu.index = 0
+	main._title_activate()
+	check("new game clears the finale", main.campaign.finale.is_empty() and not main.campaign.is_return_complete())
+	check("new game clears the components", main.campaign.recovered_component_ids().is_empty())
+	check("new game restarts at the briefing", main.campaign.stage == main.campaign.STAGE_BRIEFING)
+	finish_dialogue()
+
+	_qa_stage_skip()
+
+
+## The QA hotkey: edge-triggered, one milestone per press, legal state at each
+## step. Driven through the same entry point the keyboard poll uses.
+func _qa_stage_skip() -> void:
+	print("")
+	print("-- QA stage skip (I + O + P) " + "-".repeat(21))
+	var qa = SFCampaignQA.new()
+	# Edge-trigger: the chord fires once and needs a release plus the cooldown.
+	check("the chord fires once", qa.poll(true, true, true, 0.016))
+	check("holding it does not repeat", not qa.poll(true, true, true, 0.016))
+	check("a release re-arms the latch", not qa.poll(false, false, false, 0.016) and qa.armed())
+	check("the cooldown blocks a quick second press", not qa.poll(true, true, true, 0.016))
+	check("the chord fires after the cooldown", qa.poll(true, true, true, 1.0))
+	check("a partial chord never fires", not SFCampaignQA.new().poll(true, true, false, 1.0))
+
+	# Walk the whole campaign from the title with the skip alone.
+	main.campaign.reset_campaign()
+	main._go(main.Screen.TITLE)
+	var milestones: Array = []
+	var guard := 0
+	while guard < 40:
+		guard += 1
+		var before: String = "%s@%d" % [main.campaign.stage, main.screen]
+		var changed: bool = main._apply_qa_skip()
+		if not changed:
+			break
+		milestones.append(main.campaign.stage)
+		# The skip must always leave a live screen and no stuck input lock.
+		check("skip %d leaves a live screen" % guard, main.screen != main.Screen.SAVE_ERROR)
+		if main.world != null:
+			check("skip %d leaves world input usable" % guard, main.world.player.input_enabled or main.dialogue != null)
+		check("skip %d advances the campaign" % guard, ("%s@%d" % [main.campaign.stage, main.screen]) != before)
+
+	check("the skip reaches the credits stage", main.campaign.stage == main.campaign.STAGE_CREDITS, main.campaign.stage)
+	check("the skip marks its own use", main.campaign.has_flag("qa_stage_skip_used"))
+	check("the skip produced a valid day-one design", main.campaign.has_confirmed_design())
+	check("the skip produced all three components", main.campaign.recovered_component_ids().size() == 3)
+	check("the skip produced a fabrication", main.campaign.reconstruction.has("committed"))
+	check("the skip produced a finale snapshot", main.campaign.has_final_assembly_snapshot())
+	check("the skip completed the return objective", main.campaign.is_return_complete())
+	check("the skip saved a valid checkpoint", SFSave.has_valid_save())
+
+	# A checkpoint taken mid-skip must restore, so QA runs are resumable.
+	var snapshot_stage: String = main.campaign.stage
+	main._continue_game()
+	check("a QA run resumes from its save", main.campaign.stage == snapshot_stage, main.campaign.stage)
+	check("a resumed QA run keeps the components", main.campaign.recovered_component_ids().size() == 3)
+	main.campaign.mark_qa_stage_skip_used()
 
 
 func SFCampaign_STAGE_COMPLETE() -> String:

@@ -7,7 +7,7 @@ extends RefCounted
 const SFContent := preload("res://core/star_fall/sf_content.gd")
 const SFDesign := preload("res://core/star_fall/sf_design.gd")
 
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
 
 # Campaign stages. The stage is the only thing that decides which screen runs.
 const STAGE_MENU := "menu"
@@ -35,6 +35,13 @@ const STAGE_DAWN_BOSS := "dawn_boss"
 const STAGE_DAWN_ARCHIVE := "dawn_archive"
 const STAGE_RECONSTRUCTION := "reconstruction"
 const STAGE_READY := "ready_for_final_assembly"
+# Phase 4. The escape and the return home. These are the only stages after the
+# workshop; "ready_for_final_assembly" stays as the pre-finale checkpoint.
+const STAGE_FINAL_ASSEMBLY := "final_assembly"
+const STAGE_ESCAPE := "escape"
+const STAGE_RETURN_HOME := "return_home"
+const STAGE_MISSION_REPORT := "mission_report"
+const STAGE_CREDITS := "credits"
 
 ## Legal forward transitions. Save loading clamps back into this graph.
 const STAGE_ORDER := [
@@ -61,6 +68,11 @@ const STAGE_ORDER := [
 	STAGE_DAWN_ARCHIVE,
 	STAGE_RECONSTRUCTION,
 	STAGE_READY,
+	STAGE_FINAL_ASSEMBLY,
+	STAGE_ESCAPE,
+	STAGE_RETURN_HOME,
+	STAGE_MISSION_REPORT,
+	STAGE_CREDITS,
 ]
 
 const CHAPTER_PRESENT := "present_day_earth"
@@ -68,6 +80,7 @@ const CHAPTER_CRASH := "crash_site"
 const CHAPTER_CITY := "forgotten_city"
 const CHAPTER_COAST := "silent_coast"
 const CHAPTER_DAWN := "dawn_tower"
+const CHAPTER_RETURN := "return_home"
 
 const MEMORY_GREEN_CITY := "memory_green_city"
 const MEMORY_CITY_GREEN := "memory_city_green"
@@ -121,6 +134,12 @@ const FLAG_DAWN_ARCHIVE_RESTORED := "dawn_archive_restored"
 const FLAG_WORKSHOP_UNLOCKED := "workshop_unlocked"
 const FLAG_RETURN_SIMULATION_PASSED := "return_simulation_passed"
 const FLAG_READY_FOR_FINAL_ASSEMBLY := "ready_for_final_assembly"
+# Phase 4.
+const FLAG_FINAL_ASSEMBLY_COMPLETE := "final_assembly_complete"
+const FLAG_ESCAPE_SEEN := "escape_seen"
+const FLAG_RETURN_OBJECTIVE_COMPLETE := "return_objective_complete"
+const FLAG_MISSION_REPORT_SEEN := "mission_report_seen"
+const FLAG_QA_STAGE_SKIP_USED := "qa_stage_skip_used"
 
 var content
 
@@ -151,6 +170,11 @@ var active_mission: String = MISSION_SIGNAL
 var vocabulary_journal: Array = []
 var reconstruction: Dictionary = {}
 
+# Phase 4 progression. `finale` holds the frozen snapshot taken when the player
+# chose "Complete Assembly and Launch", whether the cinematic was skipped, and
+# the report data of the run. It is written once and never merged.
+var finale: Dictionary = {}
+
 var play_seconds: float = 0.0
 
 
@@ -180,6 +204,7 @@ func reset_campaign() -> void:
 	active_mission = MISSION_SIGNAL
 	vocabulary_journal = []
 	reconstruction = {}
+	finale = {}
 	play_seconds = 0.0
 
 
@@ -215,6 +240,11 @@ func _update_chapter_for_stage() -> void:
 			# The campaign ends back at the crash-site base, looking at what the
 			# two recovered components make possible.
 			chapter_id = CHAPTER_CRASH
+		STAGE_FINAL_ASSEMBLY:
+			# The last workshop scene: still the base, but the design is frozen.
+			chapter_id = CHAPTER_CRASH
+		STAGE_ESCAPE, STAGE_RETURN_HOME, STAGE_MISSION_REPORT, STAGE_CREDITS:
+			chapter_id = CHAPTER_RETURN
 		_:
 			chapter_id = CHAPTER_PRESENT
 
@@ -545,6 +575,78 @@ func is_ready_for_final_assembly() -> bool:
 	return has_flag(FLAG_READY_FOR_FINAL_ASSEMBLY)
 
 
+# ---------------------------------------------------------------- phase 4
+
+## Freezes the final design snapshot and records the pre-finale checkpoint. The
+## snapshot is the record the mission report reads after the fact, so a later
+## state change cannot rewrite what was launched. Returns false when the finale
+## has already started, so a double click cannot open two sequences.
+func begin_final_assembly(snapshot: Dictionary) -> bool:
+	if has_flag(FLAG_FINAL_ASSEMBLY_COMPLETE):
+		return false
+	if not finale.is_empty() and bool(finale.get("frozen", false)):
+		return false
+	finale = snapshot.duplicate(true)
+	finale["frozen"] = true
+	finale["cinematic_skipped"] = false
+	set_flag(FLAG_FINAL_ASSEMBLY_COMPLETE)
+	return true
+
+
+func has_final_assembly_snapshot() -> bool:
+	return not finale.is_empty() and bool(finale.get("frozen", false))
+
+
+## Records that the escape sequence was watched or skipped. Both paths call this
+## once, so the outcome is identical and repeat calls are harmless.
+func mark_escape_seen() -> bool:
+	set_flag(FLAG_ESCAPE_SEEN)
+	return true
+
+
+## Records whether the cinematic was skipped. Purely descriptive: no rule, the
+## report wording or the score depends on it.
+func set_cinematic_skipped(value: bool) -> void:
+	if finale.is_empty():
+		finale = {}
+	finale["cinematic_skipped"] = bool(value)
+
+
+func cinematic_skipped() -> bool:
+	return bool(finale.get("cinematic_skipped", false))
+
+
+## Completes the return objective. Idempotent: the flags, the mission outcome and
+## the new stage apply once, so a skip, a replay or a reload all agree.
+func complete_return() -> bool:
+	if has_flag(FLAG_RETURN_OBJECTIVE_COMPLETE):
+		return false
+	mark_escape_seen()
+	set_flag(FLAG_RETURN_OBJECTIVE_COMPLETE)
+	advance_to(STAGE_RETURN_HOME)
+	return true
+
+
+func is_return_complete() -> bool:
+	return has_flag(FLAG_RETURN_OBJECTIVE_COMPLETE)
+
+
+func mark_report_seen() -> void:
+	set_flag(FLAG_MISSION_REPORT_SEEN)
+
+
+## True while the finale is in progress or finished, which is what the workshop
+## and the construction console check before accepting a design change.
+func is_finale_state() -> bool:
+	return stage_index() >= STAGE_ORDER.find(STAGE_FINAL_ASSEMBLY)
+
+
+## QA stage skip support. Marks the flag so a tester's run is identifiable in the
+## report; it changes nothing about the outcome.
+func mark_qa_stage_skip_used() -> void:
+	set_flag(FLAG_QA_STAGE_SKIP_USED)
+
+
 ## The two Phase 2 rewards, as a readout for the base-return screen.
 func repair_progress() -> Array:
 	var out: Array = []
@@ -672,6 +774,7 @@ func to_save_dict() -> Dictionary:
 		"active_mission": active_mission,
 		"vocabulary_journal": vocabulary_journal.duplicate(),
 		"reconstruction": reconstruction.duplicate(true),
+		"finale": finale.duplicate(true),
 		"play_seconds": play_seconds,
 	}
 
@@ -785,6 +888,23 @@ func apply_save_dict(data: Dictionary) -> Array:
 	if has_flag(FLAG_READY_FOR_FINAL_ASSEMBLY) and not reconstruction.has("committed"):
 		warnings.append("Assembled design record missing; the workshop will reopen.")
 		flags.erase(FLAG_READY_FOR_FINAL_ASSEMBLY)
+
+	# Phase 4 (save version 4). Older saves simply have no finale record. A
+	# finish flag with no frozen snapshot is contradictory: the report would have
+	# nothing to describe, so the campaign resumes at the ready summary instead.
+	var finale_raw: Variant = data.get("finale", {})
+	if finale_raw is Dictionary:
+		finale = (finale_raw as Dictionary).duplicate(true)
+	if not has_final_assembly_snapshot():
+		if stage_index() >= STAGE_ORDER.find(STAGE_FINAL_ASSEMBLY):
+			warnings.append("Finale record missing; resuming at the final-assembly checkpoint.")
+			stage = STAGE_READY
+			chapter_id = CHAPTER_CRASH
+		finale = {}
+		flags.erase(FLAG_FINAL_ASSEMBLY_COMPLETE)
+		flags.erase(FLAG_ESCAPE_SEEN)
+		flags.erase(FLAG_RETURN_OBJECTIVE_COMPLETE)
+		flags.erase(FLAG_MISSION_REPORT_SEEN)
 
 	play_seconds = maxf(0.0, float(data.get("play_seconds", 0.0)))
 	return warnings

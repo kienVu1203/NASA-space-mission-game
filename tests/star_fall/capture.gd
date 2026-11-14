@@ -11,6 +11,7 @@ extends SceneTree
 
 const OUT_DIR := "user://captures/"
 const SFSave := preload("res://core/star_fall/sf_save.gd")
+const SFQA := preload("res://core/star_fall/sf_qa.gd")
 
 var main
 var frame: int = 0
@@ -51,6 +52,18 @@ var plan: Array = [
 	{"name": "32_dawn_archive", "setup": "_setup_dawn_archive", "wait": 20},
 	{"name": "33_workshop", "setup": "_setup_workshop", "wait": 10},
 	{"name": "34_ready_summary", "setup": "_setup_ready_summary", "wait": 10},
+	# Phase 4.
+	{"name": "35_final_assembly", "setup": "_setup_final_assembly", "wait": 10},
+	{"name": "36_assembly_install", "setup": "_setup_assembly_install", "wait": 30},
+	{"name": "37_escape_crash_site", "setup": "_setup_escape_crash_site", "wait": 40},
+	{"name": "38_escape_launch", "setup": "_setup_escape_launch", "wait": 24},
+	{"name": "39_escape_debris", "setup": "_setup_escape_debris", "wait": 24},
+	{"name": "40_escape_sunlight", "setup": "_setup_escape_sunlight", "wait": 24},
+	{"name": "41_escape_portal", "setup": "_setup_escape_portal", "wait": 24},
+	{"name": "42_escape_home", "setup": "_setup_escape_home", "wait": 28},
+	{"name": "43_final_message", "setup": "_setup_final_message", "wait": 20},
+	{"name": "44_mission_report", "setup": "_setup_mission_report", "wait": 10},
+	{"name": "45_credits", "setup": "_setup_credits", "wait": 16},
 ]
 var hold: int = 0
 
@@ -479,6 +492,118 @@ func _setup_ready_summary() -> void:
 		ws.fabricate()
 	_clear_dialogue()
 	main._go(main.Screen.CHECKPOINT)
+
+
+# ---------------------------------------------------------------- phase 4
+
+## Drive the campaign to a complete, fabricated, ready state through the QA
+## helpers, so the Phase 4 screens pose from real recorded state.
+func _phase4_campaign() -> void:
+	main.campaign.reset_campaign()
+	main._go(main.Screen.TITLE)
+	var guard := 0
+	while SFQA.next_milestone(main.campaign) != SFQA.MILESTONE_READY and guard < 30:
+		guard += 1
+		main._apply_qa_skip()
+	_clear_dialogue()
+	main._go(main.Screen.CHECKPOINT)
+
+
+func _setup_final_assembly() -> void:
+	_phase4_campaign()
+	main._checkpoint_key(KEY_ENTER)
+	_clear_dialogue()
+
+
+func _setup_assembly_install() -> void:
+	# Standalone-capable: a filtered --shots=36 run has not posed the gate yet.
+	if main.screen != main.Screen.FINAL_ASSEMBLY or main.assembly_screen == null:
+		_phase4_campaign()
+		main._checkpoint_key(KEY_ENTER)
+		_clear_dialogue()
+	if main.assembly_screen != null and not main.assembly_screen.has_started():
+		main.assembly_screen.activate()
+	if main.assembly_screen != null:
+		main.assembly_screen.install_timer = 1.4
+
+
+func _escape_to(scene_index: int, at: float) -> void:
+	if main.cinematic_screen == null:
+		main._go(main.Screen.CINEMATIC)
+	var cine = main.cinematic_screen
+	cine.scene_index = scene_index
+	cine.show_final_message = false
+	cine.scene_time = at
+	cine.elapsed = at
+	cine.paused = false
+
+
+func _start_escape() -> void:
+	if main.screen == main.Screen.CINEMATIC or main.screen == main.Screen.REPORT or main.screen == main.Screen.CREDITS:
+		return
+	_phase4_campaign()
+	var gate = main.assembly_screen
+	if gate == null:
+		main._checkpoint_key(KEY_ENTER)
+		gate = main.assembly_screen
+	if gate != null:
+		gate.activate()
+		gate._finish_installation()
+	_clear_dialogue()
+
+
+func _setup_escape_crash_site() -> void:
+	_start_escape()
+	_escape_to(0, 12.4)
+
+
+func _setup_escape_launch() -> void:
+	_start_escape()
+	_escape_to(1, 6.2)
+
+
+func _setup_escape_debris() -> void:
+	_start_escape()
+	_escape_to(2, 9.0)
+
+
+func _setup_escape_sunlight() -> void:
+	_start_escape()
+	_escape_to(3, 10.0)
+
+
+func _setup_escape_portal() -> void:
+	_start_escape()
+	_escape_to(4, 9.0)
+
+
+func _setup_escape_home() -> void:
+	_start_escape()
+	_escape_to(5, 18.0)
+
+
+func _setup_final_message() -> void:
+	_start_escape()
+	if main.cinematic_screen != null:
+		main.cinematic_screen.show_final_message = true
+		main.cinematic_screen.scene_time = 4.0
+		main.cinematic_screen.elapsed = 4.0
+
+
+func _setup_mission_report() -> void:
+	_start_escape()
+	if main.cinematic_screen != null:
+		main.cinematic_screen.skip()
+	_clear_dialogue()
+
+
+func _setup_credits() -> void:
+	_setup_mission_report()
+	if main.report_screen != null:
+		main.report_screen.handle_key(KEY_ENTER)
+	if main.credits_screen != null:
+		main.credits_screen.scroll = 40.0
+	_clear_dialogue()
 
 
 func _setup_checkpoint() -> void:

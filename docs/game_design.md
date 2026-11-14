@@ -46,14 +46,26 @@ Phase 3 (shipped):
   the paused fight and from the exploration pause menu.
 - **Dawn Project archive**, then the **reconstruction workshop** at the base:
   salvage, limited fabrication, an engine, a route, protection, storage and
-  payload, checked by a return-mission simulation. Phase 3 ends at
-  READY_FOR_FINAL_ASSEMBLY.
+  payload, checked by a return-mission simulation.
+
+Phase 4 (shipped):
+
+- **Final assembly.** A prerequisite gate before the finale: all three bosses,
+  all three components, the mandatory payload, a valid fabrication and a passing
+  simulation that matches the frozen design. Confirming is one-way.
+- **Escape cinematic.** Six in-engine scenes — leaving the crash site, launch,
+  debris passage, sunlight, the portal, home — plus the closing message.
+  Subtitles are data; Space pauses; Esc skips with an identical outcome.
+- **Mission report and score.** Built only from the recorded run, with the score
+  formula published in `finale.json`.
+- **Credits**, then the title. The ending state is saved.
 
 ## Nice-to-have (not built)
 
-- Phase 4: the escape cinematic and the return-home ending.
-- Crafting beyond the crash-site repair and the workshop.
 - More side records and optional memory files per chapter.
+- A voiced or externally rendered cinematic (the shipped one is in-engine).
+- A Windows export build (no export templates were available; see
+  `docs/submission.md`).
 
 ## Game flow
 
@@ -65,7 +77,9 @@ Title
   -> Silent Coast -> Toxic Tide -> Environmental archive
   -> Crash-site base -> Phase 2 summary
   -> Dawn Tower -> Forest memory -> Sky Remnant -> Dawn Project archive
-  -> Reconstruction workshop -> Simulation -> READY_FOR_FINAL_ASSEMBLY -> Title
+  -> Reconstruction workshop -> Simulation -> READY_FOR_FINAL_ASSEMBLY
+  -> Final assembly -> Escape (6 scenes) -> Return home
+  -> Mission report -> Credits -> Title
 ```
 
 ## Phase 2 combat design
@@ -181,3 +195,45 @@ can be stranded. Every valid day-one build can reach a passing return.
 
 **Honesty.** The panel says it on screen: a simplified educational model with
 invented values, not NASA data.
+
+## Phase 4 design
+
+**Why the finale is a gate, not a cutscene.** The brief asks for revalidated
+prerequisites, a frozen snapshot, a saved checkpoint and locked controls before
+the escape. So READY_FOR_FINAL_ASSEMBLY opens a screen that *shows* the six
+checks and only then offers one irreversible action. The confirmation latches
+twice (screen flag + campaign method), which is what makes a double click
+harmless.
+
+**Why the cinematic is in-engine.** It is drawn from generated sprites and
+primitives, so it cannot fail on a missing video file, it scales with the pixel
+viewport, and it can be skipped without any cleanup problem. Its copy and
+timings live in `finale.json`.
+
+**Why the scenes read recorded state.** Scene A lights the junction only if the
+player repaired it. Scene C's telemetry is the certified simulation of the
+frozen design: route, mass, delta-v, propellant and buffer reserves, peak power
+and the debris impact count. No number on screen is invented at playback time,
+and nothing randomly fails a design that passed.
+
+**Why the report is recomputed.** The report runs the same simulation code the
+workshop certified, from the committed design. If the two ever disagreed, the
+report would be describing a ship the player did not fly.
+
+**Score, published.** 100 for the return objective, 25 per component, 15 per
+memory, 20 per optional payload flown, and up to 30 efficiency points from the
+propellant reserve (full marks at half a tank left). It never reads inventory
+size, play time, settings or skipped cinematics, so farming cannot inflate it
+and accessibility choices cannot deflate it. Several designs reach a high total
+because the efficiency term rewards margin.
+
+**Why skipping is safe.** The cinematic reports one outcome; the controller
+applies every flag and save once. Focus loss pauses rather than letting it run
+unseen. A save written during the escape resumes at the start of the escape, and
+the documented safe checkpoint is the pre-finale one.
+
+**QA stage skip.** `I + O + P` advances one milestone per press for playtesting.
+It builds real designs through the real validators, applies real boss rewards
+and real fabrications, and saves at every step, so a skipped run is
+indistinguishable in rules from a played one. It is enabled only in debug
+builds, the editor, or with `--qa`.

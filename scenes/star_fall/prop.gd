@@ -13,6 +13,7 @@ var label: String = ""
 var lines: Array = []
 var interactive: bool = false
 var highlighted: bool = false
+var mouse_hovered: bool = false
 var solid_size: Vector2 = Vector2.ZERO
 
 var _pulse: float = 0.0
@@ -45,9 +46,20 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if highlighted:
+	if highlighted or mouse_hovered:
 		_pulse += delta
 	queue_redraw()
+
+
+func hit_rect() -> Rect2:
+	var w := 24.0
+	var h := 24.0
+	if skin != null:
+		var tex: Texture2D = skin.sprites.get(sprite_key, null)
+		if tex != null:
+			w = maxf(22.0, float(tex.get_width()) + 10.0)
+			h = maxf(22.0, float(tex.get_height()) + 10.0)
+	return Rect2(position.x - w * 0.5, position.y - h + 4.0, w, h)
 
 
 func set_sprite(key: String) -> void:
@@ -67,8 +79,8 @@ func _draw() -> void:
 	var shadow_w: float = clampf(tex.get_width() * 0.65, 10.0, 34.0)
 	skin.contact_shadow(self, Vector2(0, 0), shadow_w, 0.20)
 
-	if highlighted:
-		var glow := Color(0.37, 0.90, 0.85, 0.5)
+	if highlighted or mouse_hovered:
+		var glow := Color(0.37, 0.90, 0.85, 0.5) if highlighted else Color(0.95, 0.82, 0.35, 0.45)
 		glow.a = 0.35 + 0.25 * sin(_pulse * 5.0)
 		var w := tex.get_width() + 8
 		var h := tex.get_height() + 4

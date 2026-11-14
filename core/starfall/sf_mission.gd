@@ -42,6 +42,11 @@ var _scan_angle: float = 0.0
 var _brief_timer: float = 0.0
 var _vo: Vector2 = Vector2.ZERO
 var _vs: float = 1.0
+var _mouse_virtual_pos: Vector2 = Vector2(VW * 0.5, VH * 0.5)
+
+
+func set_mouse_virtual_pos(p: Vector2) -> void:
+	_mouse_virtual_pos = p
 
 
 func setup(p_state, p_skin, p_audio, index: int) -> void:
@@ -133,6 +138,11 @@ func update(delta: float) -> void:
 		move.y -= 1.0
 	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
 		move.y += 1.0
+	if move == Vector2.ZERO and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
+		var world_cursor := camera + _mouse_virtual_pos
+		var diff: Vector2 = world_cursor - ship.position
+		if diff.length() > 8.0:
+			move = diff.normalized()
 	var want_beam: bool = Input.is_key_pressed(KEY_SPACE) or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
 
 	ship.step(delta, move, want_beam, world)

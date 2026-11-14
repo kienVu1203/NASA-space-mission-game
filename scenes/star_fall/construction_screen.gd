@@ -36,6 +36,9 @@ var _blink: float = 0.0
 var _built_ship: Node2D = null
 
 var _slot_fuel_row: int = 5   # the fuel row sits after the five slots
+var _slot_rects: Array = []
+var _option_rects: Array = []
+var _dragging_fuel: bool = false
 
 
 func setup(skin_ref, ui_ref, campaign_ref) -> void:
@@ -80,6 +83,12 @@ func _component_name(id: String) -> String:
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		_handle_mouse_button(event as InputEventMouseButton)
+		return
+	if event is InputEventMouseMotion:
+		_handle_mouse_motion(event as InputEventMouseMotion)
+		return
 	if not (event is InputEventKey):
 		return
 	var key_event := event as InputEventKey
@@ -112,6 +121,132 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_ESCAPE:
 			skin.audio.sfx_back()
 			closed.emit()
+
+
+func _handle_mouse_button(mb: InputEventMouseButton) -> void:
+	var pos: Vector2 = get_local_mouse_position()
+	if not mb.pressed:
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			_dragging_fuel = false
+		return
+
+	if mb.button_index == MOUSE_BUTTON_RIGHT:
+		skin.audio.sfx_back()
+		closed.emit()
+		return
+
+	if mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+		if pos.x < 188.0:
+			slot_menu.move(-1)
+			current_slot = slot_menu.index
+			skin.audio.sfx_select()
+			queue_redraw()
+		else:
+			_cycle_component(-1)
+		return
+
+	if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		if pos.x < 188.0:
+			slot_menu.move(1)
+			current_slot = slot_menu.index
+			skin.audio.sfx_select()
+			queue_redraw()
+		else:
+			_cycle_component(1)
+		return
+
+	if mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+
+	# 1. Left column: slot list (A-E + F FUEL) or fuel tank on ship diagram
+	for i in _slot_rects.size():
+		var sr: Rect2 = _slot_rects[i] as Rect2
+		if sr.has_point(pos):
+			slot_menu.index = i
+			current_slot = i
+			skin.audio.sfx_select()
+			queue_redraw()
+			return
+
+	if Rect2(80, 128, 36, 56).has_point(pos):
+		slot_menu.index = _slot_fuel_row
+		current_slot = _slot_fuel_row
+		skin.audio.sfx_select()
+		queue_redraw()
+		return
+
+	# 2. Middle column: component cards or fuel bar
+	if String(slot_menu.current_id()) == "fuel":
+		var fuel_box := Rect2(206, 66, 186, 46)
+		if fuel_box.has_point(pos):
+			_dragging_fuel = true
+			_set_fuel_from_mouse_x(pos.x, fuel_box)
+			return
+	else:
+		for item in _option_rects:
+			var entry: Dictionary = item as Dictionary
+			var r: Rect2 = entry["rect"] as Rect2
+			if r.has_point(pos):
+				_select_component_by_id(String(entry["id"]))
+				return
+		if Rect2(192, 32, 214, 28).has_point(pos):
+			_cycle_component(1)
+			return
+
+	# 3. Right column: Confirm Design & Run Preflight Check buttons
+	var confirm_rect := Rect2(418, 290, 206, 16)
+	if confirm_rect.has_point(pos):
+		_confirm()
+		return
+	var preflight_rect := Rect2(418, 306, 206, 22)
+	if preflight_rect.has_point(pos) or Rect2(412, 160, 218, 128).has_point(pos):
+		_run_preflight()
+		return
+
+	# 4. Footer bar shortcuts
+	if pos.y >= 336.0:
+		if pos.x > 520.0:
+			skin.audio.sfx_back()
+			closed.emit()
+		elif pos.x > 420.0:
+			_confirm()
+		elif pos.x > 330.0:
+			_run_preflight()
+
+
+func _handle_mouse_motion(_mm: InputEventMouseMotion) -> void:
+	if _dragging_fuel and String(slot_menu.current_id()) == "fuel":
+		var pos: Vector2 = get_local_mouse_position()
+		_set_fuel_from_mouse_x(pos.x, Rect2(206, 66, 186, 46))
+
+
+func _set_fuel_from_mouse_x(mx: float, fuel_box: Rect2) -> void:
+	var cap := float(campaign.content.hull.get("fuel_capacity_kg", 500.0))
+	var step := float(campaign.content.hull.get("fuel_step_kg", 25.0))
+	if step <= 0.0:
+		step = 25.0
+	var ratio: float = clampf((mx - (fuel_box.position.x + 4.0)) / maxf(1.0, fuel_box.size.x - 8.0), 0.0, 1.0)
+	var target_kg: float = clampf(round((ratio * cap) / step) * step, 0.0, cap)
+	if not is_equal_approx(target_kg, campaign.design.fuel_kg):
+		campaign.design.set_fuel(target_kg, campaign.content)
+		skin.audio.sfx_select()
+		fuel_flash = 0.25
+		_invalidate()
+		_rebuild_slot_menu()
+		queue_redraw()
+
+
+func _select_component_by_id(comp_id: String) -> void:
+	var slot: String = String(slot_menu.current_id())
+	if comp_id == "":
+		campaign.design.clear_slot(slot)
+		skin.audio.sfx_remove()
+	else:
+		campaign.design.set_slot(slot, comp_id)
+		skin.audio.sfx_install()
+	_invalidate()
+	_rebuild_slot_menu()
+	queue_redraw()
 
 
 func _cycle_component(delta: int) -> void:
@@ -240,7 +375,8 @@ func _draw_ship_column(rect: Rect2) -> void:
 	_draw_assembled_ship(base)
 
 	# Slot indicator list under the ship: serial letters, state and short name.
-	var y := rect.position.y + 216.0
+	_slot_rects.clear()
+	var y := rect.position.y + 205.0
 	var d = campaign.design
 	var letters: Array = ["A", "B", "C", "D", "E"]
 	var index: int = 0
@@ -250,6 +386,7 @@ func _draw_ship_column(rect: Rect2) -> void:
 		var filled: bool = comp_id != ""
 		var focused: bool = slot_menu.current_id() == id
 		var row := Rect2(rect.position.x + 6, y, rect.size.x - 12, 13)
+		_slot_rects.append(row)
 		if focused:
 			draw_rect(row, SFPalette.RUIN, true)
 			draw_rect(Rect2(row.position, Vector2(2, row.size.y)), SFPalette.CYAN, true)
@@ -257,8 +394,19 @@ func _draw_ship_column(rect: Rect2) -> void:
 		draw_rect(dot, SFPalette.GREEN_OK if filled else SFPalette.ASH, true)
 		skin.text(self, Vector2(row.position.x + 16, row.position.y + 3), "%s %s" % [String(letters[index]), String(SFPalette.SLOT_NAMES.get(id, id))], SFPalette.PAPER if focused else SFPalette.PAPER_DIM)
 		skin.text_r(self, row.end.x - 5, row.position.y + 3, "SET" if filled else "EMPTY", SFPalette.GREEN_OK if filled else SFPalette.ASH_LIGHT)
-		y += 15.0
+		y += 14.0
 		index += 1
+
+	var fuel_focused: bool = slot_menu.current_id() == "fuel"
+	var fuel_row := Rect2(rect.position.x + 6, y, rect.size.x - 12, 13)
+	_slot_rects.append(fuel_row)
+	if fuel_focused:
+		draw_rect(fuel_row, SFPalette.RUIN, true)
+		draw_rect(Rect2(fuel_row.position, Vector2(2, fuel_row.size.y)), SFPalette.CYAN, true)
+	var min_fuel_ok: bool = d.fuel_kg >= float(campaign.content.requirements.get("minimum_fuel_kg", 0.0))
+	draw_rect(Rect2(fuel_row.position.x + 7, fuel_row.position.y + 5, 4, 4), SFPalette.GREEN_OK if min_fuel_ok else SFPalette.ASH, true)
+	skin.text(self, Vector2(fuel_row.position.x + 16, fuel_row.position.y + 3), "F FUEL LOAD", SFPalette.PAPER if fuel_focused else SFPalette.PAPER_DIM)
+	skin.text_r(self, fuel_row.end.x - 5, fuel_row.position.y + 3, "%dKG" % int(d.fuel_kg), SFPalette.GREEN_OK if min_fuel_ok else SFPalette.ASH_LIGHT)
 
 
 ## Draws the ship at a ground point, its shape driven by the design.
@@ -373,6 +521,7 @@ func _draw_assembled_ship(ground: Vector2) -> void:
 
 
 func _draw_component_column(rect: Rect2) -> void:
+	_option_rects.clear()
 	draw_rect(rect, Color(0.07, 0.10, 0.12), true)
 	draw_rect(rect, SFPalette.STEEL_DARK, false, 1.0)
 
@@ -385,7 +534,7 @@ func _draw_component_column(rect: Rect2) -> void:
 
 	var slot_name := String(SFPalette.SLOT_NAMES.get(current, current.to_upper()))
 	skin.text(self, rect.position + Vector2(6, 5), "SLOT: " + slot_name, SFPalette.CYAN)
-	skin.text(self, rect.position + Vector2(6, 16), "LEFT / RIGHT TO CYCLE", SFPalette.PAPER_DIM)
+	skin.text(self, rect.position + Vector2(6, 16), "CLICK OR LEFT / RIGHT TO SELECT", SFPalette.PAPER_DIM)
 
 	var installed: String = String(d.slot_component(current))
 	# Rows stop above the standing note at the bottom of the column.
@@ -418,6 +567,7 @@ func _draw_component_column(rect: Rect2) -> void:
 			skin.text(self, Vector2(rect.position.x + 8, rows_bottom - 9),
 				"+%d MORE - CYCLE TO SEE" % hidden, SFPalette.ASH_LIGHT)
 			break
+		_option_rects.append({"rect": row, "id": id})
 		var fill := Color(0.05, 0.08, 0.09)
 		if selected:
 			fill = SFPalette.RUIN

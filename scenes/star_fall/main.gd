@@ -1138,7 +1138,9 @@ func _process_launch(delta: float) -> void:
 	launch_timer += delta
 	match launch_phase:
 		LaunchPhase.COUNTDOWN:
-			if (launch_timer - delta < 0.8 and launch_timer >= 0.8) or (launch_timer - delta < 1.8 and launch_timer >= 1.8):
+			# One beep per displayed number (T-3, T-2, T-1), in step with _draw_countdown.
+			var step: int = int(launch_timer / 0.85)
+			if (launch_timer <= delta or step != int((launch_timer - delta) / 0.85)) and step < 3:
 				if audio.has_method("sfx_countdown"):
 					audio.sfx_countdown()
 			if launch_timer > 2.6:

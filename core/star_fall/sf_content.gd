@@ -7,6 +7,8 @@ const DATA_DIR := "res://data/star_fall/"
 const PARTS_FILE := "ship_parts.json"
 const CAMPAIGN_FILE := "campaign.json"
 
+const SFEcounters := preload("res://core/star_fall/sf_encounters.gd")
+
 var program: Dictionary = {}
 var hull: Dictionary = {}
 var requirements: Dictionary = {}
@@ -21,6 +23,10 @@ var missions: Array = []
 var memories: Dictionary = {}
 var dialogue: Dictionary = {}
 var checkpoint: Dictionary = {}
+var archives: Dictionary = {}
+
+## Phase 2 encounter tuning, loaded from data/star_fall/encounters.json.
+var encounters
 
 var _component_by_id: Dictionary = {}
 var _chapter_by_id: Dictionary = {}
@@ -37,6 +43,10 @@ func load_all() -> bool:
 	if not (parts is Dictionary) or not (camp is Dictionary):
 		push_error("SFContent: could not load star_fall data")
 		return false
+	encounters = SFEcounters.new()
+	if not encounters.load_all():
+		push_error("SFContent: could not load star_fall encounter data")
+		return false
 	_ingest(parts as Dictionary, camp as Dictionary)
 	_loaded = true
 	return true
@@ -44,6 +54,8 @@ func load_all() -> bool:
 
 ## Test and tooling entry point: build from in-memory dictionaries.
 func load_from_dicts(parts: Dictionary, camp: Dictionary) -> bool:
+	encounters = SFEcounters.new()
+	encounters.load_all()
 	_ingest(parts, camp)
 	_loaded = true
 	return true
@@ -73,6 +85,7 @@ func _ingest(parts: Dictionary, camp: Dictionary) -> void:
 	site_items = _as_dict(parts.get("site_items", {}))
 	repair_cost = _as_dict(parts.get("repair_cost", {}))
 
+	future_components = _as_array(camp.get("future_components", []))
 	chapters = _as_array(camp.get("chapters", []))
 	missions = _as_array(camp.get("missions", []))
 	dialogue = _as_dict(camp.get("dialogue", {}))
@@ -81,6 +94,11 @@ func _ingest(parts: Dictionary, camp: Dictionary) -> void:
 	for m in _as_array(camp.get("memories", [])):
 		var memory_entry := _as_dict(m)
 		memories[String(memory_entry.get("id", ""))] = memory_entry
+
+	archives = {}
+	var archive_data := _as_dict(camp.get("archives", {}))
+	for key in archive_data.keys():
+		archives[String(key)] = _as_dict(archive_data[key])
 
 	_component_by_id = {}
 	for c in components:
@@ -144,6 +162,18 @@ func memory(id: String) -> Dictionary:
 
 func dialogue_lines(key: String) -> Array:
 	return _as_array(dialogue.get(key, []))
+
+
+func archive(id: String) -> Dictionary:
+	return _as_dict(archives.get(id, {}))
+
+
+func has_archive(id: String) -> bool:
+	return not archive(id).is_empty()
+
+
+func memory_scene(memory_id: String) -> String:
+	return String(memory(memory_id).get("scene", "city"))
 
 
 func material_name(id: String) -> String:

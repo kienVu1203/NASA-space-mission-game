@@ -345,5 +345,463 @@
         "label": "Inspect robot"
       }
     ]
+  },
+  "forgotten_city": {
+    "id": "forgotten_city",
+    "name": "Forgotten City",
+    "theme": "city",
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "w": 720,
+      "h": 400
+    },
+    "player_start": {
+      "x": 70,
+      "y": 330
+    },
+    "props": [
+      {
+        "sprite": "rubble",
+        "x": 120,
+        "y": 96,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 250,
+        "y": 74,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 410,
+        "y": 88,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 560,
+        "y": 110,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 650,
+        "y": 300,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 200,
+        "y": 360,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "street_lamp",
+        "x": 96,
+        "y": 250,
+        "solid": [
+          8,
+          8
+        ]
+      },
+      {
+        "sprite": "street_lamp",
+        "x": 372,
+        "y": 208,
+        "solid": [
+          8,
+          8
+        ]
+      },
+      {
+        "sprite": "street_lamp",
+        "x": 612,
+        "y": 240,
+        "solid": [
+          8,
+          8
+        ]
+      },
+      {
+        "sprite": "waste_pile",
+        "x": 150,
+        "y": 286,
+        "solid": [
+          20,
+          9
+        ]
+      },
+      {
+        "sprite": "waste_pile",
+        "x": 300,
+        "y": 318,
+        "solid": [
+          20,
+          9
+        ]
+      },
+      {
+        "sprite": "waste_pile",
+        "x": 470,
+        "y": 246,
+        "solid": [
+          20,
+          9
+        ]
+      },
+      {
+        "sprite": "waste_pile",
+        "x": 560,
+        "y": 330,
+        "solid": [
+          20,
+          9
+        ]
+      },
+      {
+        "sprite": "board_stack",
+        "x": 214,
+        "y": 232,
+        "solid": [
+          10,
+          7
+        ]
+      },
+      {
+        "sprite": "board_stack",
+        "x": 430,
+        "y": 300,
+        "solid": [
+          10,
+          7
+        ]
+      },
+      {
+        "sprite": "board_stack",
+        "x": 640,
+        "y": 188,
+        "solid": [
+          10,
+          7
+        ]
+      },
+      {
+        "sprite": "shrine",
+        "x": 344,
+        "y": 262,
+        "solid": [
+          12,
+          8
+        ],
+        "interact": "memory_city_green",
+        "label": "View maintenance shrine"
+      },
+      {
+        "sprite": "checkpoint",
+        "x": 252,
+        "y": 300,
+        "solid": [
+          10,
+          7
+        ],
+        "interact": "city_checkpoint",
+        "label": "Use checkpoint"
+      },
+      {
+        "sprite": "waste_pile",
+        "x": 520,
+        "y": 196,
+        "solid": [
+          20,
+          9
+        ],
+        "interact": "salvage_city_scrap",
+        "label": "Collect circuitry"
+      },
+      {
+        "sprite": "board_stack",
+        "x": 116,
+        "y": 168,
+        "solid": [
+          10,
+          7
+        ],
+        "interact": "salvage_city_boards",
+        "label": "Collect circuitry"
+      },
+      {
+        "sprite": "waste_pile",
+        "x": 382,
+        "y": 150,
+        "solid": [
+          20,
+          9
+        ],
+        "interact": "salvage_city_frame",
+        "label": "Collect scrap metal"
+      },
+      {
+        "sprite": "control_door",
+        "x": 600,
+        "y": 150,
+        "solid": [
+          30,
+          14
+        ],
+        "interact": "city_boss_gate",
+        "label": "Enter the control center"
+      }
+    ]
+  },
+  "silent_coast": {
+    "id": "silent_coast",
+    "name": "Silent Coast",
+    "theme": "coast",
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "w": 720,
+      "h": 400
+    },
+    "player_start": {
+      "x": 64,
+      "y": 330
+    },
+    "props": [
+      {
+        "sprite": "rubble",
+        "x": 140,
+        "y": 110,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 300,
+        "y": 92,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 520,
+        "y": 100,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 640,
+        "y": 320,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 230,
+        "y": 360,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "harbor_crate",
+        "x": 120,
+        "y": 264,
+        "solid": [
+          18,
+          9
+        ]
+      },
+      {
+        "sprite": "harbor_crate",
+        "x": 356,
+        "y": 232,
+        "solid": [
+          18,
+          9
+        ]
+      },
+      {
+        "sprite": "harbor_crate",
+        "x": 590,
+        "y": 262,
+        "solid": [
+          18,
+          9
+        ]
+      },
+      {
+        "sprite": "drum",
+        "x": 206,
+        "y": 304,
+        "solid": [
+          10,
+          8
+        ]
+      },
+      {
+        "sprite": "drum",
+        "x": 282,
+        "y": 196,
+        "solid": [
+          10,
+          8
+        ]
+      },
+      {
+        "sprite": "drum",
+        "x": 486,
+        "y": 318,
+        "solid": [
+          10,
+          8
+        ]
+      },
+      {
+        "sprite": "drum",
+        "x": 650,
+        "y": 192,
+        "solid": [
+          10,
+          8
+        ]
+      },
+      {
+        "sprite": "pump",
+        "x": 430,
+        "y": 168,
+        "solid": [
+          18,
+          9
+        ]
+      },
+      {
+        "sprite": "pump",
+        "x": 96,
+        "y": 164,
+        "solid": [
+          18,
+          9
+        ]
+      },
+      {
+        "sprite": "record_terminal",
+        "x": 252,
+        "y": 258,
+        "solid": [
+          10,
+          8
+        ],
+        "interact": "coast_records",
+        "label": "Read coastal records"
+      },
+      {
+        "sprite": "sample_point",
+        "x": 330,
+        "y": 312,
+        "solid": [
+          8,
+          6
+        ],
+        "interact": "sample_coast_water",
+        "label": "Take water sample"
+      },
+      {
+        "sprite": "sample_point",
+        "x": 470,
+        "y": 258,
+        "solid": [
+          8,
+          6
+        ],
+        "interact": "sample_coast_sediment",
+        "label": "Take sediment sample"
+      },
+      {
+        "sprite": "shrine",
+        "x": 180,
+        "y": 212,
+        "solid": [
+          12,
+          8
+        ],
+        "interact": "memory_green_coast",
+        "label": "View coastal projection"
+      },
+      {
+        "sprite": "checkpoint",
+        "x": 540,
+        "y": 304,
+        "solid": [
+          10,
+          7
+        ],
+        "interact": "coast_checkpoint",
+        "label": "Use checkpoint"
+      },
+      {
+        "sprite": "waste_pile",
+        "x": 392,
+        "y": 340,
+        "solid": [
+          20,
+          9
+        ],
+        "interact": "salvage_coast_plate",
+        "label": "Collect scrap metal"
+      },
+      {
+        "sprite": "harbor_crate",
+        "x": 642,
+        "y": 346,
+        "solid": [
+          18,
+          9
+        ],
+        "interact": "salvage_coast_cable",
+        "label": "Collect polymer"
+      },
+      {
+        "sprite": "pump",
+        "x": 646,
+        "y": 96,
+        "solid": [
+          18,
+          9
+        ],
+        "interact": "coast_boss_gate",
+        "label": "Enter the cleanup facility"
+      }
+    ]
   }
 }

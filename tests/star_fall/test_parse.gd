@@ -27,6 +27,11 @@ const SCRIPTS := [
 	"res://core/star_fall/sf_pattern_scheduler.gd",
 	"res://core/star_fall/sf_encounter_model.gd",
 	"res://core/star_fall/sf_encounter.gd",
+	"res://core/star_fall/sf_vocabulary.gd",
+	"res://core/star_fall/sf_typing.gd",
+	"res://core/star_fall/sf_typing_encounter.gd",
+	"res://core/star_fall/sf_return_sim.gd",
+	"res://core/star_fall/sf_reconstruction.gd",
 	"res://scenes/star_fall/player.gd",
 	"res://scenes/star_fall/prop.gd",
 	"res://scenes/star_fall/world.gd",
@@ -34,6 +39,8 @@ const SCRIPTS := [
 	"res://scenes/star_fall/shield_duel.gd",
 	"res://scenes/star_fall/archive_screen.gd",
 	"res://scenes/star_fall/progression_screen.gd",
+	"res://scenes/star_fall/typing_duel.gd",
+	"res://scenes/star_fall/reconstruction_screen.gd",
 	"res://scenes/star_fall/main.gd",
 ]
 

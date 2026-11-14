@@ -803,5 +803,38 @@
         "label": "Enter the cleanup facility"
       }
     ]
+  },
+  "dawn_tower": {
+    "id": "dawn_tower",
+    "name": "Dawn Tower",
+    "theme": "ruin",
+    "bounds": {"x": 0, "y": 0, "w": 720, "h": 400},
+    "player_start": {"x": 60, "y": 320},
+    "props": [
+      {"sprite": "dead_tree", "x": 70, "y": 120, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 150, "y": 96, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 250, "y": 110, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 440, "y": 104, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 600, "y": 128, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 96, "y": 250, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 214, "y": 330, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 380, "y": 360, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 520, "y": 300, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 668, "y": 250, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 330, "y": 180, "solid": [8, 6]},
+      {"sprite": "dead_tree", "x": 560, "y": 196, "solid": [8, 6]},
+      {"sprite": "rubble", "x": 160, "y": 200, "solid": [18, 8]},
+      {"sprite": "rubble", "x": 470, "y": 250, "solid": [18, 8]},
+      {"sprite": "rubble", "x": 640, "y": 350, "solid": [18, 8]},
+      {"sprite": "drum", "x": 286, "y": 268, "solid": [10, 8]},
+      {"sprite": "drum", "x": 600, "y": 300, "solid": [10, 8]},
+      {"sprite": "shrine", "x": 150, "y": 290, "solid": [12, 8], "interact": "dawn_memory", "label": "View the survey projector"},
+      {"sprite": "checkpoint", "x": 420, "y": 300, "solid": [10, 7], "interact": "dawn_checkpoint", "label": "Use checkpoint"},
+      {"sprite": "record_terminal", "x": 470, "y": 170, "solid": [10, 8], "interact": "dawn_terminal", "label": "Inspect the defense console"},
+      {"sprite": "waste_pile", "x": 300, "y": 230, "solid": [20, 9], "interact": "salvage_dawn_frame", "label": "Collect scrap metal"},
+      {"sprite": "board_stack", "x": 540, "y": 360, "solid": [16, 8], "interact": "salvage_dawn_cells", "label": "Collect circuitry"},
+      {"sprite": "harbor_crate", "x": 80, "y": 350, "solid": [18, 9], "interact": "salvage_dawn_seal", "label": "Collect polymer"},
+      {"sprite": "dawn_tower", "x": 360, "y": 120, "solid": [40, 12], "interact": "dawn_boss_gate", "label": "Enter the Dawn Tower"}
+    ]
   }
 }

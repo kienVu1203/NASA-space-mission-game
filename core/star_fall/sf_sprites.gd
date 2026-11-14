@@ -36,7 +36,74 @@ static func build_all() -> Dictionary:
 	out["sample_point"] = _tex(_sample_point())
 	out["record_terminal"] = _tex(_record_terminal())
 	out["bill_phase_two"] = _tex(_bill(true))
+	# Phase 3 exploration props.
+	out["dead_tree"] = _tex(_dead_tree())
+	out["dawn_tower"] = _tex(_dawn_tower())
 	return out
+
+
+## A standing dead trunk from the former Dawn forest: bare, grey, split.
+static func _dead_tree() -> Image:
+	var img := _img(24, 40)
+	var trunk: Color = Color("5a5248")
+	var dark: Color = Color("3b352f")
+	var light: Color = Color("7a7064")
+	_rect(img, 10, 10, 4, 30, trunk)
+	_rect(img, 10, 10, 1, 30, dark)
+	_rect(img, 13, 12, 1, 26, light)
+	_rect(img, 8, 36, 8, 4, dark)
+	# Bare branches, broken short.
+	_rect(img, 4, 14, 6, 2, trunk)
+	_rect(img, 3, 11, 2, 4, trunk)
+	_rect(img, 14, 18, 6, 2, trunk)
+	_rect(img, 19, 14, 2, 5, trunk)
+	_rect(img, 11, 3, 2, 8, trunk)
+	_rect(img, 7, 6, 4, 1, dark)
+	# A pale split down the trunk and a scrap of ash at the root.
+	_px(img, 12, 20, light)
+	_px(img, 12, 21, light)
+	_px(img, 11, 28, dark)
+	_rect(img, 6, 39, 12, 1, Color("2a2622"))
+	return img
+
+
+## The Dawn Tower: a tall transmitter on a facility base, with the shield
+## emitter glowing at its crown. Origin is the ground-contact point.
+static func _dawn_tower() -> Image:
+	var img := _img(64, 96)
+	var base: Color = SFPalette.STEEL_DARK
+	var mid: Color = SFPalette.STEEL_MID
+	var hi: Color = SFPalette.STEEL
+	var smog: Color = Color("3a3048")
+	# Facility base.
+	_rect(img, 4, 72, 56, 24, base)
+	_rect(img, 4, 72, 56, 2, mid)
+	_rect(img, 24, 80, 16, 16, SFPalette.INK)
+	_rect(img, 25, 81, 14, 1, SFPalette.CYAN_DARK)
+	for i in 4:
+		_rect(img, 8 + i * 13, 77, 6, 4, SFPalette.INK)
+	# Lattice mast.
+	_rect(img, 26, 14, 3, 58, mid)
+	_rect(img, 35, 14, 3, 58, base)
+	var y := 18
+	while y < 70:
+		_rect(img, 28, y, 8, 1, hi)
+		_px(img, 30, y + 2, mid)
+		_px(img, 33, y + 4, mid)
+		y += 7
+	# Transmitter dishes.
+	_rect(img, 16, 30, 10, 6, mid)
+	_rect(img, 15, 31, 1, 4, hi)
+	_rect(img, 38, 44, 10, 6, mid)
+	_rect(img, 48, 45, 1, 4, hi)
+	# Shield emitter crown, wrapped in smog.
+	_rect(img, 22, 4, 20, 10, base)
+	_rect(img, 26, 6, 12, 6, SFPalette.CYAN_DIM)
+	_rect(img, 29, 7, 6, 3, SFPalette.CYAN)
+	for i in 10:
+		_px(img, 18 + (i * 7) % 28, 2 + (i * 5) % 12, smog)
+		_px(img, 19 + (i * 7) % 28, 2 + (i * 5) % 12, smog)
+	return img
 
 
 # ---------------------------------------------------------------- helpers

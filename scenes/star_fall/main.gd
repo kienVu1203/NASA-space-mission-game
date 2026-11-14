@@ -23,6 +23,10 @@ const SFConstruction := preload("res://scenes/star_fall/construction_screen.gd")
 const SFDuel := preload("res://scenes/star_fall/shield_duel.gd")
 const SFArchive := preload("res://scenes/star_fall/archive_screen.gd")
 const SFProgression := preload("res://scenes/star_fall/progression_screen.gd")
+const SFTypingDuel := preload("res://scenes/star_fall/typing_duel.gd")
+const SFWorkshop := preload("res://scenes/star_fall/reconstruction_screen.gd")
+const SFVocabulary := preload("res://core/star_fall/sf_vocabulary.gd")
+const SFContent := preload("res://core/star_fall/sf_content.gd")
 
 enum Screen {
 	TITLE,
@@ -36,6 +40,9 @@ enum Screen {
 	ARCHIVE,
 	PROGRESSION,
 	SAVE_ERROR,
+	TYPING,
+	WORKSHOP,
+	JOURNAL,
 }
 
 enum LaunchPhase {COUNTDOWN, ASCENT, SIGNAL, RIFT, CRASH, DONE}
@@ -77,6 +84,14 @@ var archive_screen = null
 var progression_screen = null
 var _archive_id: String = ""
 var _pending_boss_id: String = ""
+
+# Phase 3 screens and content.
+var typing_duel = null
+var workshop_screen = null
+var vocab = null
+var typing_data: Dictionary = {}
+var journal_index: int = 0
+var journal_return: int = Screen.WORLD
 
 # Encounter dialogue is read over a frozen arena; the duel checks this.
 var encounter_input_locked: bool = false
@@ -124,6 +139,10 @@ func _ready() -> void:
 	campaign = GameState.campaign
 	sites = SFSites.new()
 	sites.load_all()
+	vocab = SFVocabulary.new()
+	if not vocab.load_all():
+		push_error("STAR FALL: the vocabulary library failed validation")
+	typing_data = SFContent.read_json("res://data/star_fall/typing.json") as Dictionary
 
 	audio = SFAudio.new()
 	audio.name = "SFAudio"
@@ -202,6 +221,8 @@ func _rebuild_pause_menu() -> void:
 	if screen == Screen.WORLD:
 		items.append({"id": "resume", "label": "RESUME", "enabled": true})
 		items.append({"id": "save", "label": "SAVE PROGRESS", "enabled": true})
+		if not campaign.vocabulary_journal.is_empty():
+			items.append({"id": "journal", "label": "VOCABULARY JOURNAL", "enabled": true})
 		items.append({"id": "settings", "label": "SETTINGS", "enabled": true})
 		items.append({"id": "title", "label": "RETURN TO MAIN MENU", "enabled": true})
 	else:
@@ -240,6 +261,12 @@ func _go(next: int) -> void:
 	if progression_screen != null:
 		progression_screen.queue_free()
 		progression_screen = null
+	if typing_duel != null:
+		typing_duel.queue_free()
+		typing_duel = null
+	if workshop_screen != null:
+		workshop_screen.queue_free()
+		workshop_screen = null
 
 	screen = next
 	blink = 0.0
@@ -283,6 +310,10 @@ func _go(next: int) -> void:
 		Screen.SAVE_ERROR:
 			if audio.has_method("stop_music"):
 				audio.stop_music()
+		Screen.TYPING:
+			_enter_typing()
+		Screen.WORKSHOP:
+			_enter_workshop()
 	queue_redraw()
 
 
@@ -331,6 +362,8 @@ func _world_theme(zone_id: String) -> String:
 			return "city"
 		"silent_coast":
 			return "coast"
+		"dawn_tower":
+			return "ruin"
 	return "ruin"
 
 
@@ -400,6 +433,10 @@ func apply_focus_state() -> void:
 	encounter_input_locked = dialogue != null
 	if duel != null:
 		duel.input_locked = encounter_input_locked
+	if typing_duel != null:
+		typing_duel.input_locked = encounter_input_locked
+	if workshop_screen != null:
+		workshop_screen.input_locked = encounter_input_locked
 
 
 # ---------------------------------------------------------------- input
@@ -459,6 +496,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_checkpoint_key(key_event.keycode)
 		Screen.SAVE_ERROR:
 			_save_error_key(key_event.keycode)
+		Screen.JOURNAL:
+			_journal_key(key_event.keycode)
 
 
 func _menu_item_at(menu, origin: Vector2, width: float, row_h: float, pos: Vector2) -> int:
@@ -618,6 +657,8 @@ func _resume_from_campaign() -> void:
 			zone = "forgotten_city"
 		SFCampaign.CHAPTER_COAST:
 			zone = "silent_coast"
+		SFCampaign.CHAPTER_DAWN:
+			zone = "dawn_tower"
 		SFCampaign.CHAPTER_PRESENT:
 			zone = "spaceport"
 		_:
@@ -667,6 +708,19 @@ func _resume_from_campaign() -> void:
 		SFCampaign.STAGE_BASE_RETURN:
 			_go(Screen.PROGRESSION)
 		SFCampaign.STAGE_PHASE_TWO_COMPLETE:
+			_go(Screen.CHECKPOINT)
+		SFCampaign.STAGE_DAWN_INTRO:
+			_go(Screen.WORLD)
+			if not campaign.has_flag(SFCampaign.FLAG_DAWN_ENTERED):
+				_show_dawn_intro()
+		SFCampaign.STAGE_DAWN_BOSS:
+			# Never resumed mid-fight: the pre-boss checkpoint is the resume point.
+			_begin_dawn_boss()
+		SFCampaign.STAGE_DAWN_ARCHIVE:
+			_enter_archive_scene(SFCampaign.ARCHIVE_DAWN)
+		SFCampaign.STAGE_RECONSTRUCTION:
+			_go(Screen.WORKSHOP)
+		SFCampaign.STAGE_READY:
 			_go(Screen.CHECKPOINT)
 		_:
 			_go(Screen.WORLD)
@@ -768,7 +822,11 @@ func _on_world_interact(object_id: String, prop) -> void:
 			var lines: Array = prop.lines as Array if prop != null else []
 			_open_dialogue(lines, "INSPECTION")
 		"crash_vela":
-			_inspect_wreck()
+			if campaign.has_flag(SFCampaign.FLAG_WORKSHOP_UNLOCKED):
+				audio.sfx_blip()
+				_go(Screen.WORKSHOP)
+			else:
+				_inspect_wreck()
 		"bill_body":
 			_interact_bill(prop)
 		"power_connection":
@@ -791,6 +849,16 @@ func _on_world_interact(object_id: String, prop) -> void:
 			_take_sample(object_id)
 		"coast_boss_gate":
 			_approach_coast_gate()
+		# Phase 3: Dawn Tower.
+		"dawn_memory":
+			_open_dialogue(campaign.content.dialogue_lines("dawn_memory"), "SURVEY PROJECTOR",
+				Callable(self, "_on_dawn_projector_done"))
+		"dawn_checkpoint":
+			_use_dawn_checkpoint()
+		"dawn_terminal":
+			_open_dialogue(campaign.content.dialogue_lines("dawn_terminal"), "DEFENSE CONSOLE")
+		"dawn_boss_gate":
+			_approach_dawn_gate()
 		_:
 			if object_id.begins_with("salvage") or object_id == "scrap_extra":
 				_collect_salvage(object_id)
@@ -1257,11 +1325,20 @@ func _checkpoint_key(key: int) -> void:
 			# summary is the stopping point, so it returns to the title with the
 			# save intact. After Phase 1 it leads into the Forgotten City, which
 			# is where Bill's coordinates point.
-			if campaign.has_flag(SFCampaign.FLAG_PHASE_TWO_COMPLETE):
-				campaign.advance_to(SFCampaign.STAGE_COMPLETE)
-				campaign.set_checkpoint(SFCampaign.STAGE_COMPLETE, SFCampaign.CHAPTER_CRASH)
+			# Phase 3 ends at READY_FOR_FINAL_ASSEMBLY: that summary is the
+			# stopping point and returns to the title with the save intact.
+			if campaign.is_ready_for_final_assembly():
 				_save_quietly()
 				_go(Screen.TITLE)
+				return
+			# The Phase 2 summary now continues into the Dawn Tower.
+			if campaign.has_flag(SFCampaign.FLAG_PHASE_TWO_COMPLETE):
+				campaign.advance_to(SFCampaign.STAGE_DAWN_INTRO)
+				campaign.set_checkpoint(SFCampaign.STAGE_DAWN_INTRO, SFCampaign.CHAPTER_DAWN)
+				_save_quietly()
+				zone = "dawn_tower"
+				_go(Screen.WORLD)
+				_show_dawn_intro()
 				return
 			campaign.advance_to(SFCampaign.STAGE_CITY_INTRO)
 			campaign.set_checkpoint(SFCampaign.STAGE_CITY_INTRO, SFCampaign.CHAPTER_CITY)
@@ -1545,6 +1622,17 @@ func _on_archive_closed() -> void:
 		campaign.set_checkpoint(SFCampaign.STAGE_BASE_RETURN, SFCampaign.CHAPTER_CRASH)
 		_save_quietly()
 		_enter_base_return(true)
+		return
+	if _archive_id == SFCampaign.ARCHIVE_DAWN:
+		var first: bool = campaign.complete_dawn_tower()
+		campaign.advance_to(SFCampaign.STAGE_RECONSTRUCTION)
+		campaign.set_checkpoint(SFCampaign.STAGE_RECONSTRUCTION, SFCampaign.CHAPTER_CRASH)
+		_save_quietly()
+		zone = "crash_site"
+		_go(Screen.WORKSHOP)
+		if first:
+			ui.notify("RECONSTRUCTION WORKSHOP UNLOCKED", "good", 4.0)
+			_open_dialogue(campaign.content.dialogue_lines("workshop_intro"), "BILL")
 
 
 ## Announces the mission change once, after the reveal. Kept out of the data
@@ -1600,6 +1688,254 @@ func _on_progression_closed() -> void:
 
 func _on_phase_two_done() -> void:
 	_go(Screen.CHECKPOINT)
+
+
+# ---------------------------------------------------------------- phase 3
+
+## Enters the Dawn Tower. Idempotent: the intro plays once, on first entry.
+func _show_dawn_intro() -> void:
+	campaign.set_flag(SFCampaign.FLAG_DAWN_ENTERED)
+	campaign.advance_to(SFCampaign.STAGE_DAWN_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_INTRO, SFCampaign.CHAPTER_DAWN)
+	_save_quietly()
+	_open_dialogue(campaign.content.dialogue_lines("dawn_intro"), "DAWN TOWER", Callable(self, "_on_dawn_intro_done"))
+
+
+func _on_dawn_intro_done() -> void:
+	ui.notify("Find the survey projector and the checkpoint on the boardwalk.", "info", 4.0)
+
+
+## The survey projector plays the healthy-forest memory, then returns to the
+## slope. Viewing it is required before the tower: the fight should be about
+## something the player has seen.
+func _on_dawn_projector_done() -> void:
+	if campaign.has_viewed_memory(SFCampaign.MEMORY_HEALTHY_FOREST):
+		ui.notify("The survey is already archived in Bill's index.", "info", 2.5)
+		return
+	_play_memory(SFCampaign.MEMORY_HEALTHY_FOREST, Callable(self, "_return_to_world"))
+
+
+func _use_dawn_checkpoint() -> void:
+	var first: bool = not campaign.has_flag(SFCampaign.FLAG_DAWN_CHECKPOINT)
+	campaign.set_flag(SFCampaign.FLAG_DAWN_CHECKPOINT)
+	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_BOSS, SFCampaign.CHAPTER_DAWN)
+	_save_quietly()
+	var lines: Array = campaign.content.dialogue_lines("dawn_checkpoint") if first else [
+		"Boardwalk marker confirmed. The tower gate is up the slope.",
+		"A failed fight restarts at the tower, not at the ridge.",
+	]
+	_open_dialogue(lines, "CHECKPOINT")
+
+
+## The tower gate refuses entry until the checkpoint is used and the forest
+## memory has been seen, and says so in the fiction.
+func _approach_dawn_gate() -> void:
+	if campaign.has_flag(SFCampaign.FLAG_SKY_REMNANT_DEFEATED):
+		_open_dialogue(["The shield is quiet. The archive inside is already restored."], "DAWN TOWER")
+		return
+	if not campaign.has_viewed_memory(SFCampaign.MEMORY_HEALTHY_FOREST):
+		audio.sfx_denied()
+		_open_dialogue([
+			"Bill: \"Before we go in, there is a projector on the boardwalk. I would like you to see what this slope was.\"",
+		], "DAWN TOWER GATE")
+		return
+	if not campaign.has_flag(SFCampaign.FLAG_DAWN_CHECKPOINT):
+		audio.sfx_denied()
+		_open_dialogue([
+			"Smog moves behind the shield like something breathing.",
+			"Nick: \"Checkpoint first. I want a way back if this goes badly.\"",
+		], "DAWN TOWER GATE")
+		return
+	_begin_dawn_boss()
+
+
+## Starts the typing encounter. The briefing (and, the first time, Bill's
+## tutorial) plays over a frozen arena; nothing spawns until it closes.
+func _begin_dawn_boss() -> void:
+	campaign.advance_to(SFCampaign.STAGE_DAWN_BOSS)
+	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_BOSS, SFCampaign.CHAPTER_DAWN)
+	_save_quietly()
+	_go(Screen.TYPING)
+	var lines: Array = campaign.content.dialogue_lines("dawn_boss_intro").duplicate()
+	if not campaign.has_flag(SFCampaign.FLAG_TYPING_TUTORIAL_SEEN):
+		lines.append_array(campaign.content.dialogue_lines("typing_tutorial"))
+	_open_dialogue(lines, "SKY REMNANT", Callable(self, "_on_dawn_boss_intro_done"))
+
+
+func _on_dawn_boss_intro_done() -> void:
+	campaign.set_flag(SFCampaign.FLAG_TYPING_TUTORIAL_SEEN)
+	_save_quietly()
+	if typing_duel != null:
+		typing_duel.start_fight()
+	audio.set_ambience("none")
+	audio.sfx_rift()
+
+
+## The deck seed changes with the journal size, so a new attempt after leaving
+## the tower practises fresh words; a retry inside the fight keeps its deck.
+func _enter_typing() -> void:
+	var boss: Dictionary = typing_data.get("boss", {}) as Dictionary
+	var stages: Array = (typing_data.get("deck", {}) as Dictionary).get("stages", []) as Array
+	var seed_value: int = int(boss.get("seed", 1)) + campaign.vocabulary_journal.size()
+	var deck: Array = vocab.select_deck(stages, seed_value)
+	typing_duel = SFTypingDuel.new()
+	typing_duel.name = "TypingDuel"
+	typing_duel.setup(skin, ui, typing_data, deck, seed_value, vocab, campaign)
+	typing_duel.duel_finished.connect(_on_typing_finished)
+	typing_duel.duel_aborted.connect(_on_typing_aborted)
+	typing_duel.word_learned.connect(_on_word_learned)
+	add_child(typing_duel)
+	typing_duel.begin_attempt()
+	audio.set_ambience("none")
+	queue_redraw()
+
+
+## A word was typed. The journal is persistent study progress, saved the first
+## time each entry is learned; it never counts as boss damage.
+func _on_word_learned(entry_id: String) -> void:
+	if campaign.record_vocabulary(entry_id):
+		_save_quietly()
+
+
+## The typing fight was won. The reward is applied here exactly once.
+func _on_typing_finished(outcome: String) -> void:
+	if outcome != "victory":
+		return
+	var boss: Dictionary = typing_data.get("boss", {}) as Dictionary
+	var first: bool = campaign.complete_boss(String(boss.get("reward_flag", SFCampaign.FLAG_SKY_REMNANT_DEFEATED)),
+		String(boss.get("reward_component", SFCampaign.COMPONENT_SHIELD_EMITTER)))
+	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_ARCHIVE, SFCampaign.CHAPTER_DAWN)
+	_save_quietly()
+	if first:
+		ui.notify("SHIELD EMITTER RECOVERED", "good", 4.0)
+	_open_dialogue(campaign.content.dialogue_lines("dawn_victory"), "SKY REMNANT DISPERSED",
+		Callable(self, "_on_dawn_victory_done"))
+
+
+func _on_dawn_victory_done() -> void:
+	campaign.advance_to(SFCampaign.STAGE_DAWN_ARCHIVE)
+	_save_quietly()
+	_enter_archive_scene(SFCampaign.ARCHIVE_DAWN)
+
+
+## Leaving the fight from its pause menu returns to the slope. Nothing is
+## awarded; the pre-boss checkpoint and the journal are kept.
+func _on_typing_aborted() -> void:
+	campaign.set_checkpoint(SFCampaign.STAGE_DAWN_BOSS, SFCampaign.CHAPTER_DAWN)
+	_save_quietly()
+	zone = "dawn_tower"
+	_go(Screen.WORLD)
+
+
+func _enter_workshop() -> void:
+	workshop_screen = SFWorkshop.new()
+	workshop_screen.name = "Workshop"
+	workshop_screen.setup(skin, ui, campaign)
+	workshop_screen.closed.connect(_on_workshop_closed)
+	workshop_screen.assembled.connect(_on_workshop_assembled)
+	add_child(workshop_screen)
+	if audio.has_method("play_music"):
+		audio.play_music("construction")
+	audio.set_ambience("ruin")
+	queue_redraw()
+
+
+## Leaving the workshop keeps the selection (saved) and returns to the base.
+func _on_workshop_closed() -> void:
+	_save_quietly()
+	if campaign.is_ready_for_final_assembly():
+		_go(Screen.CHECKPOINT)
+		return
+	zone = "crash_site"
+	_go(Screen.WORLD)
+	ui.notify("The workshop is at the wreck. E to reopen it.", "info", 3.0)
+
+
+## The design was fabricated. This is READY_FOR_FINAL_ASSEMBLY, the end of
+## Phase 3; the escape itself is Phase 4.
+func _on_workshop_assembled() -> void:
+	campaign.advance_to(SFCampaign.STAGE_READY)
+	campaign.set_checkpoint(SFCampaign.STAGE_READY, SFCampaign.CHAPTER_CRASH)
+	_save_quietly()
+	_open_dialogue(campaign.content.dialogue_lines("workshop_ready"), "READY FOR FINAL ASSEMBLY",
+		Callable(self, "_on_ready_dialogue_done"))
+
+
+func _on_ready_dialogue_done() -> void:
+	_go(Screen.CHECKPOINT)
+
+
+func journal_entries() -> Array:
+	var out: Array = []
+	for id in campaign.vocabulary_journal:
+		var e: Dictionary = vocab.entry(String(id))
+		if not e.is_empty():
+			out.append(e)
+	return out
+
+
+func _journal_key(key: int) -> void:
+	match key:
+		KEY_UP, KEY_W:
+			journal_index = maxi(0, journal_index - 1)
+			audio.sfx_select()
+		KEY_DOWN, KEY_S:
+			journal_index = mini(maxi(0, campaign.vocabulary_journal.size() - 1), journal_index + 1)
+			audio.sfx_select()
+		KEY_ESCAPE, KEY_ENTER, KEY_KP_ENTER, KEY_BACKSPACE:
+			audio.sfx_back()
+			_go(journal_return)
+
+
+func _draw_ready_summary() -> void:
+	var panel := Rect2(80, 34, 480, 220)
+	draw_rect(panel, Color(0.05, 0.09, 0.10, 0.94), true)
+	draw_rect(panel, SFPalette.GREEN_OK, false, 1.0)
+	draw_rect(Rect2(panel.position, Vector2(panel.size.x, 1)), SFPalette.GREEN_OK, true)
+	skin.text_c(self, VW * 0.5, panel.position.y + 14, "READY FOR FINAL ASSEMBLY", SFPalette.GREEN_OK, 2)
+	var rec: Dictionary = campaign.reconstruction.get("report", {}) as Dictionary
+	var t: Dictionary = rec.get("totals", {}) as Dictionary
+	var route := String(rec.get("route_id", "")).replace("_", " ").to_upper()
+	var body := [
+		"Navigation chip, power core and shield emitter are fitted to the rebuilt VELA.",
+		"Bill's memory core and the Dawn Project evidence archive are loaded.",
+		"Route: %s. Launch mass %.0f kg, delta-v %.0f of %.0f m/s needed." % [route, float(t.get("wet_mass_kg", 0)), float(t.get("delta_v_available_m_s", 0)), float(t.get("delta_v_required_m_s", 0))],
+		"%d environmental words in the journal." % campaign.vocabulary_journal.size(),
+	]
+	var y: float = panel.position.y + 44.0
+	for line in body:
+		y = skin.wrap(self, Vector2(panel.position.x + 20, y), panel.size.x - 40, String(line), SFPalette.PAPER, 1, 3) + 5.0
+	skin.text_c(self, VW * 0.5, panel.end.y - 18, "PHASE 3 COMPLETE - CHECKPOINT SAVED", SFPalette.GREEN_OK)
+	draw_rect(Rect2(0, VH - 30, VW, 30), Color(0.03, 0.05, 0.05, 0.9), true)
+	skin.text_c(self, VW * 0.5, VH - 23, "ENTER  RETURN TO MAIN MENU", SFPalette.PAPER)
+	skin.text_c(self, VW * 0.5, VH - 12, "THE ESCAPE IS PHASE 4 - NOT PART OF THIS BUILD", SFPalette.ASH_LIGHT)
+
+
+## The healthy Dawn forest: layered trunks, a full canopy, birds, a boardwalk.
+func _draw_forest_hologram(cx: float, cy: float, flicker: float) -> void:
+	var base_y := cy + 34.0
+	var leaf := Color(0.30, 0.85, 0.50, 0.62 * flicker)
+	var leaf_hi := Color(0.55, 1.0, 0.65, 0.62 * flicker)
+	var trunk := Color(0.35, 0.65, 0.50, 0.55 * flicker)
+	for i in 9:
+		var tx := cx - 92.0 + float(i) * 23.0
+		var th := 40.0 + float((i * 29) % 26)
+		draw_rect(Rect2(tx, base_y - th, 3, th), trunk, true)
+		draw_rect(Rect2(tx - 9, base_y - th - 10, 21, 16), leaf, true)
+		draw_rect(Rect2(tx - 5, base_y - th - 14, 13, 6), leaf_hi, true)
+	# Birds over the canopy.
+	for i in 4:
+		var bx := cx - 60.0 + float(i) * 38.0
+		var by := base_y - 86.0 - float(i % 2) * 8.0
+		draw_rect(Rect2(bx, by, 3, 1), leaf_hi, true)
+		draw_rect(Rect2(bx + 3, by - 1, 3, 1), leaf_hi, true)
+	# Boardwalk with two survey figures.
+	draw_rect(Rect2(cx - 96, base_y - 4, 192, 3), Color(0.5, 0.95, 0.8, 0.5 * flicker), true)
+	for i in 2:
+		var fx := cx - 20.0 + float(i) * 34.0
+		draw_rect(Rect2(fx, base_y - 14, 4, 10), leaf_hi, true)
+		draw_rect(Rect2(fx, base_y - 18, 4, 4), Color(0.8, 1.0, 0.9, 0.6 * flicker), true)
+	draw_rect(Rect2(cx - 96, base_y, 192, 2), Color(0.4, 0.95, 0.8, 0.35 * flicker), true)
 
 
 # ---------------------------------------------------------------- save error
@@ -1700,6 +2036,8 @@ func _draw() -> void:
 			_draw_checkpoint()
 		Screen.SAVE_ERROR:
 			_draw_save_error()
+		Screen.JOURNAL:
+			ui.journal_panel(self, journal_entries(), journal_index)
 
 	if screen != Screen.WORLD:
 		ui.toast(self)
@@ -2065,6 +2403,8 @@ func _draw_memory() -> void:
 	# working harbour. Data decides, not this script.
 	if campaign.content.memory_scene(memory_id) == "coast":
 		_draw_coast_hologram(cx, cy, flicker)
+	elif campaign.content.memory_scene(memory_id) == "forest":
+		_draw_forest_hologram(cx, cy, flicker)
 	else:
 		_draw_city_hologram(cx, cy, flicker)
 
@@ -2191,6 +2531,9 @@ func _draw_checkpoint() -> void:
 	# Phase 1's summary is a waypoint on the road to the Forgotten City; Phase
 	# 2's is the end of this build.
 	var phase_two: bool = campaign.has_flag(SFCampaign.FLAG_PHASE_TWO_COMPLETE)
+	if campaign.is_ready_for_final_assembly():
+		_draw_ready_summary()
+		return
 	var data: Dictionary = campaign.content.checkpoint
 	var panel := Rect2(88, 40, 464, 190)
 	draw_rect(panel, Color(0.05, 0.09, 0.10, 0.94), true)
@@ -2205,7 +2548,7 @@ func _draw_checkpoint() -> void:
 			"Navigation chip and power core are fitted to the VELA's frame.",
 			"The control-center and environmental archives are restored.",
 			"Nick is carrying the record the machines were built to erase.",
-			"Dawn Tower is unlocked on the chart. It is not built yet.",
+			"Dawn Tower is unlocked on the chart. The shield emitter is waiting there.",
 		]
 	var y: float = panel.position.y + 44.0
 	for line in body:
@@ -2218,7 +2561,7 @@ func _draw_checkpoint() -> void:
 			"FITTED" if campaign.has_component(SFCampaign.COMPONENT_SHIELD_EMITTER) else "MISSING",
 		]
 		skin.text_c(self, VW * 0.5, panel.end.y - 34, comps, SFPalette.GOLD)
-		skin.text_c(self, VW * 0.5, panel.end.y - 18, "CHECKPOINT SAVED - PHASE 2 STOPS HERE", SFPalette.GREEN_OK)
+		skin.text_c(self, VW * 0.5, panel.end.y - 18, "PHASE 2 COMPLETE - CHECKPOINT SAVED", SFPalette.GREEN_OK)
 	else:
 		var manifest: Dictionary = campaign.mission_manifest
 		if not manifest.is_empty():
@@ -2234,10 +2577,11 @@ func _draw_checkpoint() -> void:
 	# Footer on its own strip, clear of the panel above it.
 	draw_rect(Rect2(0, VH - 30, VW, 30), Color(0.03, 0.05, 0.05, 0.9), true)
 	draw_rect(Rect2(0, VH - 30, VW, 1), SFPalette.CYAN_DARK, true)
-	skin.text_c(self, VW * 0.5, VH - 23, "ENTER RETURN TO MAIN MENU", SFPalette.PAPER)
 	if phase_two:
-		skin.text_c(self, VW * 0.5, VH - 12, "DAWN TOWER IS UNLOCKED - PHASE 3 IS NOT PART OF THIS BUILD", SFPalette.ASH_LIGHT)
+		skin.text_c(self, VW * 0.5, VH - 23, "ENTER  CONTINUE TO THE DAWN TOWER", SFPalette.PAPER)
+		skin.text_c(self, VW * 0.5, VH - 12, "DAWN TOWER - PHASE 3", SFPalette.ASH_LIGHT)
 	else:
+		skin.text_c(self, VW * 0.5, VH - 23, "ENTER  CONTINUE", SFPalette.PAPER)
 		skin.text_c(self, VW * 0.5, VH - 12, "FORGOTTEN CITY - PHASE 2", SFPalette.ASH_LIGHT)
 
 
@@ -2326,6 +2670,11 @@ func _pause_activate() -> void:
 			_close_pause()
 		"save":
 			_manual_save()
+		"journal":
+			audio.sfx_blip()
+			journal_return = Screen.WORLD
+			journal_index = maxi(0, campaign.vocabulary_journal.size() - 1)
+			_go(Screen.JOURNAL)
 		"settings":
 			audio.sfx_blip()
 			_rebuild_settings_menu()

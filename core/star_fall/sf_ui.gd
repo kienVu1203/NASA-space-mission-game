@@ -201,3 +201,50 @@ func value_row(ci: CanvasItem, pos: Vector2, label: String, value: String, width
 	skin.text(ci, pos, label, SFPalette.PAPER_DIM)
 	var c: Color = SFPalette.PAPER if good else SFPalette.RED
 	skin.text_r(ci, pos.x + width, pos.y, value, c)
+
+
+## The vocabulary journal: a list of learned words on the left and the selected
+## entry's definition, example and note on the right. `entries` are vocabulary
+## dictionaries in the order they were learned. Shared by the paused typing
+## encounter and the exploration pause menu, so both read the same way.
+func journal_panel(ci: CanvasItem, entries: Array, index: int, footer_hint: String = "UP/DOWN  BROWSE     ESC  BACK") -> void:
+	var panel := Rect2(40, 34, 560, 292)
+	modal(ci, panel, SFPalette.GREEN_OK)
+	skin.text(ci, panel.position + Vector2(14, 10), "VOCABULARY JOURNAL", SFPalette.GREEN_OK)
+	skin.text_r(ci, panel.end.x - 14, panel.position.y + 10, "%d WORDS LEARNED" % entries.size(), SFPalette.PAPER_DIM)
+	if entries.is_empty():
+		skin.wrap(ci, panel.position + Vector2(14, 40), panel.size.x - 28,
+			"No words yet. Every word you type at the Dawn Tower is recorded here with its meaning.",
+			SFPalette.PAPER, 1, 4)
+		skin.text_c(ci, panel.position.x + panel.size.x * 0.5, panel.end.y - 14, footer_hint, SFPalette.PAPER_DIM)
+		return
+	var sel := clampi(index, 0, entries.size() - 1)
+	# Word list: a scrolling window that keeps the selection visible.
+	var rows := 14
+	var first := clampi(sel - rows / 2, 0, maxi(0, entries.size() - rows))
+	var list := Rect2(panel.position.x + 10, panel.position.y + 28, 150, panel.size.y - 52)
+	ci.draw_rect(list, Color(0.03, 0.06, 0.06, 0.9), true)
+	for i in range(first, mini(entries.size(), first + rows)):
+		var e: Dictionary = entries[i]
+		var y := list.position.y + 4.0 + float(i - first) * 16.0
+		if i == sel:
+			ci.draw_rect(Rect2(list.position.x + 2, y - 2, list.size.x - 4, 13), SFPalette.CYAN_DARK, true)
+		skin.text(ci, Vector2(list.position.x + 8, y + 1), String(e.get("text", "")), SFPalette.PAPER if i == sel else SFPalette.PAPER_DIM)
+	# Detail.
+	var d: Dictionary = entries[sel]
+	var dx := list.end.x + 14.0
+	var dw := panel.end.x - dx - 14.0
+	var y2 := panel.position.y + 32.0
+	skin.text(ci, Vector2(dx, y2), String(d.get("text", "")).to_upper(), SFPalette.PAPER, 2)
+	y2 += 22.0
+	skin.text(ci, Vector2(dx, y2), "%s  /  %s" % [String(d.get("category", "")).to_upper(), String(d.get("band", "")).to_upper()], SFPalette.CYAN_DIM)
+	y2 += 18.0
+	skin.text(ci, Vector2(dx, y2), "MEANING", SFPalette.GOLD)
+	y2 = skin.wrap(ci, Vector2(dx, y2 + 12.0), dw, String(d.get("definition", "")), SFPalette.PAPER, 1, 4) + 8.0
+	skin.text(ci, Vector2(dx, y2), "EXAMPLE", SFPalette.GOLD)
+	y2 = skin.wrap(ci, Vector2(dx, y2 + 12.0), dw, String(d.get("example", "")), SFPalette.PAPER_DIM, 1, 3) + 8.0
+	var note := String(d.get("note", ""))
+	if note != "":
+		skin.text(ci, Vector2(dx, y2), "WHY IT MATTERS", SFPalette.GOLD)
+		skin.wrap(ci, Vector2(dx, y2 + 12.0), dw, note, SFPalette.PAPER_DIM, 1, 3)
+	skin.text_c(ci, panel.position.x + panel.size.x * 0.5, panel.end.y - 14, footer_hint, SFPalette.PAPER_DIM)

@@ -34,11 +34,25 @@ Phase 2 (shipped):
 - **Environmental archive**, the crash-site base return, both components shown
   fitted, and the Dawn Tower unlocked.
 
+Phase 3 (shipped):
+
+- **Dawn Tower**: a dead forest below the Dawn Project transmitter, a survey
+  projector holding a memory of the healthy forest, a boardwalk checkpoint, a
+  defense console and salvage.
+- **Sky Remnant**: a typing battle against a smog-born guardian. Environmental
+  vocabulary falls from the boss; typing a word fires a pulse back. Reward:
+  `shield_emitter`.
+- **Vocabulary journal**: every word typed is kept with its meaning, readable in
+  the paused fight and from the exploration pause menu.
+- **Dawn Project archive**, then the **reconstruction workshop** at the base:
+  salvage, limited fabrication, an engine, a route, protection, storage and
+  payload, checked by a return-mission simulation. Phase 3 ends at
+  READY_FOR_FINAL_ASSEMBLY.
+
 ## Nice-to-have (not built)
 
-- Dawn Tower: the transmitter run, the shield emitter and the Phase 3 encounter.
-- The final reconstruction and the return-home ending.
-- Crafting beyond the crash-site repair.
+- Phase 4: the escape cinematic and the return-home ending.
+- Crafting beyond the crash-site repair and the workshop.
 - More side records and optional memory files per chapter.
 
 ## Game flow
@@ -49,7 +63,9 @@ Title
   -> Crash site -> Salvage -> Bill -> Memory -> Phase 1 summary
   -> Forgotten City -> Scrap King -> Control-center archive -> Reveal
   -> Silent Coast -> Toxic Tide -> Environmental archive
-  -> Crash-site base -> Phase 2 summary -> Title
+  -> Crash-site base -> Phase 2 summary
+  -> Dawn Tower -> Forest memory -> Sky Remnant -> Dawn Project archive
+  -> Reconstruction workshop -> Simulation -> READY_FOR_FINAL_ASSEMBLY -> Title
 ```
 
 ## Phase 2 combat design
@@ -107,3 +123,61 @@ The chapter order is fixed and gates are explicit:
   Coast. Nothing before it names Earth or a date.
 - The **Silent Coast outcome** unlocks Dawn Tower and returns the campaign to the
   crash-site base, where the recovery frame shows what has been earned.
+
+## Phase 3 typing battle design
+
+**Why typing.** The third boss replaces the earlier movement and dodge idea with
+a typing fight, so the final encounter teaches something: the player reads and
+types real environmental vocabulary, and each word carries a short meaning.
+The fiction: the Dawn Project defense console accepts archive terms as control
+signatures. The game says this is how the facility was built, not how real
+machines work.
+
+**The loop.** The Sky Remnant sheds words that fall toward a red danger line.
+Typing a word's first letter selects it; finishing it fires one pulse, which
+damages the boss once when it lands. A wrong letter only restarts that word,
+with a clear notice and no damage. A word that reaches the line costs health
+and returns to the queue a few seconds later, so nothing required is ever lost.
+
+**Library versus deck.** The library has 199 entries; one fight uses a
+30-word deck in four stages from familiar to advanced. Boss health is exactly
+30 pulses, so the health bar is the deck: the boss falls when the last word
+lands, never earlier, and the fight can never stall with every word done.
+
+**Accessible pacing.** One word at a time with long falls to start; up to two
+later. The game measures typing pace over several words and only ever adjusts
+within bounds: slower typists get one word at a time and longer falls, faster
+typists get shorter gaps. Misses never speed anything up. Nothing is ever typed
+for the player, and the advanced stage is never skipped. The 3–4 minute length
+is a target for an assumed casual typist, not a timer; a slower player takes
+longer and can still win.
+
+**Learning without lecturing.** The learning panel shows the selected word and
+one line of meaning; nothing long sits beside the falling words. Definitions,
+examples and "why it matters" notes live in the journal, which can be read at
+any time without being attacked.
+
+## Phase 3 reconstruction design
+
+**Different from day one.** Day one used credits and new parts. The future uses
+salvage and a small fabricator, so the question is what to build from what was
+found, not what to buy.
+
+**Real trade-offs, no best build.**
+
+- The **Fast Corridor** is short but violent: more delta-v, dense debris that
+  needs plating (heavy, more propellant) or an amplifier (light, but power
+  hungry), and a short relay window that cannot carry extra records.
+- The **Extended Arc** is quiet but long: little protection and delta-v, but
+  four hours of electrical load that punish power-hungry choices.
+- **Repairing the day-one engine** is cheap, and its performance is whatever the
+  player launched with. A light engine can fly the Extended Arc but not the Fast
+  Corridor. The **rebuilt cluster** flies either, at a high fabrication cost.
+
+**Fairness.** Simulating is free and repeatable; fabrication spends salvage
+once and only for a design with a current passing report. Scavenging tops
+common materials up to a floor that always covers a passing design, so no run
+can be stranded. Every valid day-one build can reach a passing return.
+
+**Honesty.** The panel says it on screen: a simplified educational model with
+invented values, not NASA data.

@@ -78,6 +78,10 @@ func _zone_title() -> String:
 			return "FORGOTTEN CITY"
 		SFCampaign.CHAPTER_COAST:
 			return "SILENT COAST"
+		SFCampaign.CHAPTER_DAWN:
+			return "DAWN TOWER"
+	if campaign.has_flag(SFCampaign.FLAG_WORKSHOP_UNLOCKED):
+		return "CRASH-SITE BASE"
 	return "UNIDENTIFIED SITE"
 
 
@@ -108,6 +112,19 @@ func _objective_text() -> String:
 			return "Restore the environmental archive"
 		return "Return to the crash-site base"
 
+	if campaign.chapter_id == SFCampaign.CHAPTER_DAWN:
+		if campaign.has_flag(SFCampaign.FLAG_SKY_REMNANT_DEFEATED):
+			return "Restore the Dawn Project archive"
+		if not campaign.has_viewed_memory(SFCampaign.MEMORY_HEALTHY_FOREST):
+			return "View the survey projector on the boardwalk"
+		if not campaign.has_flag(SFCampaign.FLAG_DAWN_CHECKPOINT):
+			return "Use the boardwalk checkpoint"
+		return "Enter the Dawn Tower [E]"
+
+	if campaign.is_ready_for_final_assembly():
+		return "Ready for final assembly"
+	if campaign.has_flag(SFCampaign.FLAG_WORKSHOP_UNLOCKED):
+		return "Rebuild the VELA at the wreck [E]"
 	if not campaign.has_flag(SFCampaign.FLAG_VELA_INSPECTED):
 		return "Inspect the wreck [E]"
 	if not campaign.has_flag(SFCampaign.FLAG_POWER_REPAIRED):

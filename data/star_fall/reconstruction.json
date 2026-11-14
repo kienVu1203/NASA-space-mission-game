@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "_note": "Phase 3 VELA reconstruction workshop and return-mission simulation. SIMPLIFIED EDUCATIONAL GAMEPLAY MODEL: every component value, route requirement and constant here is invented for the game and is NOT NASA data. Units: mass kg, propellant kg, power W, energy Wh, time s, data MB, relay throughput MB/s, delta-v m/s.",
+  "frame": {
+    "name": "Recovered VELA Frame",
+    "dry_mass_kg": 600,
+    "mass_limit_kg": 2200,
+    "tank_capacity_kg": 900,
+    "fuel_step_kg": 20
+  },
+  "fabrication_capacity": 12,
+  "replenish_floor": {"scrap_metal": 8, "circuitry": 4, "polymer": 3},
+  "constants": {
+    "g0_m_s2": 9.81,
+    "crew_life_support_w": 60,
+    "relay_rate_mb_per_s": 0.5,
+    "relay_radio_w": 40,
+    "battery_reserve_fraction": 0.2,
+    "delta_v_reserve_fraction": 0.1,
+    "max_battery_discharge_w": 160,
+    "ascent_seconds": 300,
+    "rift_seconds": 300,
+    "rift_navigation_surge_w": 180,
+    "debris_impacts_per_600_s_per_rating": 1.0
+  },
+  "recovered_components": [
+    {"id": "navigation_chip", "name": "Navigation Chip", "mass_kg": 20, "power_w": 30, "data_capacity_mb": 128,
+     "note": "Guides the rift transition and holds the base flight data store."},
+    {"id": "power_core", "name": "Power Core", "mass_kg": 90, "output_w": 220, "storage_wh": 600,
+     "note": "Continuous electrical output plus a buffer for demand above that output."},
+    {"id": "shield_emitter", "name": "Shield Emitter", "mass_kg": 60, "idle_w": 20, "active_w": 160, "protection_rating": 3,
+     "note": "Runs at idle until the debris-exposed transit, then at full power."}
+  ],
+  "original_propulsion": {
+    "_note": "The Phase 1 engine survives in the wreck and can be repaired. Keyed by the Phase 1 component id.",
+    "propulsion_light": {"name": "Repaired Light Thruster", "mass_kg": 150, "isp_s": 330, "thrust_capacity_kg": 1500, "power_w": 25},
+    "propulsion_heavy": {"name": "Repaired Heavy Cluster", "mass_kg": 300, "isp_s": 320, "thrust_capacity_kg": 2400, "power_w": 45}
+  },
+  "propulsion": [
+    {"id": "repair_original", "name": "Repair the original engine", "short": "REPAIR ORIGINAL",
+     "description": "Cheap. Its performance is whatever you launched with on day one.",
+     "cost": {"scrap_metal": 2, "circuitry": 1}, "fabrication": 3},
+    {"id": "rebuilt_cluster", "name": "Rebuilt Dawn cluster", "short": "REBUILT CLUSTER",
+     "description": "Rebuilt from Dawn Project stock: efficient and strong, but expensive to fabricate.",
+     "mass_kg": 260, "isp_s": 340, "thrust_capacity_kg": 2200, "power_w": 40,
+     "cost": {"scrap_metal": 6, "circuitry": 3, "polymer": 2}, "fabrication": 6}
+  ],
+  "protection": [
+    {"id": "protection_none", "name": "Emitter only", "short": "EMITTER ONLY", "description": "The shield emitter alone. Rating 3.",
+     "rating": 0, "mass_kg": 0, "active_w": 0, "cost": {}, "fabrication": 0},
+    {"id": "armor_plating", "name": "Scrap armor plating", "short": "ARMOR PLATING", "description": "+2 rating. Heavy, so it needs more propellant.",
+     "rating": 2, "mass_kg": 120, "active_w": 0, "cost": {"scrap_metal": 5}, "fabrication": 3},
+    {"id": "shield_amplifier", "name": "Shield amplifier", "short": "AMPLIFIER", "description": "+2 rating. Light, but draws 90 W during the debris transit.",
+     "rating": 2, "mass_kg": 15, "active_w": 90, "cost": {"circuitry": 3, "polymer": 1}, "fabrication": 3}
+  ],
+  "storage": [
+    {"id": "storage_none", "name": "Navigation chip store only", "short": "CHIP ONLY", "description": "128 MB. Too small for the mandatory payload.",
+     "data_mb": 0, "mass_kg": 0, "power_w": 0, "cost": {}, "fabrication": 0},
+    {"id": "storage_compact", "name": "Compact data module", "short": "COMPACT 256 MB", "description": "+256 MB.",
+     "data_mb": 256, "mass_kg": 8, "power_w": 10, "cost": {"circuitry": 2}, "fabrication": 2},
+    {"id": "storage_array", "name": "Archive data array", "short": "ARRAY 768 MB", "description": "+768 MB. Heavier and hungrier.",
+     "data_mb": 768, "mass_kg": 20, "power_w": 25, "cost": {"circuitry": 4, "polymer": 1}, "fabrication": 4}
+  ],
+  "payload": [
+    {"id": "bill_memory_core", "name": "Bill's memory core", "mandatory": true, "mass_kg": 40, "data_mb": 120, "power_w": 10,
+     "cost": {}, "fabrication": 0},
+    {"id": "evidence_archive", "name": "Minimum evidence archive", "mandatory": true, "mass_kg": 15, "data_mb": 200, "power_w": 0,
+     "cost": {"polymer": 1}, "fabrication": 1},
+    {"id": "environmental_samples", "name": "Environmental samples", "mandatory": false, "mass_kg": 30, "data_mb": 0, "power_w": 25,
+     "cost": {"polymer": 2}, "fabrication": 1},
+    {"id": "additional_records", "name": "Additional scientific records", "mandatory": false, "mass_kg": 10, "data_mb": 240, "power_w": 0,
+     "cost": {"circuitry": 1}, "fabrication": 1}
+  ],
+  "routes": [
+    {"id": "fast_corridor", "name": "Fast Corridor", "short": "FAST CORRIDOR",
+     "description": "Short and violent: more delta-v, a dense debris field, and a short relay window.",
+     "delta_v_m_s": 1500, "transit_seconds": 2400, "debris_rating": 5, "debris_variance": 0.15, "launch_window_seconds": 900},
+    {"id": "extended_arc", "name": "Extended Arc", "short": "EXTENDED ARC",
+     "description": "Long and quiet: less delta-v and light debris, but four hours of electrical load.",
+     "delta_v_m_s": 1100, "transit_seconds": 14400, "debris_rating": 3, "debris_variance": 0.1, "launch_window_seconds": 1800}
+  ],
+  "stage_delta_v_share": {"ascent": 0.6, "transit": 0.25, "rift": 0.15}
+}

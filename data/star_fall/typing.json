@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "_note": "Phase 3 typing encounter tuning (Sky Remnant at the Dawn Tower). Times are seconds, positions are 640x360 canvas pixels, health is health points. The deck is a finite selection from vocabulary.json; boss health is always deck size x damage_per_word. See docs/star_fall_contract.md section 17.",
+  "boss": {
+    "id": "sky_remnant",
+    "chapter_id": "dawn_tower",
+    "name": "SKY REMNANT",
+    "subtitle": "Smog-born guardian of the Dawn Project shield",
+    "reward_component": "shield_emitter",
+    "reward_flag": "sky_remnant_defeated",
+    "archive_id": "dawn_archive",
+    "seed": 51207,
+    "visual": {
+      "smog": "3a3048",
+      "smog_light": "5d4d70",
+      "bone": "b9b2a0",
+      "ember": "e07a3a",
+      "eye": "f2d35a",
+      "sky": "1a1424"
+    }
+  },
+  "arena": {
+    "spawn_y": 112,
+    "danger_y": 278,
+    "lanes_x": [168, 272, 376, 480],
+    "nick": {"x": 320, "y": 318},
+    "boss_point": {"x": 320, "y": 74}
+  },
+  "health": {
+    "nick_health": 100,
+    "miss_damage": 12,
+    "damage_per_word": 10
+  },
+  "attack": {
+    "flight_seconds": 0.45
+  },
+  "timing": {
+    "first_spawn_delay": 1.2,
+    "victory_hold_seconds": 1.8,
+    "requeue_delay_seconds": 4.0,
+    "lane_retry_seconds": 0.25,
+    "distinct_letter_lookahead": 3
+  },
+  "deck": {
+    "_note": "Stages run in order inside one fight. Each stage draws `count` entries from one band. fall_seconds is the base time a word takes from the spawn line to the danger line.",
+    "stages": [
+      {"band": "foundation", "count": 8, "fall_seconds": 10.5, "max_active": 1, "spawn_gap": 1.6},
+      {"band": "developing", "count": 8, "fall_seconds": 10.0, "max_active": 2, "spawn_gap": 2.4},
+      {"band": "intermediate", "count": 8, "fall_seconds": 12.5, "max_active": 2, "spawn_gap": 3.0},
+      {"band": "advanced", "count": 6, "fall_seconds": 15.0, "max_active": 2, "spawn_gap": 3.6}
+    ]
+  },
+  "pacing": {
+    "_note": "Bounded adaptation. When the observed pace needs more than slow_ratio of a fall to finish a word, slow mode limits the field to one word and travel_scale stretches fall time (up to travel_scale_max). gap_scale shortens empty gaps for faster typists. A miss never speeds anything up.",
+    "reaction_seconds": 1.4,
+    "min_observations": 4,
+    "window": 6,
+    "travel_scale_min": 0.85,
+    "travel_scale_max": 1.7,
+    "gap_scale_min": 0.5,
+    "gap_scale_max": 1.3,
+    "adjust_step": 0.06,
+    "miss_travel_step": 0.1,
+    "slow_ratio": 0.7,
+    "fast_ratio": 0.35,
+    "slow_clear_ratio": 0.45,
+    "idle_gap_seconds": 0.6,
+    "pressure_miss_threshold": 2,
+    "pressure_clear_completions": 3
+  },
+  "estimate": {
+    "_note": "Assumptions for the pre-fight duration estimate only. 1.8 characters per second is roughly 22 words per minute, an assumed adult casual typist, not a measured audience value.",
+    "assumed_chars_per_second": 1.8,
+    "mistake_rate": 0.08,
+    "miss_rate": 0.05
+  }
+}

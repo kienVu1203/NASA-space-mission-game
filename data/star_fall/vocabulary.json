@@ -1,0 +1,1637 @@
+{
+ "schema_version": 1,
+ "_note": "STAR FALL environmental vocabulary library (English). Typing targets are lowercase a-z single words, American spelling. Definitions and examples are original short text written for this game; see docs/vocabulary.md for review status and sources.",
+ "bands": [
+  "foundation",
+  "developing",
+  "intermediate",
+  "advanced"
+ ],
+ "categories": [
+  "nature",
+  "water",
+  "forest",
+  "waste",
+  "recycling",
+  "energy",
+  "pollution",
+  "habitat",
+  "conservation",
+  "responsibility"
+ ],
+ "entries": [
+  {
+   "id": "v_air",
+   "text": "air",
+   "definition": "The invisible mix of gases that living things breathe.",
+   "example": "Trees help keep the air fresh.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_sun",
+   "text": "sun",
+   "definition": "The star that gives our planet light and heat.",
+   "example": "The sun warms the soil in spring.",
+   "category": "energy",
+   "band": "foundation"
+  },
+  {
+   "id": "v_tree",
+   "text": "tree",
+   "definition": "A tall plant with a woody trunk and branches.",
+   "example": "We planted a tree beside the school.",
+   "category": "forest",
+   "band": "foundation"
+  },
+  {
+   "id": "v_soil",
+   "text": "soil",
+   "definition": "The top layer of ground where plants grow.",
+   "example": "Healthy soil is full of tiny living things.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_seed",
+   "text": "seed",
+   "definition": "A small part of a plant that can grow into a new plant.",
+   "example": "She pressed a seed into the warm soil.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_water",
+   "text": "water",
+   "definition": "The clear liquid that fills rivers, lakes, and oceans.",
+   "example": "Every living thing needs clean water.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_clean",
+   "text": "clean",
+   "definition": "Free from dirt, waste, or harmful substances.",
+   "example": "The volunteers left the beach clean.",
+   "category": "responsibility",
+   "band": "foundation"
+  },
+  {
+   "id": "v_leaf",
+   "text": "leaf",
+   "definition": "A flat green part of a plant that catches sunlight.",
+   "example": "A leaf turns sunlight into food for the tree.",
+   "category": "forest",
+   "band": "foundation"
+  },
+  {
+   "id": "v_rain",
+   "text": "rain",
+   "definition": "Water that falls from clouds in drops.",
+   "example": "Rain refills the pond each spring.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_wind",
+   "text": "wind",
+   "definition": "Moving air.",
+   "example": "The wind turned the tall white turbine.",
+   "category": "energy",
+   "band": "foundation"
+  },
+  {
+   "id": "v_sea",
+   "text": "sea",
+   "definition": "A large area of salt water.",
+   "example": "The sea was calm that morning.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_lake",
+   "text": "lake",
+   "definition": "A large body of water surrounded by land.",
+   "example": "Ducks rested on the quiet lake.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_pond",
+   "text": "pond",
+   "definition": "A small, still body of water.",
+   "example": "Frogs laid their eggs in the pond.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_river",
+   "text": "river",
+   "definition": "A large stream of water that flows across land.",
+   "example": "The river carried fresh water to the valley.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_bird",
+   "text": "bird",
+   "definition": "An animal with feathers and wings.",
+   "example": "A bird built its nest in the hedge.",
+   "category": "habitat",
+   "band": "foundation"
+  },
+  {
+   "id": "v_fish",
+   "text": "fish",
+   "definition": "An animal that lives and breathes in water.",
+   "example": "The fish swam between the rocks.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_bee",
+   "text": "bee",
+   "definition": "A flying insect that collects nectar and spreads pollen.",
+   "example": "A bee moved from flower to flower.",
+   "category": "nature",
+   "band": "foundation",
+   "note": "Bees help many food plants make fruit and seeds."
+  },
+  {
+   "id": "v_frog",
+   "text": "frog",
+   "definition": "A small animal that lives both on land and in water.",
+   "example": "The frog jumped back into the pond.",
+   "category": "habitat",
+   "band": "foundation"
+  },
+  {
+   "id": "v_plant",
+   "text": "plant",
+   "definition": "A living thing that usually grows in soil and makes its own food.",
+   "example": "Water the plant once a week.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_grass",
+   "text": "grass",
+   "definition": "Green plants with thin leaves that cover fields and lawns.",
+   "example": "Sheep grazed on the long grass.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_flower",
+   "text": "flower",
+   "definition": "The colorful part of a plant that makes seeds.",
+   "example": "The flower attracted a butterfly.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_root",
+   "text": "root",
+   "definition": "The part of a plant that grows underground and takes in water.",
+   "example": "A root holds the tree firmly in the ground.",
+   "category": "forest",
+   "band": "foundation"
+  },
+  {
+   "id": "v_bark",
+   "text": "bark",
+   "definition": "The tough outer covering of a tree trunk.",
+   "example": "Bark protects a tree from insects.",
+   "category": "forest",
+   "band": "foundation"
+  },
+  {
+   "id": "v_wood",
+   "text": "wood",
+   "definition": "The hard material that forms a tree's trunk and branches.",
+   "example": "The bench was made from reclaimed wood.",
+   "category": "forest",
+   "band": "foundation"
+  },
+  {
+   "id": "v_mud",
+   "text": "mud",
+   "definition": "Soft, wet soil.",
+   "example": "Pigs cool off by rolling in mud.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_rock",
+   "text": "rock",
+   "definition": "A hard, solid piece of the ground.",
+   "example": "Moss grew on the shady side of the rock.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_sand",
+   "text": "sand",
+   "definition": "Tiny grains of rock found on beaches and in deserts.",
+   "example": "The tide smoothed the sand.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_wave",
+   "text": "wave",
+   "definition": "A moving ridge of water on the surface of the sea.",
+   "example": "A wave washed over the shells.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_ice",
+   "text": "ice",
+   "definition": "Water that has frozen solid.",
+   "example": "The ice on the lake melted in April.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_snow",
+   "text": "snow",
+   "definition": "Soft white flakes of frozen water that fall from clouds.",
+   "example": "Snow covered the hills.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_cloud",
+   "text": "cloud",
+   "definition": "A mass of tiny water drops floating in the sky.",
+   "example": "A dark cloud brought rain.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_trash",
+   "text": "trash",
+   "definition": "Things people throw away because they no longer want them.",
+   "example": "Put your trash in the bin, not on the path.",
+   "category": "waste",
+   "band": "foundation"
+  },
+  {
+   "id": "v_bin",
+   "text": "bin",
+   "definition": "A container for holding waste or recycling.",
+   "example": "The blue bin is for paper.",
+   "category": "waste",
+   "band": "foundation"
+  },
+  {
+   "id": "v_can",
+   "text": "can",
+   "definition": "A metal container for food or drink.",
+   "example": "An empty can is easy to recycle.",
+   "category": "recycling",
+   "band": "foundation"
+  },
+  {
+   "id": "v_bag",
+   "text": "bag",
+   "definition": "A soft container made of paper, cloth, or plastic.",
+   "example": "Bring a cloth bag to the shop.",
+   "category": "waste",
+   "band": "foundation"
+  },
+  {
+   "id": "v_jar",
+   "text": "jar",
+   "definition": "A glass or plastic container with a wide opening.",
+   "example": "We reuse the jar to store seeds.",
+   "category": "recycling",
+   "band": "foundation"
+  },
+  {
+   "id": "v_box",
+   "text": "box",
+   "definition": "A container with flat sides, often made of cardboard.",
+   "example": "Fold the box before recycling it.",
+   "category": "recycling",
+   "band": "foundation"
+  },
+  {
+   "id": "v_lamp",
+   "text": "lamp",
+   "definition": "A device that gives light.",
+   "example": "Switch off the lamp when you leave.",
+   "category": "energy",
+   "band": "foundation"
+  },
+  {
+   "id": "v_heat",
+   "text": "heat",
+   "definition": "Warmth, or the energy that makes things hot.",
+   "example": "Thick walls keep heat inside the house.",
+   "category": "energy",
+   "band": "foundation"
+  },
+  {
+   "id": "v_light",
+   "text": "light",
+   "definition": "The energy that lets us see.",
+   "example": "Sunlight streamed through the window.",
+   "category": "energy",
+   "band": "foundation"
+  },
+  {
+   "id": "v_care",
+   "text": "care",
+   "definition": "To look after something and keep it safe.",
+   "example": "We care for the garden every weekend.",
+   "category": "responsibility",
+   "band": "foundation"
+  },
+  {
+   "id": "v_save",
+   "text": "save",
+   "definition": "To keep something from being wasted or lost.",
+   "example": "Turn off the tap to save water.",
+   "category": "conservation",
+   "band": "foundation"
+  },
+  {
+   "id": "v_earth",
+   "text": "earth",
+   "definition": "The planet we live on; also the ground or soil.",
+   "example": "Earth is the only home we have.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_home",
+   "text": "home",
+   "definition": "The place where a person or animal lives.",
+   "example": "The hollow log is home to a family of mice.",
+   "category": "habitat",
+   "band": "foundation"
+  },
+  {
+   "id": "v_nest",
+   "text": "nest",
+   "definition": "A shelter that birds and some animals build for their young.",
+   "example": "The robin laid three eggs in its nest.",
+   "category": "habitat",
+   "band": "foundation"
+  },
+  {
+   "id": "v_park",
+   "text": "park",
+   "definition": "A public area of land with grass and trees.",
+   "example": "The town park has a new wildflower bed.",
+   "category": "conservation",
+   "band": "foundation"
+  },
+  {
+   "id": "v_farm",
+   "text": "farm",
+   "definition": "Land used for growing crops or raising animals.",
+   "example": "The farm grows apples for the village.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_fruit",
+   "text": "fruit",
+   "definition": "The part of a plant that holds its seeds and can often be eaten.",
+   "example": "Fruit trees feed both birds and people.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_green",
+   "text": "green",
+   "definition": "Covered with plants, or kind to the environment.",
+   "example": "The city wants more green space.",
+   "category": "conservation",
+   "band": "foundation"
+  },
+  {
+   "id": "v_dirt",
+   "text": "dirt",
+   "definition": "Loose soil.",
+   "example": "The dog dug happily in the dirt.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_fog",
+   "text": "fog",
+   "definition": "A thick cloud close to the ground.",
+   "example": "Fog drifted over the marsh at dawn.",
+   "category": "water",
+   "band": "foundation"
+  },
+  {
+   "id": "v_hill",
+   "text": "hill",
+   "definition": "A raised area of land, smaller than a mountain.",
+   "example": "Wildflowers covered the hill.",
+   "category": "nature",
+   "band": "foundation"
+  },
+  {
+   "id": "v_reuse",
+   "text": "reuse",
+   "definition": "To use something again instead of throwing it away.",
+   "example": "We reuse glass jars for paint.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_waste",
+   "text": "waste",
+   "definition": "Material that is thrown away or used carelessly.",
+   "example": "Food waste can become compost.",
+   "category": "waste",
+   "band": "developing"
+  },
+  {
+   "id": "v_litter",
+   "text": "litter",
+   "definition": "Trash left lying in a public place.",
+   "example": "The class picked up litter in the park.",
+   "category": "waste",
+   "band": "developing"
+  },
+  {
+   "id": "v_forest",
+   "text": "forest",
+   "definition": "A large area covered with trees.",
+   "example": "The forest is home to deer and owls.",
+   "category": "forest",
+   "band": "developing"
+  },
+  {
+   "id": "v_recycle",
+   "text": "recycle",
+   "definition": "To process used materials so they can be made into new things.",
+   "example": "We recycle paper, cans, and bottles.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_protect",
+   "text": "protect",
+   "definition": "To keep something safe from harm.",
+   "example": "Fences protect the young trees from deer.",
+   "category": "conservation",
+   "band": "developing"
+  },
+  {
+   "id": "v_reduce",
+   "text": "reduce",
+   "definition": "To make something smaller in amount.",
+   "example": "We reduce waste by buying less packaging.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_repair",
+   "text": "repair",
+   "definition": "To fix something that is broken.",
+   "example": "Repair the bike instead of buying a new one.",
+   "category": "recycling",
+   "band": "developing",
+   "note": "Repairing keeps things in use and out of the trash."
+  },
+  {
+   "id": "v_plastic",
+   "text": "plastic",
+   "definition": "A light, strong material made mostly from oil.",
+   "example": "Some plastic lasts for hundreds of years.",
+   "category": "waste",
+   "band": "developing"
+  },
+  {
+   "id": "v_paper",
+   "text": "paper",
+   "definition": "Thin material made from wood pulp, used for writing and packing.",
+   "example": "Paper can be recycled several times.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_glass",
+   "text": "glass",
+   "definition": "A hard, clear material made by melting sand.",
+   "example": "Glass can be melted and reshaped again and again.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_metal",
+   "text": "metal",
+   "definition": "A hard material such as iron, steel, or aluminum.",
+   "example": "Old metal was melted down to make new tools.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_bottle",
+   "text": "bottle",
+   "definition": "A container with a narrow neck for holding liquids.",
+   "example": "Refill your water bottle at the fountain.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_garden",
+   "text": "garden",
+   "definition": "A piece of land where plants are grown.",
+   "example": "The school garden grows beans and peas.",
+   "category": "nature",
+   "band": "developing"
+  },
+  {
+   "id": "v_insect",
+   "text": "insect",
+   "definition": "A small animal with six legs and a body in three parts.",
+   "example": "An insect hotel gives beetles a place to shelter.",
+   "category": "habitat",
+   "band": "developing"
+  },
+  {
+   "id": "v_animal",
+   "text": "animal",
+   "definition": "A living thing that can move and must eat to survive.",
+   "example": "Every animal needs food, water, and shelter.",
+   "category": "habitat",
+   "band": "developing"
+  },
+  {
+   "id": "v_ocean",
+   "text": "ocean",
+   "definition": "One of the very large bodies of salt water on the planet.",
+   "example": "The ocean covers most of the planet.",
+   "category": "water",
+   "band": "developing"
+  },
+  {
+   "id": "v_stream",
+   "text": "stream",
+   "definition": "A small, narrow river.",
+   "example": "Trout swim in the cold stream.",
+   "category": "water",
+   "band": "developing"
+  },
+  {
+   "id": "v_spring",
+   "text": "spring",
+   "definition": "A place where water flows naturally out of the ground.",
+   "example": "The village drew water from a spring.",
+   "category": "water",
+   "band": "developing"
+  },
+  {
+   "id": "v_shore",
+   "text": "shore",
+   "definition": "The land along the edge of a sea or lake.",
+   "example": "Shells were scattered along the shore.",
+   "category": "water",
+   "band": "developing"
+  },
+  {
+   "id": "v_beach",
+   "text": "beach",
+   "definition": "A sandy or pebbly shore by the sea.",
+   "example": "We cleaned the beach after the storm.",
+   "category": "water",
+   "band": "developing"
+  },
+  {
+   "id": "v_tide",
+   "text": "tide",
+   "definition": "The regular rise and fall of the sea.",
+   "example": "At low tide we found crabs in the rock pools.",
+   "category": "water",
+   "band": "developing"
+  },
+  {
+   "id": "v_reef",
+   "text": "reef",
+   "definition": "A ridge of rock, sand, or coral near the surface of the sea.",
+   "example": "Bright fish shelter in the reef.",
+   "category": "habitat",
+   "band": "developing"
+  },
+  {
+   "id": "v_coral",
+   "text": "coral",
+   "definition": "A hard structure built by tiny sea animals that forms reefs.",
+   "example": "Coral needs clear, warm water to grow.",
+   "category": "habitat",
+   "band": "developing"
+  },
+  {
+   "id": "v_shell",
+   "text": "shell",
+   "definition": "The hard outer covering of some sea animals.",
+   "example": "A crab hid inside an empty shell.",
+   "category": "water",
+   "band": "developing"
+  },
+  {
+   "id": "v_branch",
+   "text": "branch",
+   "definition": "A part of a tree that grows out from the trunk.",
+   "example": "A squirrel ran along the branch.",
+   "category": "forest",
+   "band": "developing"
+  },
+  {
+   "id": "v_trunk",
+   "text": "trunk",
+   "definition": "The main woody stem of a tree.",
+   "example": "The trunk was too wide to hug.",
+   "category": "forest",
+   "band": "developing"
+  },
+  {
+   "id": "v_canopy",
+   "text": "canopy",
+   "definition": "The top layer of leaves formed by the crowns of trees.",
+   "example": "Monkeys live high in the canopy.",
+   "category": "forest",
+   "band": "developing"
+  },
+  {
+   "id": "v_moss",
+   "text": "moss",
+   "definition": "A small, soft green plant that grows in damp places.",
+   "example": "Moss covered the fallen log.",
+   "category": "forest",
+   "band": "developing"
+  },
+  {
+   "id": "v_fungus",
+   "text": "fungus",
+   "definition": "A living thing, such as a mushroom, that feeds on dead or living matter.",
+   "example": "A fungus helps break down fallen leaves.",
+   "category": "forest",
+   "band": "developing",
+   "note": "Fungi return nutrients from dead wood to the soil."
+  },
+  {
+   "id": "v_weather",
+   "text": "weather",
+   "definition": "The state of the air at a certain time and place.",
+   "example": "The weather turned stormy in the afternoon.",
+   "category": "nature",
+   "band": "developing"
+  },
+  {
+   "id": "v_season",
+   "text": "season",
+   "definition": "One of the four parts of the year.",
+   "example": "Each season brings changes to the forest.",
+   "category": "nature",
+   "band": "developing"
+  },
+  {
+   "id": "v_power",
+   "text": "power",
+   "definition": "Energy that makes machines and devices work.",
+   "example": "Solar panels provide power for the cabin.",
+   "category": "energy",
+   "band": "developing"
+  },
+  {
+   "id": "v_energy",
+   "text": "energy",
+   "definition": "The ability to do work, such as moving, heating, or lighting.",
+   "example": "Food gives our bodies energy.",
+   "category": "energy",
+   "band": "developing"
+  },
+  {
+   "id": "v_solar",
+   "text": "solar",
+   "definition": "Relating to the sun, or powered by sunlight.",
+   "example": "Solar panels turned sunlight into electricity.",
+   "category": "energy",
+   "band": "developing"
+  },
+  {
+   "id": "v_fuel",
+   "text": "fuel",
+   "definition": "A material that is burned or used up to make energy.",
+   "example": "Wood was once the main fuel for cooking.",
+   "category": "energy",
+   "band": "developing"
+  },
+  {
+   "id": "v_smoke",
+   "text": "smoke",
+   "definition": "The gray or black cloud given off by something burning.",
+   "example": "Smoke from the fire filled the valley.",
+   "category": "pollution",
+   "band": "developing"
+  },
+  {
+   "id": "v_smog",
+   "text": "smog",
+   "definition": "A haze of smoke, fog, and other pollution that hangs in the air.",
+   "example": "Smog hid the mountains from view.",
+   "category": "pollution",
+   "band": "developing",
+   "note": "Smog is a visible sign of air pollution over cities."
+  },
+  {
+   "id": "v_dust",
+   "text": "dust",
+   "definition": "Tiny dry particles of soil or other matter.",
+   "example": "Dust blew off the dry fields.",
+   "category": "pollution",
+   "band": "developing"
+  },
+  {
+   "id": "v_oil",
+   "text": "oil",
+   "definition": "A thick liquid from underground, used as fuel and to make plastic.",
+   "example": "Spilled oil coats the feathers of seabirds.",
+   "category": "pollution",
+   "band": "developing"
+  },
+  {
+   "id": "v_spill",
+   "text": "spill",
+   "definition": "An accidental release of a liquid, often a harmful one.",
+   "example": "Crews worked for weeks to clean up the spill.",
+   "category": "pollution",
+   "band": "developing"
+  },
+  {
+   "id": "v_toxic",
+   "text": "toxic",
+   "definition": "Poisonous and harmful to living things.",
+   "example": "Toxic chemicals must never be poured down the drain.",
+   "category": "pollution",
+   "band": "developing"
+  },
+  {
+   "id": "v_harm",
+   "text": "harm",
+   "definition": "Damage or injury.",
+   "example": "Loud noise can harm wildlife.",
+   "category": "responsibility",
+   "band": "developing"
+  },
+  {
+   "id": "v_share",
+   "text": "share",
+   "definition": "To use or enjoy something together with others.",
+   "example": "We share the river with many animals.",
+   "category": "responsibility",
+   "band": "developing"
+  },
+  {
+   "id": "v_rescue",
+   "text": "rescue",
+   "definition": "To save someone or something from danger.",
+   "example": "Volunteers rescue turtles caught in nets.",
+   "category": "conservation",
+   "band": "developing"
+  },
+  {
+   "id": "v_planet",
+   "text": "planet",
+   "definition": "A large body in space that moves around a star.",
+   "example": "Our planet is covered with oceans and forests.",
+   "category": "nature",
+   "band": "developing"
+  },
+  {
+   "id": "v_nature",
+   "text": "nature",
+   "definition": "The plants, animals, land, and other parts of the world not made by people.",
+   "example": "We spent the day exploring nature.",
+   "category": "nature",
+   "band": "developing"
+  },
+  {
+   "id": "v_wild",
+   "text": "wild",
+   "definition": "Living or growing naturally, without care from people.",
+   "example": "Wild berries grew along the trail.",
+   "category": "habitat",
+   "band": "developing"
+  },
+  {
+   "id": "v_meadow",
+   "text": "meadow",
+   "definition": "A field of grass and wildflowers.",
+   "example": "Butterflies drifted across the meadow.",
+   "category": "habitat",
+   "band": "developing"
+  },
+  {
+   "id": "v_valley",
+   "text": "valley",
+   "definition": "Low land between hills or mountains.",
+   "example": "A river ran through the valley.",
+   "category": "nature",
+   "band": "developing"
+  },
+  {
+   "id": "v_marsh",
+   "text": "marsh",
+   "definition": "Low, wet land often covered with tall grasses.",
+   "example": "Herons hunt for fish in the marsh.",
+   "category": "habitat",
+   "band": "developing"
+  },
+  {
+   "id": "v_sort",
+   "text": "sort",
+   "definition": "To arrange things into groups.",
+   "example": "Sort the recycling into paper, glass, and cans.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_refill",
+   "text": "refill",
+   "definition": "To fill something again after it has been emptied.",
+   "example": "Refill the soap bottle at the shop.",
+   "category": "recycling",
+   "band": "developing"
+  },
+  {
+   "id": "v_donate",
+   "text": "donate",
+   "definition": "To give something away to help others.",
+   "example": "We donate old clothes instead of throwing them out.",
+   "category": "recycling",
+   "band": "developing",
+   "note": "Donating gives items a second life instead of sending them to a landfill."
+  },
+  {
+   "id": "v_prey",
+   "text": "prey",
+   "definition": "An animal that is hunted by another animal for food.",
+   "example": "Mice are prey for foxes and hawks.",
+   "category": "habitat",
+   "band": "developing"
+  },
+  {
+   "id": "v_habitat",
+   "text": "habitat",
+   "definition": "The natural home of a plant or animal.",
+   "example": "The wetland is a habitat for many birds.",
+   "category": "habitat",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_compost",
+   "text": "compost",
+   "definition": "Rotted plant and food waste used to enrich soil.",
+   "example": "Our compost turns vegetable peels into rich soil.",
+   "category": "recycling",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_conserve",
+   "text": "conserve",
+   "definition": "To protect something and use it carefully so it lasts.",
+   "example": "Short showers help conserve water.",
+   "category": "conservation",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_restore",
+   "text": "restore",
+   "definition": "To bring something back to a good condition.",
+   "example": "The group worked to restore the old wetland.",
+   "category": "conservation",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_wildlife",
+   "text": "wildlife",
+   "definition": "Animals and plants that live in natural conditions.",
+   "example": "The reserve protects local wildlife.",
+   "category": "habitat",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_recycling",
+   "text": "recycling",
+   "definition": "The process of turning used materials into new products.",
+   "example": "Recycling keeps metal out of landfills.",
+   "category": "recycling",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_landfill",
+   "text": "landfill",
+   "definition": "A place where waste is buried under layers of soil.",
+   "example": "The landfill was almost full.",
+   "category": "waste",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_garbage",
+   "text": "garbage",
+   "definition": "Food scraps and other things that are thrown away.",
+   "example": "Garbage trucks collect waste every Tuesday.",
+   "category": "waste",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_packaging",
+   "text": "packaging",
+   "definition": "The boxes, wrappers, and containers that products come in.",
+   "example": "Choose products with less packaging.",
+   "category": "waste",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_resource",
+   "text": "resource",
+   "definition": "A supply of something useful, such as water, wood, or minerals.",
+   "example": "Fresh water is a precious resource.",
+   "category": "energy",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_electric",
+   "text": "electric",
+   "definition": "Powered by or relating to electricity.",
+   "example": "The town bought electric buses.",
+   "category": "energy",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_battery",
+   "text": "battery",
+   "definition": "A device that stores energy and supplies it as electricity.",
+   "example": "Old batteries need special recycling.",
+   "category": "energy",
+   "band": "intermediate",
+   "note": "Batteries contain metals that should not end up in landfills."
+  },
+  {
+   "id": "v_turbine",
+   "text": "turbine",
+   "definition": "A machine with blades that turn to produce power.",
+   "example": "The wind turbine spun all night.",
+   "category": "energy",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_climate",
+   "text": "climate",
+   "definition": "The usual weather of a place over many years.",
+   "example": "The climate in the north is cold and dry.",
+   "category": "nature",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_drought",
+   "text": "drought",
+   "definition": "A long period with little or no rain.",
+   "example": "The drought dried up the farm ponds.",
+   "category": "water",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_flood",
+   "text": "flood",
+   "definition": "A large amount of water covering land that is usually dry.",
+   "example": "Wetlands can soak up water and soften a flood.",
+   "category": "water",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_glacier",
+   "text": "glacier",
+   "definition": "A huge, slow-moving mass of ice.",
+   "example": "The glacier has shrunk over the past century.",
+   "category": "water",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_wetland",
+   "text": "wetland",
+   "definition": "Land that is soaked with water, such as a marsh or swamp.",
+   "example": "A wetland filters water and shelters birds.",
+   "category": "habitat",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_estuary",
+   "text": "estuary",
+   "definition": "The wide part of a river where it meets the sea.",
+   "example": "Young fish grow up in the estuary.",
+   "category": "water",
+   "band": "intermediate",
+   "note": "Fresh and salt water mix here, making a rich nursery for sea life."
+  },
+  {
+   "id": "v_mangrove",
+   "text": "mangrove",
+   "definition": "A tree that grows in salty coastal water.",
+   "example": "Mangrove roots shelter young fish.",
+   "category": "habitat",
+   "band": "intermediate",
+   "note": "Mangrove forests protect coasts from storms and erosion."
+  },
+  {
+   "id": "v_pollen",
+   "text": "pollen",
+   "definition": "A fine powder made by flowers that helps plants make seeds.",
+   "example": "Bees carry pollen from flower to flower.",
+   "category": "nature",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_nectar",
+   "text": "nectar",
+   "definition": "A sweet liquid made by flowers.",
+   "example": "Hummingbirds drink nectar.",
+   "category": "nature",
+   "band": "intermediate",
+   "note": "Nectar is the reward that draws pollinators to flowers."
+  },
+  {
+   "id": "v_species",
+   "text": "species",
+   "definition": "A group of living things that are alike and can breed together.",
+   "example": "The forest holds hundreds of species of beetle.",
+   "category": "habitat",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_predator",
+   "text": "predator",
+   "definition": "An animal that hunts other animals for food.",
+   "example": "The owl is a night predator.",
+   "category": "habitat",
+   "band": "intermediate",
+   "note": "Predators keep prey numbers in balance."
+  },
+  {
+   "id": "v_migrate",
+   "text": "migrate",
+   "definition": "To move from one region to another with the seasons.",
+   "example": "Geese migrate south for the winter.",
+   "category": "habitat",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_shelter",
+   "text": "shelter",
+   "definition": "A place that gives protection from weather or danger.",
+   "example": "Hedges give birds shelter from the wind.",
+   "category": "habitat",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_seedling",
+   "text": "seedling",
+   "definition": "A young plant grown from a seed.",
+   "example": "Each student planted a seedling.",
+   "category": "forest",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_sapling",
+   "text": "sapling",
+   "definition": "A young tree.",
+   "example": "The sapling needs a stake until it grows strong.",
+   "category": "forest",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_woodland",
+   "text": "woodland",
+   "definition": "Land covered with trees, usually less dense than a forest.",
+   "example": "Bluebells carpet the woodland in spring.",
+   "category": "forest",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_logging",
+   "text": "logging",
+   "definition": "The cutting down of trees for wood.",
+   "example": "Careless logging can strip a hillside bare.",
+   "category": "forest",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_timber",
+   "text": "timber",
+   "definition": "Wood prepared for building.",
+   "example": "The cabin was built from local timber.",
+   "category": "forest",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_pollute",
+   "text": "pollute",
+   "definition": "To make air, water, or land dirty and harmful.",
+   "example": "Factories must not pollute the river.",
+   "category": "pollution",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_exhaust",
+   "text": "exhaust",
+   "definition": "The waste gases released by an engine.",
+   "example": "Car exhaust adds to air pollution.",
+   "category": "pollution",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_chemical",
+   "text": "chemical",
+   "definition": "A substance made by or used in chemistry.",
+   "example": "Store garden chemicals away from streams.",
+   "category": "pollution",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_sewage",
+   "text": "sewage",
+   "definition": "Waste water and waste matter carried away in sewers.",
+   "example": "Treated sewage is cleaned before it reaches the river.",
+   "category": "pollution",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_runoff",
+   "text": "runoff",
+   "definition": "Rainwater that flows over land into streams, often carrying dirt or chemicals.",
+   "example": "Runoff from the fields carried fertilizer into the lake.",
+   "category": "pollution",
+   "band": "intermediate",
+   "note": "Runoff is how pollution on land reaches rivers and seas."
+  },
+  {
+   "id": "v_erosion",
+   "text": "erosion",
+   "definition": "The slow wearing away of soil or rock by wind or water.",
+   "example": "Tree roots help stop erosion on steep slopes.",
+   "category": "nature",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_mineral",
+   "text": "mineral",
+   "definition": "A natural solid substance found in rocks and soil.",
+   "example": "Plants absorb minerals from the soil.",
+   "category": "nature",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_nutrient",
+   "text": "nutrient",
+   "definition": "A substance that living things need to grow and stay healthy.",
+   "example": "Compost adds nutrients to the garden.",
+   "category": "nature",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_organic",
+   "text": "organic",
+   "definition": "Coming from living things, or grown without artificial chemicals.",
+   "example": "Leaves and peels are organic waste.",
+   "category": "nature",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_reserve",
+   "text": "reserve",
+   "definition": "An area of land set aside to protect plants and animals.",
+   "example": "The nature reserve is closed to cars.",
+   "category": "conservation",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_replant",
+   "text": "replant",
+   "definition": "To plant again, especially trees in a cleared area.",
+   "example": "Volunteers replant the hillside every autumn.",
+   "category": "conservation",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_recover",
+   "text": "recover",
+   "definition": "To return to a healthy state.",
+   "example": "The river began to recover once the dumping stopped.",
+   "category": "conservation",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_cleanup",
+   "text": "cleanup",
+   "definition": "An effort to remove litter or pollution from a place.",
+   "example": "The beach cleanup filled forty bags.",
+   "category": "responsibility",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_volunteer",
+   "text": "volunteer",
+   "definition": "A person who offers to help without being paid.",
+   "example": "A volunteer showed us how to sort recycling.",
+   "category": "responsibility",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_respect",
+   "text": "respect",
+   "definition": "To treat something as important and worth protecting.",
+   "example": "Respect wildlife by keeping your distance.",
+   "category": "responsibility",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_recyclable",
+   "text": "recyclable",
+   "definition": "Able to be recycled.",
+   "example": "Check whether the container is recyclable.",
+   "category": "recycling",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_reusable",
+   "text": "reusable",
+   "definition": "Able to be used again.",
+   "example": "She carries a reusable cup.",
+   "category": "recycling",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_upcycle",
+   "text": "upcycle",
+   "definition": "To turn old or waste items into something of greater value.",
+   "example": "We upcycle old tires into planters.",
+   "category": "recycling",
+   "band": "intermediate",
+   "note": "Upcycling keeps materials in use without breaking them down first."
+  },
+  {
+   "id": "v_harvest",
+   "text": "harvest",
+   "definition": "To gather crops when they are ripe.",
+   "example": "The farmers harvest the wheat in late summer.",
+   "category": "nature",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_rainfall",
+   "text": "rainfall",
+   "definition": "The amount of rain that falls in a place.",
+   "example": "Rainfall was low this year.",
+   "category": "water",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_aquifer",
+   "text": "aquifer",
+   "definition": "A layer of underground rock or gravel that holds water.",
+   "example": "The town's wells draw from an aquifer.",
+   "category": "water",
+   "band": "intermediate",
+   "note": "Many communities depend on aquifers for drinking water."
+  },
+  {
+   "id": "v_carbon",
+   "text": "carbon",
+   "definition": "A chemical element found in all living things and in fuels like coal.",
+   "example": "Burning coal releases carbon into the air.",
+   "category": "energy",
+   "band": "intermediate",
+   "note": "Carbon released by burning fuel warms the climate."
+  },
+  {
+   "id": "v_emission",
+   "text": "emission",
+   "definition": "A gas or other substance released into the air.",
+   "example": "The new bus has a lower emission rate.",
+   "category": "pollution",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_hazard",
+   "text": "hazard",
+   "definition": "Something that could cause harm.",
+   "example": "Broken glass on the trail is a hazard.",
+   "category": "pollution",
+   "band": "intermediate"
+  },
+  {
+   "id": "v_pollution",
+   "text": "pollution",
+   "definition": "Harmful substances that make air, water, or land dirty.",
+   "example": "Air pollution can make people sick.",
+   "category": "pollution",
+   "band": "advanced"
+  },
+  {
+   "id": "v_ecosystem",
+   "text": "ecosystem",
+   "definition": "A community of living things and their surroundings, working together.",
+   "example": "A pond is a small ecosystem.",
+   "category": "habitat",
+   "band": "advanced"
+  },
+  {
+   "id": "v_biodiversity",
+   "text": "biodiversity",
+   "definition": "The variety of all living things in a place.",
+   "example": "Rainforests have rich biodiversity.",
+   "category": "conservation",
+   "band": "advanced"
+  },
+  {
+   "id": "v_conservation",
+   "text": "conservation",
+   "definition": "The careful protection of nature and natural resources.",
+   "example": "Conservation keeps rare animals from disappearing.",
+   "category": "conservation",
+   "band": "advanced"
+  },
+  {
+   "id": "v_sustainability",
+   "text": "sustainability",
+   "definition": "Meeting present needs without harming the ability of future generations to meet theirs.",
+   "example": "Sustainability means thinking about the future.",
+   "category": "responsibility",
+   "band": "advanced"
+  },
+  {
+   "id": "v_sustainable",
+   "text": "sustainable",
+   "definition": "Able to continue for a long time without damaging the environment.",
+   "example": "Sustainable fishing leaves enough fish to breed.",
+   "category": "responsibility",
+   "band": "advanced"
+  },
+  {
+   "id": "v_renewable",
+   "text": "renewable",
+   "definition": "Able to be replaced naturally, like sunlight or wind.",
+   "example": "Wind is a renewable source of energy.",
+   "category": "energy",
+   "band": "advanced"
+  },
+  {
+   "id": "v_deforestation",
+   "text": "deforestation",
+   "definition": "The clearing of forests on a large scale.",
+   "example": "Deforestation destroys animal habitats.",
+   "category": "forest",
+   "band": "advanced"
+  },
+  {
+   "id": "v_reforestation",
+   "text": "reforestation",
+   "definition": "Planting trees where a forest has been cut down.",
+   "example": "Reforestation brought birds back to the valley.",
+   "category": "forest",
+   "band": "advanced"
+  },
+  {
+   "id": "v_photosynthesis",
+   "text": "photosynthesis",
+   "definition": "The process plants use to turn sunlight, water, and carbon dioxide into food.",
+   "example": "Photosynthesis releases oxygen into the air.",
+   "category": "nature",
+   "band": "advanced"
+  },
+  {
+   "id": "v_atmosphere",
+   "text": "atmosphere",
+   "definition": "The layer of gases that surrounds a planet.",
+   "example": "The atmosphere shields the planet from harmful rays.",
+   "category": "nature",
+   "band": "advanced"
+  },
+  {
+   "id": "v_environment",
+   "text": "environment",
+   "definition": "The natural world and the conditions around living things.",
+   "example": "We all share responsibility for the environment.",
+   "category": "nature",
+   "band": "advanced"
+  },
+  {
+   "id": "v_contamination",
+   "text": "contamination",
+   "definition": "The presence of something harmful that makes a substance unsafe.",
+   "example": "Tests found contamination in the well water.",
+   "category": "pollution",
+   "band": "advanced"
+  },
+  {
+   "id": "v_decompose",
+   "text": "decompose",
+   "definition": "To break down slowly into simpler substances.",
+   "example": "Leaves decompose into rich soil.",
+   "category": "recycling",
+   "band": "advanced"
+  },
+  {
+   "id": "v_biodegradable",
+   "text": "biodegradable",
+   "definition": "Able to be broken down naturally by bacteria and other living things.",
+   "example": "Banana peels are biodegradable.",
+   "category": "waste",
+   "band": "advanced"
+  },
+  {
+   "id": "v_microplastic",
+   "text": "microplastic",
+   "definition": "A tiny piece of plastic less than five millimeters long.",
+   "example": "Microplastic has been found in the deep ocean.",
+   "category": "pollution",
+   "band": "advanced",
+   "note": "Microplastic forms when larger plastic waste breaks apart."
+  },
+  {
+   "id": "v_endangered",
+   "text": "endangered",
+   "definition": "At risk of disappearing forever.",
+   "example": "The endangered frog lives in only one valley.",
+   "category": "conservation",
+   "band": "advanced"
+  },
+  {
+   "id": "v_extinction",
+   "text": "extinction",
+   "definition": "The dying out of a whole species.",
+   "example": "Habitat loss is a leading cause of extinction.",
+   "category": "conservation",
+   "band": "advanced"
+  },
+  {
+   "id": "v_greenhouse",
+   "text": "greenhouse",
+   "definition": "A glass building that traps the sun's heat to keep plants warm.",
+   "example": "Tomatoes grow well in a greenhouse.",
+   "category": "energy",
+   "band": "advanced",
+   "note": "The greenhouse effect is named after the way these buildings trap heat."
+  },
+  {
+   "id": "v_efficiency",
+   "text": "efficiency",
+   "definition": "Getting the most use out of energy or materials with the least waste.",
+   "example": "LED bulbs improve energy efficiency.",
+   "category": "energy",
+   "band": "advanced"
+  },
+  {
+   "id": "v_geothermal",
+   "text": "geothermal",
+   "definition": "Using heat from deep inside the ground.",
+   "example": "Geothermal plants turn underground heat into electricity.",
+   "category": "energy",
+   "band": "advanced"
+  },
+  {
+   "id": "v_hydroelectric",
+   "text": "hydroelectric",
+   "definition": "Producing electricity from moving water.",
+   "example": "The hydroelectric dam powers the city.",
+   "category": "energy",
+   "band": "advanced"
+  },
+  {
+   "id": "v_pollinator",
+   "text": "pollinator",
+   "definition": "An animal, such as a bee or bat, that carries pollen between flowers.",
+   "example": "A garden full of flowers helps every pollinator.",
+   "category": "habitat",
+   "band": "advanced"
+  },
+  {
+   "id": "v_watershed",
+   "text": "watershed",
+   "definition": "An area of land that drains into a river, lake, or sea.",
+   "example": "Everything in the watershed affects the river downstream.",
+   "category": "water",
+   "band": "advanced",
+   "note": "What happens anywhere in a watershed reaches the water below."
+  },
+  {
+   "id": "v_groundwater",
+   "text": "groundwater",
+   "definition": "Water held underground in soil and rock.",
+   "example": "Wells pump groundwater to the surface.",
+   "category": "water",
+   "band": "advanced"
+  },
+  {
+   "id": "v_desalination",
+   "text": "desalination",
+   "definition": "Removing salt from seawater to make it safe to drink.",
+   "example": "Desalination uses a lot of energy.",
+   "category": "water",
+   "band": "advanced"
+  },
+  {
+   "id": "v_stewardship",
+   "text": "stewardship",
+   "definition": "The responsible care of something entrusted to you.",
+   "example": "Stewardship of the forest passed to the next generation.",
+   "category": "responsibility",
+   "band": "advanced",
+   "note": "Stewardship means caring for nature on behalf of others, including the future."
+  },
+  {
+   "id": "v_accountability",
+   "text": "accountability",
+   "definition": "Being responsible for your actions and their results.",
+   "example": "Companies need accountability for the waste they create.",
+   "category": "responsibility",
+   "band": "advanced"
+  },
+  {
+   "id": "v_regeneration",
+   "text": "regeneration",
+   "definition": "The natural regrowth of a damaged area.",
+   "example": "After the fire, regeneration began within a year.",
+   "category": "conservation",
+   "band": "advanced"
+  },
+  {
+   "id": "v_consumption",
+   "text": "consumption",
+   "definition": "The using up of goods, energy, or resources.",
+   "example": "Lower consumption means less waste.",
+   "category": "responsibility",
+   "band": "advanced",
+   "note": "How much we consume decides how much waste we make."
+  },
+  {
+   "id": "v_incineration",
+   "text": "incineration",
+   "definition": "The burning of waste.",
+   "example": "Incineration shrinks waste but can pollute the air.",
+   "category": "waste",
+   "band": "advanced"
+  },
+  {
+   "id": "v_fertilizer",
+   "text": "fertilizer",
+   "definition": "A substance added to soil to help plants grow.",
+   "example": "Too much fertilizer can wash into lakes.",
+   "category": "pollution",
+   "band": "advanced",
+   "note": "Excess fertilizer feeds algae that choke rivers and lakes."
+  },
+  {
+   "id": "v_pesticide",
+   "text": "pesticide",
+   "definition": "A chemical used to kill pests that damage crops.",
+   "example": "Some pesticides also harm bees.",
+   "category": "pollution",
+   "band": "advanced"
+  },
+  {
+   "id": "v_restoration",
+   "text": "restoration",
+   "definition": "Returning something to its earlier, healthier condition.",
+   "example": "Wetland restoration brought the herons back.",
+   "category": "conservation",
+   "band": "advanced"
+  },
+  {
+   "id": "v_preservation",
+   "text": "preservation",
+   "definition": "Keeping something safe from harm or decay.",
+   "example": "Preservation of old forests protects rare plants.",
+   "category": "conservation",
+   "band": "advanced"
+  },
+  {
+   "id": "v_ecological",
+   "text": "ecological",
+   "definition": "Relating to living things and their surroundings.",
+   "example": "The spill caused serious ecological damage.",
+   "category": "habitat",
+   "band": "advanced"
+  },
+  {
+   "id": "v_insulation",
+   "text": "insulation",
+   "definition": "Material that slows the flow of heat in or out of a building.",
+   "example": "Good insulation keeps a house warm with less fuel.",
+   "category": "energy",
+   "band": "advanced",
+   "note": "Less heat lost means less energy burned."
+  }
+ ]
+}

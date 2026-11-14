@@ -197,6 +197,18 @@
     "salvage_coast_cable": {
       "material": "polymer",
       "amount": 2
+    },
+    "salvage_dawn_frame": {
+      "material": "scrap_metal",
+      "amount": 3
+    },
+    "salvage_dawn_cells": {
+      "material": "circuitry",
+      "amount": 3
+    },
+    "salvage_dawn_seal": {
+      "material": "polymer",
+      "amount": 2
     }
   },
   "materials": {
@@ -277,6 +289,22 @@
     "coast_boss_gate": {
       "name": "Cleanup Facility Intake",
       "interact_label": "Enter the cleanup facility"
+    },
+    "dawn_memory": {
+      "name": "Survey Projector",
+      "interact_label": "View the survey projector"
+    },
+    "dawn_checkpoint": {
+      "name": "Boardwalk Checkpoint",
+      "interact_label": "Use checkpoint"
+    },
+    "dawn_terminal": {
+      "name": "Defense Console",
+      "interact_label": "Inspect the defense console"
+    },
+    "dawn_boss_gate": {
+      "name": "Dawn Tower Shield Gate",
+      "interact_label": "Enter the Dawn Tower"
     }
   },
   "repair_cost": {

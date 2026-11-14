@@ -1,4 +1,4 @@
-# STAR FALL — Contract (through Phase 2)
+# STAR FALL — Contract (through Phase 3)
 
 This document is the contract between the code, the data, and whoever works on
 the next phase. If something here and the code disagree, treat one of them as a
@@ -33,6 +33,11 @@ core/star_fall/                 Pure logic and presentation kit. No UI nodes.
   sf_pattern_scheduler.gd       Spawn timing, telegraphs, health-band escalation
   sf_encounter_model.gd         Health, charge, phases, counterattack arbitration
   sf_encounter.gd               Encounter controller: glues the four above
+  sf_vocabulary.gd              Phase 3: vocabulary library, validation, deck selection
+  sf_typing.gd                  Phase 3: typing target selection and progress
+  sf_typing_encounter.gd        Phase 3: queue, spawning, movement, health, attacks, pacing
+  sf_reconstruction.gd          Phase 3: workshop selection, costs, atomic fabrication
+  sf_return_sim.gd              Phase 3: return-mission simulation (pure)
   sf_campaign.gd                Campaign state, quests, salvage, save dicts (pure)
   sf_save.gd                    Versioned save/load to user:// (pure + FileAccess)
   sf_dialogue.gd                Dialogue model (pure)
@@ -49,19 +54,25 @@ scenes/star_fall/
   shield_duel.gd                The Phase 2 shield-defense encounter screen
   archive_screen.gd             Archive restoration (city and coast)
   progression_screen.gd         Base return and the Phase 2 summary
+  typing_duel.gd                Phase 3: the Sky Remnant typing encounter screen
+  reconstruction_screen.gd      Phase 3: the VELA reconstruction workshop
 
 data/star_fall/
   ship_parts.json               Hull, mission requirements, components, salvage
   campaign.json                 Chapters, missions, memories, archives, dialogue
   encounters.json               Phase 2 boss tuning, patterns, projectile types
-  sites.json                    Authored world layouts (four sites)
+  sites.json                    Authored world layouts (five sites)
+  vocabulary.json               Phase 3: 199-entry environmental vocabulary library
+  typing.json                   Phase 3: typing encounter tuning
+  reconstruction.json           Phase 3: workshop options and simulation constants
 
 tests/star_fall/
   test_parse.gd                 Every script compiles
   test_logic.gd                 Validation, transactions, inventory, save/load
   test_flow.gd                  Boots the real scene, drives both phases end to end
   test_encounter.gd             Phase 2 combat rules, escalation, retry, rewards
-  capture.gd                    Dev tool: renders 27 key screens to PNG
+  test_phase3.gd                Phase 3 vocabulary, typing, pacing, workshop, simulation, save
+  capture.gd                    Dev tool: renders 35 key screens to PNG
 ```
 
 ### Rules the architecture enforces
@@ -105,6 +116,8 @@ menu -> briefing -> construction -> launch -> flight -> crash_intro
      -> city_intro -> city_boss -> city_archive
      -> silent_intro -> coast_boss -> coast_archive
      -> base_return -> phase_two_complete -> complete
+     -> dawn_intro -> dawn_boss -> dawn_archive
+     -> reconstruction -> ready_for_final_assembly
 ```
 
 | Stage | Screen | What happens |
@@ -125,16 +138,22 @@ menu -> briefing -> construction -> launch -> flight -> crash_intro
 | `coast_boss` | Duel | Toxic Tide. Never checkpointed mid-fight |
 | `coast_archive` | Archive | Environmental archive, Dawn Tower unlock |
 | `base_return` | Progression | Crash-site base, both components shown |
-| `phase_two_complete` | Checkpoint | Phase 2 summary; returns to the title |
-| `complete` | Title | Return to menu with the save intact |
+| `phase_two_complete` | Checkpoint | Phase 2 summary; continues into the Dawn Tower |
+| `complete` | Checkpoint | Legacy Phase 2 stopping point; resumes at the Phase 2 summary |
+| `dawn_intro` | World (Dawn Tower) | Former forest, survey projector, checkpoint, gate |
+| `dawn_boss` | Typing duel | Sky Remnant. Never checkpointed mid-fight |
+| `dawn_archive` | Archive | Dawn Project archive; unlocks the workshop |
+| `reconstruction` | Workshop | VELA reconstruction and return simulation |
+| `ready_for_final_assembly` | Checkpoint | READY_FOR_FINAL_ASSEMBLY summary; returns to the title |
 
 Chapters (`chapter_id`): `present_day_earth`, `crash_site`, `forgotten_city`,
-`silent_coast`, `dawn_tower`, `return_home`. The first four are playable;
-`dawn_tower` and `return_home` stay declared and `deferred` in `campaign.json`.
+`silent_coast`, `dawn_tower`, `return_home`. The first five are playable;
+`return_home` stays declared and `deferred` in `campaign.json` (Phase 4).
 
 The chapter follows the stage automatically. `base_return`,
-`phase_two_complete` and `complete` resolve back to `crash_site`, because Phase 2
-ends at the base.
+`phase_two_complete`, `complete`, `reconstruction` and
+`ready_for_final_assembly` resolve to `crash_site` (the base); the three
+`dawn_*` stages resolve to `dawn_tower`.
 
 **Spoiler rule.** Until the control-center archive is closed, no HUD label,
 chapter title, zone name or dialogue names Earth, a future date, or the year.
@@ -155,11 +174,11 @@ Do not rename these. Saves and data files refer to them.
 | `crash_site` | Unidentified ruined site, and the Phase 2 base |
 | `forgotten_city` | Phase 2, Scrap King |
 | `silent_coast` | Phase 2, Toxic Tide |
-| `dawn_tower` | Declared, not playable |
+| `dawn_tower` | Phase 3, Sky Remnant |
 | `return_home` | Declared, not playable |
 
 **Future spacecraft components:** `navigation_chip` (Phase 2 reward),
-`power_core` (Phase 2 reward), `shield_emitter` (declared, not awarded).
+`power_core` (Phase 2 reward), `shield_emitter` (Phase 3 reward).
 
 **Missions:** `signal_investigation` (Phase 1) and `return_with_evidence`
 (Phase 2, after the reveal).
@@ -254,7 +273,7 @@ Every file in `data/star_fall/` is a JSON object with `schema_version` and a
 ```jsonc
 {
   "schema_version": 1,
-  "chapters":  [{"id": "...", "name": "...", "stage": "briefing|crash_site|deferred"}],
+  "chapters":  [{"id": "...", "name": "...", "stage": "briefing|crash_site|forgotten_city|silent_coast|dawn_tower|deferred"}],
   "future_components": [{"id": "...", "name": "..."}],
   "missions":  [{"id": "...", "name": "...", "summary": "...", "requirements": ["..."]}],
   "memories":  [{"id": "...", "title": "...", "frame": "...", "lines": ["..."]}],
@@ -312,6 +331,11 @@ the construction console and menu screens, which are panel-driven.
 | *(encounter)* Space | — | Counterattack, only when the charge meter is full |
 | *(archive)* Left/Right or A/D | — | Previous / next record |
 | *(archive, progression)* Enter / E / Esc | — | Close the screen |
+| *(typing)* A–Z | — | Type falling words; first letter selects, finishing fires |
+| *(typing)* Backspace | — | Release the selected word (no penalty) |
+| *(typing)* Esc | — | Pause: resume, vocabulary journal, restart, main menu |
+| *(workshop)* Up/Down, Left/Right | — | Choose a row, change its option (Shift: fuel x5) |
+| *(workshop)* V / F / C | — | Run simulation / fabricate / scavenge materials |
 
 Behaviour requirements honoured by the implementation:
 
@@ -327,6 +351,11 @@ Behaviour requirements honoured by the implementation:
   is frozen and no combat key is consumed, so reading Bill's briefing is safe.
 - Space is consumed as a just-pressed edge. Holding it never repeats a
   counterattack, and a press below full charge does nothing at all.
+- In the typing encounter only fresh presses count (`echo` is ignored, so a
+  held key never completes repeated letters), only `A`–`Z` reach the model
+  (Shift, Ctrl, Alt, function and navigation keys never type), Ctrl/Alt/Meta
+  chords are ignored, and every key is consumed by the screen so nothing leaks
+  into movement, the shield duel, or the global `M` mute shortcut.
 
 ---
 
@@ -403,6 +432,15 @@ restore_archive(archive_id: String) -> bool    # false if already restored
 is_archive_restored(archive_id: String) -> bool
 reveal_future_earth() -> bool                  # applies once; sets the mission
 complete_silent_coast() -> bool                # applies once; unlocks Dawn Tower
+# Phase 3 (all idempotent)
+complete_boss(reward_flag, component_id) -> bool   # false if the flag was already set
+complete_dawn_tower() -> bool                  # restores the archive, unlocks the workshop
+record_vocabulary(entry_id) -> bool            # false if already in the journal
+has_vocabulary(entry_id) -> bool
+original_propulsion_id() -> String             # the day-one engine, for repair
+store_reconstruction_selection(selection) -> void   # free; ignored once assembled
+commit_reconstruction(selection, report) -> void    # called once by SFReconstruction.commit()
+is_ready_for_final_assembly() -> bool
 mission_id() / mission_data() / mission_name() -> ...
 boss_for_chapter(chapter_id: String) -> Dictionary
 ```
@@ -483,7 +521,7 @@ prevents launch. A design is launchable only when every blocking check passes.
 
 ---
 
-## 7. Save schema (version 1 baseline; version 2 adds section 13)
+## 7. Save schema (version 1 baseline; version 2 adds section 13; version 3 adds section 19)
 
 Path: `user://star_fall_save.json`. On Windows this resolves under
 `%APPDATA%\Godot\app_userdata\STAR FALL\`.
@@ -602,11 +640,17 @@ GODOT="/c/Users/<you>/Downloads/Godot_v4.0-stable_win64.exe/Godot_v4.0-stable_wi
 "$GODOT" --headless --path . --script res://tests/star_fall/test_logic.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_flow.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_encounter.gd
+"$GODOT" --headless --path . --script res://tests/star_fall/test_phase3.gd
 ```
 
 Each prints `PASS`/`FAIL` per check and a `RESULT:` line, and exits non-zero on
-failure. `test_encounter.gd` is the Phase 2 combat and persistence suite; the
-other three cover Phase 1 and the campaign flow through both phases.
+failure. `test_encounter.gd` is the Phase 2 combat and persistence suite;
+`test_phase3.gd` is the Phase 3 vocabulary, typing, pacing, workshop,
+simulation and save suite; `test_flow.gd` drives the real main scene from the
+title to READY_FOR_FINAL_ASSEMBLY.
+
+**Warning:** `test_flow.gd` and `capture.gd` delete
+`user://star_fall_save.json`. Back up a real save before running them.
 
 ### Screenshots (needs a display, not headless)
 
@@ -615,7 +659,7 @@ other three cover Phase 1 and the campaign flow through both phases.
 "$GODOT" --path . --script res://tests/star_fall/capture.gd -- --shots=17,18
 ```
 
-Writes 27 PNGs to `user://captures/`. `--shots=` renders only the named screens
+Writes 35 PNGs to `user://captures/`. `--shots=` renders only the named screens
 (by their number prefix), which is the quickest way to re-check one pose. This
 is a presentation aid only; it is not evidence that the game plays correctly.
 
@@ -629,8 +673,10 @@ progression models obey every rule in section 12 of the Phase 2 brief; both
 Phase 2 fights can be won through their own rules and fully reset on retry.
 
 **Not** proven: that anything looks right, that audio is audible, that the
-window scales well, that the mouse aims the shield as it feels, or that the
-fights are *fun* at the intended difficulty. Those require playing it.
+window scales well, that the mouse aims the shield as it feels, that typing
+feels responsive on a real keyboard, or that the fights are *fun* at the
+intended difficulty. Those require playing it. The Phase 3 pacing numbers come
+from scripted typing bots, not from people (section 17).
 
 ---
 
@@ -687,8 +733,8 @@ fights are *fun* at the intended difficulty. Those require playing it.
   base.
 - **Base return and Phase 2 summary.** The VELA recovery frame shows the
   navigation chip and power core fitted, the shield emitter still missing, the
-  restored archives and the next objective. The summary returns to the title and
-  keeps the save.
+  restored archives and the next objective. The summary keeps the save and (since
+  Phase 3) continues into the Dawn Tower.
 - **Persistence.** Save version 2 adds recovered components, restored archives
   and the active mission; version-1 saves still load. A retry of either boss
   resets only encounter-local state.
@@ -868,12 +914,308 @@ Phase 3.
 
 ## 15. Deferred scope (explicitly not built)
 
-- Dawn Tower: its exploration, encounter, mechanics and the final ending.
-- The shield emitter component.
-- The Phase 3 boss and any replacement of its planned mechanics.
-- The final reconstruction system and the return-home finale.
-- Crafting beyond the crash-site repair cost.
-- Mission planning simulation beyond preflight validation.
+- Phase 4: the final escape cinematic, the return-home chapter and the ending.
+  The campaign stops at READY_FOR_FINAL_ASSEMBLY.
 - Any 3D pipeline, engine migration, or external asset dependency.
 - A combined test runner across both games.
 - An export preset and a web build.
+
+---
+
+## 16. Phase 3: scope and architecture
+
+Phase 3 adds the Dawn Tower chapter, the Sky Remnant typing encounter, the
+`shield_emitter` reward, the Dawn Project archive, the full VELA
+reconstruction workshop and the return-mission simulation. It stops at
+**READY_FOR_FINAL_ASSEMBLY**; the escape is Phase 4.
+
+| File | Owns |
+|---|---|
+| `core/star_fall/sf_vocabulary.gd` | Library load, validation, seeded deck selection |
+| `core/star_fall/sf_typing.gd` | Target selection and progress (first letter, reset, release) |
+| `core/star_fall/sf_typing_encounter.gd` | Pending queue, spawning, lanes, movement, misses, health, attacks, pacing, duration estimate |
+| `core/star_fall/sf_reconstruction.gd` | Workshop selection, material and fabrication cost, atomic commit, replenishment |
+| `core/star_fall/sf_return_sim.gd` | Pure, deterministic return-mission simulation |
+| `scenes/star_fall/typing_duel.gd` | Typing screen: drawing, input, pause, journal view, result signals |
+| `scenes/star_fall/reconstruction_screen.gd` | Workshop screen: selection UI, live preview, report, fabricate |
+| `core/star_fall/sf_ui.gd` `journal_panel()` | The journal view shared by the fight and the exploration pause |
+
+Rules the split enforces:
+
+- The typing screen reports `word_learned(id)` and `duel_finished("victory")`;
+  `main.gd` records the journal entry and awards `shield_emitter` through
+  `complete_boss()`, which refuses a repeat.
+- A typing fight is never serialised. The pre-boss checkpoint is the resume
+  point; a retry rebuilds the encounter from the same deck.
+- The workshop previews and simulates for free. Only
+  `SFReconstruction.commit()` spends materials, after checking every condition,
+  and it refuses once the VELA is assembled.
+
+### Dawn Tower flow
+
+```
+Phase 2 summary -> dawn_intro (world) -> survey projector (memory_healthy_forest)
+  -> boardwalk checkpoint -> tower gate -> dawn_boss (typing)
+  -> victory -> shield_emitter -> dawn_archive -> reconstruction (workshop)
+  -> simulate -> fabricate -> ready_for_final_assembly (summary) -> title
+```
+
+The tower gate refuses entry, in the fiction, until the forest memory has been
+seen and the checkpoint used. The defense console (optional) explains the
+typing interface: the facility's defense reads environmental archive terms as
+control signatures. This is the game's fiction, stated in-game as such, not a
+claim about real machines.
+
+The Sky Remnant keeps the planned non-robot identity: a living mass of smog
+with wings, a skull of fused debris and ember eyes, nesting in the shield.
+
+## 17. Phase 3: typing encounter rules and data
+
+### Rules
+
+- One correctly completed word fires one attack; the attack damages the boss
+  once when it arrives (0.45 s flight). Individual letters never fire. Enter is
+  not required.
+- A wrong letter resets only the selected word to zero and keeps it selected;
+  the wrong key is not reinterpreted as a new selection; it never damages Nick.
+- No target: a first letter selects the matching active word **closest to the
+  danger line** (largest y), ties broken by the oldest word. That letter counts.
+- A word reaching the danger line: one miss, `miss_damage` once, the target is
+  cleared if it was that word, the instance is removed, and the entry returns to
+  the pending queue (in deck order) after `requeue_delay_seconds`. It is never
+  respawned at the bottom, never removed from the deck, and never doubles up.
+- Boss health = deck size × `damage_per_word`. Each entry's first completion is
+  its only payout. Victory requires every entry complete **and** every attack
+  landed; the controller defensively zeroes health then, so the fight can never
+  be stranded with all words done.
+- After the last word: no spawns, no word damage, the final attack resolves,
+  then the boss dissolves and the result is offered.
+- Nick at zero health stops everything and offers Retry (same deck, easy stage,
+  every encounter-local value reset). Campaign progress and the journal stay.
+- Pause, the journal, a dialogue and window focus loss stop the simulation
+  entirely: words, spawns, damage, encounter time and pace measurement.
+
+### Spawning and readability
+
+- Four fixed lanes; one active word per lane, so labels never overlap and stay
+  inside the play field. Words spawn at `spawn_y`, never near the danger line.
+- When choosing the next word, up to three ready entries are considered and a
+  first letter not already on screen is preferred; variety is never bought by
+  skipping the stage order.
+- Labels show the typed prefix in gold; urgency moves green → gold → red and
+  blinks near the line. The learning panel shows the selected word, its short
+  definition, and a clear "WRONG LETTER - START AGAIN FROM 'X'" notice.
+
+### `data/star_fall/typing.json`
+
+```jsonc
+{
+  "boss":   {"id": "sky_remnant", "chapter_id": "dawn_tower", "name": "...", "subtitle": "...",
+             "reward_component": "shield_emitter", "reward_flag": "sky_remnant_defeated",
+             "archive_id": "dawn_archive", "seed": 51207, "visual": {...}},
+  "arena":  {"spawn_y": 112, "danger_y": 278, "lanes_x": [168, 272, 376, 480],
+             "nick": {"x": 320, "y": 318}, "boss_point": {"x": 320, "y": 74}},
+  "health": {"nick_health": 100, "miss_damage": 12, "damage_per_word": 10},
+  "attack": {"flight_seconds": 0.45},
+  "timing": {"first_spawn_delay": 1.2, "victory_hold_seconds": 1.8,
+             "requeue_delay_seconds": 4.0, "lane_retry_seconds": 0.25,
+             "distinct_letter_lookahead": 3},
+  "deck":   {"stages": [{"band": "foundation", "count": 8, "fall_seconds": 10.5,
+                         "max_active": 1, "spawn_gap": 1.6}, ...]},
+  "pacing": {"reaction_seconds": 1.4, "min_observations": 4, "window": 6,
+             "travel_scale_min": 0.85, "travel_scale_max": 1.7,
+             "gap_scale_min": 0.5, "gap_scale_max": 1.3, "adjust_step": 0.06,
+             "miss_travel_step": 0.1, "slow_ratio": 0.7, "fast_ratio": 0.35,
+             "slow_clear_ratio": 0.45, "idle_gap_seconds": 0.6,
+             "pressure_miss_threshold": 2, "pressure_clear_completions": 3},
+  "estimate": {"assumed_chars_per_second": 1.8, "mistake_rate": 0.08, "miss_rate": 0.05}
+}
+```
+
+### Pacing
+
+The deck is 30 words in four stages (8 foundation, 8 developing, 8
+intermediate, 6 advanced): one word at a time with a generous fall at first,
+then up to two at once with longer falls for longer words. There is no mode
+selection.
+
+Adaptation is conservative and bounded:
+
+- Typing speed is measured from each word's selecting key to its last key
+  (resets included), over the last 6 words, and only after 4 words. One short
+  word never decides anything.
+- **Slower typists.** If clearing a full field (per-word time × the stage's
+  `max_active`) would need more than 70% of a fall, slow mode limits the field
+  to one word, and fall time and gaps stretch by one step (up to 1.7× and 1.3×).
+  Slow mode clears again under 45%.
+- **Faster typists.** If a word needs under 35% of a fall and nothing was
+  missed recently, gaps shrink (down to 0.5×). Fall speed is never raised, so
+  band progression and readability are unchanged. An empty field brings the
+  next word within 0.6 s.
+- **Misses** stretch fall time, restore gaps to at least 1.0×, and after two
+  recent misses lower the word cap by one until three clean completions. A miss
+  never makes anything faster.
+- Nothing is ever completed for the player, no stage is skipped, and no boss
+  damage is ever unearned.
+
+**Duration estimate.** `SFTypingEncounter.estimate_seconds()` sums, per word,
+`length / cps + reaction`, adds half a retype at the mistake rate, adds
+`miss_rate × (requeue delay + fall)`, plus the opening delay. With the assumed
+1.8 characters per second (about 22 words per minute, an assumed adult casual
+typist, not a measured value) the shipped deck estimates **178 s (3.0 min)**.
+
+**Measured with scripted bots** (`test_phase3.gd`, deterministic, seed 51207,
+headless). These are rule checks, not playtests:
+
+| Bot profile | Result | Fight time | Misses | Resets | Final adaptation |
+|---|---|---|---|---|---|
+| 5.0 cps, no errors, 0.6 s reaction | win | 63 s | 0 | 0 | gaps 0.76× |
+| 1.8 cps, 1 wrong key per 25, 1.4 s reaction | win | 177 s | 0 | 9 | slow mode, fall 1.66× |
+| 1.2 cps, 1 wrong key per 15, 1.8 s reaction | win | 292 s | 0 | 18 | slow mode, fall 1.7× |
+
+No child or adult has played this encounter. The timings above say nothing
+about whether the fight suits the intended audience; every value is in
+`typing.json` so playtesting can retune it.
+
+## 18. Phase 3: reconstruction workshop and return simulation
+
+**SIMPLIFIED EDUCATIONAL GAMEPLAY MODEL.** Every component value, route
+requirement and constant in `data/star_fall/reconstruction.json` is invented
+for the game. None of it is NASA data.
+
+### Workshop
+
+Day-one construction used credits and new parts. The future workshop uses
+**salvage** (scrap metal, circuitry, polymer) and a **fabrication capacity of
+12 units**; propellant comes free from the Dawn depot but must still be lifted.
+
+| Group | Options |
+|---|---|
+| Recovered (mandatory) | navigation chip, power core, shield emitter |
+| Propulsion | repair the original day-one engine (its own stats), or the rebuilt Dawn cluster |
+| Propellant | 0–900 kg in 20 kg steps |
+| Protection | emitter only, armor plating (+2, heavy), shield amplifier (+2, 90 W in transit) |
+| Data storage | chip store only (128 MB), compact (+256 MB), array (+768 MB) |
+| Payload, mandatory | Bill's memory core, minimum evidence archive |
+| Payload, optional | environmental samples (30 kg, 25 W cooling), additional records (240 MB) |
+| Route | Fast Corridor, Extended Arc |
+
+- The right panel always shows a free live preview. **V** certifies a report
+  for the exact design; any change clears it ("the previous report no longer
+  applies"), and **F** refuses a stale or failing report.
+- **F** checks, in order: not already assembled, current passing report, all
+  three components, fabrication capacity, materials. Only then are materials
+  removed, once.
+- **C** tops each material up to the replenish floor (8 scrap, 4 circuitry,
+  3 polymer), never above it. The floor covers the cheapest passing design, so
+  no run can be stranded by salvage spent earlier.
+
+### Simulation model (`sf_return_sim.gd`)
+
+| Quantity | Unit | Model |
+|---|---|---|
+| Mass | kg | dry = frame + parts + payload; wet = dry + propellant |
+| Launch mass | kg | wet ≤ min(frame limit, engine thrust capacity) |
+| Delta-v | m/s | `Isp × g0 × ln(wet / dry)` ≥ route delta-v × 1.10 |
+| Propellant per stage | kg | each stage burns its share of route delta-v in order |
+| Power | W | demand per stage; core output 220 W; peak ≤ output + 160 W buffer discharge |
+| Energy | Wh | `energy_used_Wh = power_W × duration_s / 3600`; only demand above output drains the 600 Wh buffer, which must keep 20% |
+| Time | s | relay sync, ascent 300 s, transit (route), rift 300 s |
+| Data | MB | payload MB ≤ storage MB |
+| Relay throughput | MB/s | sync time = payload MB / 0.5 MB/s, within the route's launch window |
+| Protection | rating | emitter 3 + upgrade ≥ route debris rating |
+
+Electrical energy and propellant are separate resources. Communications use the
+surviving local Dawn relay; nothing contacts the present day. The seed only
+varies the reported debris impact count; validity uses deterministic margins,
+so identical inputs and seed always give identical reports.
+
+The report returns overall validity, every check with a message, failures with
+actionable suggestions, per-stage time / load / buffer draw / propellant, and
+reserves (propellant and buffer remaining).
+
+| Route | Delta-v | Transit | Debris rating | Launch window |
+|---|---|---|---|---|
+| Fast Corridor | 1500 m/s | 2400 s | 5 | 900 s |
+| Extended Arc | 1100 m/s | 14400 s | 3 | 1800 s |
+
+### Verified designs (`test_phase3.gd`)
+
+| Design | Fab | Salvage | Wet mass |
+|---|---|---|---|
+| A Extended, repaired light engine, compact store, samples | 7 | 2 scrap, 3 circuitry, 3 polymer | 1473 kg |
+| B Fast, rebuilt cluster, amplifier, compact store | 12 | 6 scrap, 8 circuitry, 4 polymer | 1828 kg |
+| C Fast, repaired heavy engine, armor plating, compact store | 9 | 7 scrap, 3 circuitry, 1 polymer | 2133 kg |
+| D Extended, repaired heavy engine, array, samples + records | 10 | 2 scrap, 6 circuitry, 4 polymer | 1745 kg |
+
+Trade-offs, all checked by the suite: the repaired light engine cannot fly the
+Fast Corridor; the amplifier build cannot also cool samples (peak power); plating
+costs propellant; the Fast Corridor's relay window cannot carry the extra
+records; an amplifier on the Extended Arc runs out of buffer. **Both day-one
+engines** have a passing Extended Arc design whose salvage fits the replenish
+floor, so every valid Phase 1 build can reach READY_FOR_FINAL_ASSEMBLY.
+
+## 19. Phase 3 save schema (version 3)
+
+Version 3 adds two fields. Versions 1 and 2 load with both empty.
+
+```jsonc
+{
+  "version": 3,
+  "vocabulary_journal": ["v_soil", "v_habitat"],   // learned entry ids, unique, in order
+  "reconstruction": {
+    "selection": {"propulsion": "repair_original", "protection": "protection_none",
+                  "storage": "storage_compact", "route": "extended_arc", "fuel_kg": 460.0,
+                  "optional": {"environmental_samples": true, "additional_records": false}},
+    "committed": { ... same shape, present only after fabrication ... },
+    "report": {"route_id": "...", "signature": "...", "seed": 30303, "totals": {...}}
+  }
+  // ... every version 2 field, unchanged
+}
+```
+
+- Journal ids are de-duplicated on load; non-string entries are dropped.
+- Unknown workshop option ids are ignored when the workshop reloads them.
+- A `ready_for_final_assembly` flag without a `committed` design is cleared
+  with a warning, so the workshop reopens rather than claiming an assembly with
+  no record.
+- An active falling word, attack or partial typing fight is never saved.
+
+## 20. Phase 3 stable IDs
+
+| Kind | id |
+|---|---|
+| Chapter | `dawn_tower` |
+| Boss | `sky_remnant` |
+| Reward | `shield_emitter` |
+| Archive | `dawn_archive` |
+| Memory | `memory_healthy_forest` |
+| Site | `dawn_tower` |
+| Stage | `dawn_intro`, `dawn_boss`, `dawn_archive`, `reconstruction`, `ready_for_final_assembly` |
+| Flag | `dawn_entered`, `dawn_checkpoint`, `typing_tutorial_seen`, `sky_remnant_defeated`, `dawn_archive_restored`, `workshop_unlocked`, `return_simulation_passed`, `ready_for_final_assembly` |
+| World object | `dawn_memory`, `dawn_checkpoint`, `dawn_terminal`, `dawn_boss_gate` |
+| Salvage | `salvage_dawn_frame`, `salvage_dawn_cells`, `salvage_dawn_seal` |
+| Vocabulary | `v_<text>` for every entry in `vocabulary.json` |
+| Workshop options | `repair_original`, `rebuilt_cluster`; `protection_none`, `armor_plating`, `shield_amplifier`; `storage_none`, `storage_compact`, `storage_array`; `bill_memory_core`, `evidence_archive`, `environmental_samples`, `additional_records`; `fast_corridor`, `extended_arc` |
+
+### Phase 3 completed scope
+
+- Dawn Tower exploration: dead forest, survey projector with the healthy-forest
+  memory, boardwalk checkpoint, defense console, salvage, and the tower gate.
+- The Sky Remnant typing encounter with a 199-entry library, 30-word staged
+  deck, learning panel, journal, first-time tutorial, bounded pacing, pause and
+  retry.
+- `shield_emitter` awarded once; the Dawn Project archive restored.
+- The full reconstruction workshop and the return-mission simulation, ending at
+  READY_FOR_FINAL_ASSEMBLY. Save version 3.
+
+### Phase 3 known limitations
+
+- Visuals, audio, input feel, UI scaling and pacing have not been checked by a
+  person at the keyboard; see `docs/test_checklist.md`.
+- Typing audio reuses existing UI and combat sounds; there are no new Phase 3
+  sound assets.
+- The Dawn Tower ground uses the existing ruin theme with new dead-tree and
+  tower sprites, not a dedicated forest ground.
+- The workshop is keyboard only (no mouse support), unlike the title menu.
+- The vocabulary has not been reviewed by an educator (`docs/vocabulary.md`).

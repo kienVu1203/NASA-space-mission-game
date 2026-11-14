@@ -43,6 +43,14 @@ var plan: Array = [
 	{"name": "24_coast_archive", "setup": "_setup_coast_archive", "wait": 20},
 	{"name": "25_base_return", "setup": "_setup_base_return", "wait": 20},
 	{"name": "26_phase_two_summary", "setup": "_setup_phase_two_summary", "wait": 12},
+	{"name": "27_dawn_tower", "setup": "_setup_dawn_tower", "wait": 20},
+	{"name": "28_forest_memory", "setup": "_setup_forest_memory", "wait": 24},
+	{"name": "29_sky_remnant", "setup": "_setup_sky_remnant", "wait": 30},
+	{"name": "30_typing_reset", "setup": "_setup_typing_reset", "wait": 4},
+	{"name": "31_typing_journal", "setup": "_setup_typing_journal", "wait": 6},
+	{"name": "32_dawn_archive", "setup": "_setup_dawn_archive", "wait": 20},
+	{"name": "33_workshop", "setup": "_setup_workshop", "wait": 10},
+	{"name": "34_ready_summary", "setup": "_setup_ready_summary", "wait": 10},
 ]
 var hold: int = 0
 
@@ -354,6 +362,120 @@ func _setup_phase_two_summary() -> void:
 	main.campaign.award_component("power_core")
 	main.campaign.advance_to(main.campaign.STAGE_PHASE_TWO_COMPLETE)
 	main.campaign.set_checkpoint(main.campaign.STAGE_PHASE_TWO_COMPLETE, main.campaign.CHAPTER_CRASH)
+	main._go(main.Screen.CHECKPOINT)
+
+
+# ---------------------------------------------------------------- phase 3
+
+func _phase3_campaign() -> void:
+	main.campaign.reveal_future_earth()
+	main.campaign.complete_silent_coast()
+	main.campaign.award_component("navigation_chip")
+	main.campaign.award_component("power_core")
+	if not main.campaign.has_confirmed_design():
+		main.campaign.confirmed_design = {"slots": {"propulsion": "propulsion_light"}, "fuel_kg": 200.0}
+
+
+func _setup_dawn_tower() -> void:
+	_phase3_campaign()
+	main.campaign.advance_to(main.campaign.STAGE_DAWN_INTRO)
+	main.campaign.set_flag(main.campaign.FLAG_DAWN_ENTERED)
+	main.zone = "dawn_tower"
+	_clear_dialogue()
+	main._go(main.Screen.WORLD)
+	if main.world != null:
+		main.world.set_player_position(Vector2(330, 170))
+
+
+func _setup_forest_memory() -> void:
+	main.memory_id = main.campaign.MEMORY_HEALTHY_FOREST
+	main.memory_index = 3
+	main.memory_chars = 999.0
+	main._go(main.Screen.MEMORY)
+
+
+func _setup_sky_remnant() -> void:
+	_phase3_campaign()
+	main.campaign.set_flag(main.campaign.FLAG_TYPING_TUTORIAL_SEEN)
+	main._begin_dawn_boss()
+	_clear_dialogue()
+	var duel = main.typing_duel
+	if duel == null:
+		return
+	duel.start_fight()
+	var enc = duel.encounter
+	# Play into the second stage so two words are falling, then select one.
+	var guard := 0
+	while enc.completed_count() < 9 and guard < 4000:
+		guard += 1
+		duel.advance_for(0.05)
+		if not enc.active.is_empty() and enc.completed_count() < 9:
+			var t := String((enc.active[0] as Dictionary)["text"])
+			for i in t.length():
+				duel.handle_key(KEY_A, t.unicode_at(i))
+	guard = 0
+	while enc.active.size() < 2 and guard < 400:
+		guard += 1
+		duel.advance_for(0.05)
+	duel.advance_for(1.2)
+	if not enc.active.is_empty():
+		var word: Dictionary = enc.active[enc.active.size() - 1]
+		var text := String(word["text"])
+		for i in mini(2, text.length() - 1):
+			duel.handle_key(KEY_A, text.unicode_at(i))
+
+
+func _setup_typing_reset() -> void:
+	var duel = main.typing_duel
+	if duel != null:
+		duel.handle_key(KEY_Q, 113)
+
+
+func _setup_typing_journal() -> void:
+	var duel = main.typing_duel
+	if duel != null:
+		duel.handle_key(KEY_ESCAPE)
+		duel.handle_key(KEY_DOWN)
+		duel.handle_key(KEY_ENTER)
+
+
+func _setup_dawn_archive() -> void:
+	_phase3_campaign()
+	main.campaign.complete_boss("sky_remnant_defeated", "shield_emitter")
+	main._archive_id = main.campaign.ARCHIVE_DAWN
+	main._go(main.Screen.ARCHIVE)
+	if main.archive_screen != null:
+		main.archive_screen.index = maxi(0, main.archive_screen.entries.size() - 1)
+
+
+func _setup_workshop() -> void:
+	_phase3_campaign()
+	main.campaign.complete_boss("sky_remnant_defeated", "shield_emitter")
+	main.campaign.complete_dawn_tower()
+	main.campaign.advance_to(main.campaign.STAGE_RECONSTRUCTION)
+	main.zone = "crash_site"
+	main._go(main.Screen.WORKSHOP)
+	_clear_dialogue()
+	var ws = main.workshop_screen
+	if ws != null:
+		ws.workshop.set_choice("route", "fast_corridor")
+		ws.workshop.set_choice("propulsion", "rebuilt_cluster")
+		ws.workshop.set_choice("protection", "shield_amplifier")
+		ws.workshop.set_fuel(float(ws.workshop.simulate(main.campaign.recovered_component_ids(), 1)["totals"]["propellant_needed_kg"]))
+		ws._design_changed()
+		ws.row = 2
+		ws.run_simulation()
+
+
+func _setup_ready_summary() -> void:
+	var ws = main.workshop_screen
+	if ws != null:
+		ws.scavenge()
+		main.campaign.add_material("circuitry", 6)
+		main.campaign.add_material("polymer", 2)
+		ws.run_simulation()
+		ws.fabricate()
+	_clear_dialogue()
 	main._go(main.Screen.CHECKPOINT)
 
 

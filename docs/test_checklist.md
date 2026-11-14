@@ -32,8 +32,8 @@ at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 - [x] A failed preflight on the console blocks confirmation — `test_flow.gd`
 - [x] Revising the design and re-running preflight passes — `test_flow.gd`
 - [x] Confirmation moves to the launch sequence — `test_flow.gd`
-- [x] Skipping the cutscene still sets launch, rift and crash flags — `test_flow.gd`
-- [x] Skipping the cutscene still saves the crash-site checkpoint — `test_flow.gd`
+- [x] The launch cannot be skipped and still sets launch, rift and crash flags — `test_flow.gd`
+- [x] The launch sequence saves the crash-site checkpoint — `test_flow.gd`
 - [x] The launch design yields surviving science data — `test_flow.gd`
 - [x] Crash-site labels contain no spoilers — `test_flow.gd`
 - [x] Wreck inspection grants design-dependent salvage — `test_flow.gd`
@@ -122,7 +122,7 @@ at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 - [x] The Toxic Tide can be defeated and grants the power core once
 - [x] The environmental archive applies the lesson and unlocks Dawn Tower
 - [x] The base return shows both recovered components
-- [x] The Phase 2 summary returns to the title and keeps the save
+- [x] The Phase 2 summary continues into the Dawn Tower and keeps the save
 - [x] Continue restores the Phase 2 stage, components, archives and mission
 
 ## Manual (a person must play it)
@@ -167,6 +167,50 @@ at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 - [ ] Nothing before the archive names Earth or shows a date
 - [ ] The base return shows both components fitted and the emitter still missing
 - [ ] Alt-tabbing mid-fight pauses rather than letting attacks land
+
+### Phase 3 automated checks
+
+- [x] The vocabulary library has at least 180 unique, valid entries with definitions, examples, bands and categories — `test_phase3.gd`
+- [x] The validator rejects duplicate ids or text, empty fields, unknown bands or categories, and invalid characters — `test_phase3.gd`
+- [x] A deck is finite, repeats no entry, and runs from foundation to advanced — `test_phase3.gd`
+- [x] A first letter selects the lowest matching word; correct letters advance only it — `test_phase3.gd`
+- [x] A wrong letter resets only that word, keeps it selected, and does not hurt Nick — `test_phase3.gd`
+- [x] Upper and lower case match; digits, spaces, accents, chords, function keys and held-key echo do not type — `test_phase3.gd`, `test_flow.gd`
+- [x] A completed word fires exactly one attack; single letters never fire — `test_phase3.gd`
+- [x] A missed word damages once, clears the target, requeues after a delay, and never doubles up — `test_phase3.gd`
+- [x] A completed entry cannot pay out twice; boss health equals deck size x damage — `test_phase3.gd`
+- [x] The boss cannot die before the last entry, and the final attack still lands — `test_phase3.gd`
+- [x] Active words never share a lane — `test_phase3.gd`
+- [x] Retry restores both health bars, reuses the deck, restarts at the easy stage, keeps the journal — `test_phase3.gd`, `test_flow.gd`
+- [x] Pause, the journal, a dialogue and focus loss freeze words, time and damage — `test_flow.gd`
+- [x] Fast, target and slow scripted typists can all win — `test_phase3.gd`
+- [x] `shield_emitter` is awarded once and survives save/load without duplicates — `test_phase3.gd`, `test_flow.gd`
+- [x] The simulation uses `Wh = W x s / 3600`, is deterministic for a seed, and reports per-stage use and reserves — `test_phase3.gd`
+- [x] Missing components, mass, delta-v, energy, peak power, protection, data and relay-sync failures are reported with suggestions — `test_phase3.gd`
+- [x] Four distinct designs pass; trade-offs prevent a single best build — `test_phase3.gd`
+- [x] Both day-one engines have a passing, always-affordable return design — `test_phase3.gd`
+- [x] Simulating is free; fabrication is atomic, needs a current passing report, and happens once — `test_phase3.gd`, `test_flow.gd`
+- [x] A design change invalidates the previous report — `test_phase3.gd`, `test_flow.gd`
+- [x] Scavenging tops materials up to the floor and never above it — `test_phase3.gd`
+- [x] Version 1 and 2 saves still load; version 3 keeps the journal and workshop record — `test_phase3.gd`
+- [x] The real main scene plays from the title to READY_FOR_FINAL_ASSEMBLY, and Continue resumes there — `test_flow.gd`
+
+### Phase 3 manual checks
+
+- [ ] Falling words are readable at 1280x720 and at other window sizes; no label overlaps another
+- [ ] The typed prefix, the selected word and the reset notice are obvious at a glance
+- [ ] Typing feels immediate on a real keyboard; held keys never auto-type
+- [ ] The Sky Remnant reads as large, fierce and alive (wings, eyes, jaw), and pulses visibly land
+- [ ] The danger line and word urgency colours are clear, including for colour-blind players (blinking near the line)
+- [ ] The first fight with the tutorial is understandable without the README
+- [ ] Measured fight length for real players (record typing speed, misses, time)
+- [ ] Slow typists can finish; fast typists are not bored
+- [ ] Typing and success sounds are audible and not irritating over ~30 words
+- [ ] The vocabulary journal is readable and easy to browse
+- [ ] The Dawn Tower slope reads as a dead forest with a tower, not a generic ruin
+- [ ] The workshop report is understandable: what failed and what to change
+- [ ] The READY FOR FINAL ASSEMBLY summary is clearly the end of this build
+- [ ] An educator has reviewed the vocabulary (spelling, meaning, suitability, bands)
 
 ## Regression (the legacy NASA mission-planner skeleton)
 

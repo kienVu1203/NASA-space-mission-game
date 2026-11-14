@@ -1,6 +1,7 @@
 extends SceneTree
-## STAR FALL flow test: boots the real main scene and drives the whole Phase 1
-## campaign through the same entry points the keyboard uses.
+## STAR FALL flow test: boots the real main scene and drives the whole campaign
+## (Phases 1, 2 and 3, up to READY_FOR_FINAL_ASSEMBLY) through the same entry
+## points the keyboard uses.
 ##
 ##   Godot --headless --path . --script res://tests/star_fall/test_flow.gd
 ##
@@ -77,6 +78,14 @@ func _process(_delta: float) -> bool:
 		44:
 			_coast_archive_and_base()
 		48:
+			_dawn_tower()
+		52:
+			_sky_remnant()
+		56:
+			_dawn_archive_and_workshop()
+		60:
+			_ready_and_continue()
+		64:
 			_finish()
 	return false
 
@@ -227,16 +236,21 @@ func _launch_and_crash() -> void:
 	print("-- Launch, the signal and the rift " + "-".repeat(26))
 	check("launch starts at the countdown", main.launch_phase == main.LaunchPhase.COUNTDOWN)
 
-	# The accident must be a scripted event: skip it and check the state.
+	# The launch can no longer be skipped. Esc must do nothing; the sequence
+	# then runs to the crash on its own (the scripted accident).
 	main._launch_key(KEY_ESCAPE)
-	check("skip reaches the crash site", main.screen == main.Screen.WORLD and main.zone == "crash_site")
-	check("skip still applies the launch flag", main.campaign.has_flag("launched"))
-	check("skip still applies the rift flag", main.campaign.has_flag("rift_seen"))
-	check("skip still applies the crash flag", main.campaign.has_flag("crashed"))
-	check("skip advances the chapter", main.campaign.chapter_id == "crash_site")
-	check("skip saves at the crash site checkpoint", main.campaign.checkpoint_stage == main.campaign.STAGE_CRASH_SITE)
+	check("escape does not skip the launch", main.screen == main.Screen.LAUNCH)
+	var guard := 0
+	while main.screen == main.Screen.LAUNCH and guard < 800:
+		guard += 1
+		main._process_launch(0.1)
+	check("the launch sequence reaches the crash site", main.screen == main.Screen.WORLD and main.zone == "crash_site")
+	check("the launch flag is applied", main.campaign.has_flag("launched"))
+	check("the rift flag is applied", main.campaign.has_flag("rift_seen"))
+	check("the crash flag is applied", main.campaign.has_flag("crashed"))
+	check("the chapter advances to the crash site", main.campaign.chapter_id == "crash_site")
+	check("the crash site checkpoint is saved", main.campaign.checkpoint_stage == main.campaign.STAGE_CRASH_SITE)
 	check("a save now exists", SFSave.has_valid_save())
-	check("skipping opens the impact dialogue", main.dialogue != null)
 	finish_dialogue()
 	check("post-crash stage is the crash site", main.campaign.stage == main.campaign.STAGE_CRASH_SITE)
 
@@ -602,16 +616,16 @@ func _coast_archive_and_base() -> void:
 	check("Phase 2 is marked complete", main.campaign.has_flag("phase_two_complete"))
 	check("the stage is the Phase 2 complete stage", main.campaign.stage == main.campaign.STAGE_PHASE_TWO_COMPLETE)
 
-	# The summary after Phase 2 is the stopping point: it returns to the title
-	# and keeps the save, rather than looping back into the city.
-	main._checkpoint_key(KEY_ENTER)
-	check("the Phase 2 summary returns to the title", main.screen == main.Screen.TITLE, str(main.screen))
-	check("the campaign records completion", main.campaign.stage == main.campaign.STAGE_COMPLETE)
-	check("a completed save still exists", SFSave.has_valid_save())
+	check("a save exists at the Phase 2 summary", SFSave.has_valid_save())
 
-	# Save/load must preserve Phase 2 progression exactly once.
+	# Save/load must preserve Phase 2 progression exactly once. A save written
+	# by the Phase 2 build ended at the "complete" stage; it must still resume
+	# at the summary, which now continues into the Dawn Tower.
+	main.campaign.advance_to(main.campaign.STAGE_COMPLETE)
+	main._save_quietly()
 	main._go(main.Screen.TITLE)
 	main._continue_game()
+	check("a finished Phase 2 save resumes at the summary", main.screen == main.Screen.CHECKPOINT, str(main.screen))
 	check("continue restores the Phase 2 completion", main.campaign.stage == main.campaign.STAGE_COMPLETE)
 	check("continue restores both components", _component_count("navigation_chip") == 1 and _component_count("power_core") == 1)
 	check("continue restores the restored archives", main.campaign.is_archive_restored("city_archive") and main.campaign.is_archive_restored("coast_archive"))
@@ -657,6 +671,220 @@ func _component_recovered(component_id: String) -> bool:
 		if String(comp.get("id", "")) == component_id:
 			return bool(comp.get("recovered", false))
 	return false
+
+
+# ---------------------------------------------------------------- phase 3
+
+func _type(duel, text: String) -> void:
+	for i in text.length():
+		duel.handle_key(KEY_A, text.unicode_at(i))
+
+
+func _dawn_tower() -> void:
+	print("")
+	print("-- Dawn Tower: exploration, memory and the gate " + "-".repeat(11))
+	main._checkpoint_key(KEY_ENTER)
+	check("the Phase 2 summary continues into the Dawn Tower", main.screen == main.Screen.WORLD and main.zone == "dawn_tower", "%s %s" % [str(main.screen), main.zone])
+	check("the stage is the Dawn intro", main.campaign.stage == main.campaign.STAGE_DAWN_INTRO)
+	check("the chapter is the Dawn Tower", main.campaign.chapter_id == "dawn_tower")
+	check("the Dawn intro opens", main.dialogue != null)
+	finish_dialogue()
+	check("Dawn entry is recorded", main.campaign.has_flag("dawn_entered"))
+	check("the Dawn Tower site has its gate", main.world.prop_by_id("dawn_boss_gate") != null)
+
+	main._on_world_interact("dawn_boss_gate", main.world.prop_by_id("dawn_boss_gate"))
+	check("the gate refuses entry before the forest memory", main.screen == main.Screen.WORLD and main.dialogue != null)
+	finish_dialogue()
+
+	main._on_world_interact("dawn_terminal", main.world.prop_by_id("dawn_terminal"))
+	check("the defense console explains the typing interface", main.dialogue != null)
+	finish_dialogue()
+
+	main._on_world_interact("dawn_memory", main.world.prop_by_id("dawn_memory"))
+	finish_dialogue()
+	check("the projector plays the healthy-forest memory", main.screen == main.Screen.MEMORY and main.memory_id == "memory_healthy_forest", str(main.screen))
+	main._finish_memory_playback()
+	check("the forest memory is recorded", main.campaign.has_viewed_memory("memory_healthy_forest"))
+	check("the memory returns to the slope", main.screen == main.Screen.WORLD and main.zone == "dawn_tower")
+
+	main._on_world_interact("dawn_boss_gate", main.world.prop_by_id("dawn_boss_gate"))
+	check("the gate refuses entry before the checkpoint", main.screen == main.Screen.WORLD)
+	finish_dialogue()
+
+	var scrap_before: int = main.campaign.material_count("scrap_metal")
+	for object_id in ["salvage_dawn_frame", "salvage_dawn_cells", "salvage_dawn_seal"]:
+		var prop = main.world.prop_by_id(object_id)
+		if prop != null:
+			main._on_world_interact(String(object_id), prop)
+	check("Dawn salvage is collected", main.campaign.is_collected("salvage_dawn_frame") or main.campaign.material_count("scrap_metal") > scrap_before)
+
+	main._on_world_interact("dawn_checkpoint", main.world.prop_by_id("dawn_checkpoint"))
+	finish_dialogue()
+	check("the Dawn checkpoint is set", main.campaign.has_flag("dawn_checkpoint"))
+	check("the checkpoint is the pre-boss resume point", main.campaign.checkpoint_stage == main.campaign.STAGE_DAWN_BOSS)
+
+
+func _sky_remnant() -> void:
+	print("")
+	print("-- Sky Remnant: typing, pause, defeat, retry, victory " + "-".repeat(5))
+	main._on_world_interact("dawn_boss_gate", main.world.prop_by_id("dawn_boss_gate"))
+	check("the gate starts the typing encounter", main.screen == main.Screen.TYPING, str(main.screen))
+	var duel = main.typing_duel
+	var enc = duel.encounter
+	check("the briefing and tutorial open over the arena", main.dialogue != null)
+	check("the arena is input-locked during the briefing", duel.input_locked)
+	duel.advance_for(6.0)
+	check("nothing spawns during the tutorial", enc.active.is_empty() and enc.phase == enc.PHASE_INTRO)
+	finish_dialogue()
+	check("the tutorial is recorded as seen", main.campaign.has_flag("typing_tutorial_seen"))
+	check("the fight starts after the briefing", enc.is_fighting() and not duel.input_locked)
+	check("exploration is not running during the fight", main.world == null)
+	check("boss health equals deck size x damage", enc.boss_health_max == enc.deck.size() * enc.damage_per_word())
+
+	var guard := 0
+	while enc.active.is_empty() and guard < 400:
+		guard += 1
+		duel.advance_for(0.05)
+	var word: Dictionary = enc.active[0]
+	var text := String(word["text"])
+	duel.handle_key(KEY_A, text.to_upper().unicode_at(0))
+	check("an uppercase key selects the word", enc.typing.target_uid == int(word["uid"]) and enc.typing.progress == 1)
+	var echo := InputEventKey.new()
+	echo.pressed = true
+	echo.echo = true
+	echo.keycode = KEY_A
+	echo.unicode = text.unicode_at(1)
+	duel._unhandled_input(echo)
+	check("held-key echo does not type", enc.typing.progress == 1)
+	duel.handle_key(KEY_A, text.unicode_at(1), true)
+	check("a Ctrl/Alt chord does not type", enc.typing.progress == 1)
+	duel.handle_key(KEY_F1, 0)
+	check("function keys do not type", enc.typing.progress == 1)
+
+	# Pause freezes everything.
+	duel.handle_key(KEY_ESCAPE)
+	check("escape pauses", duel.state == duel.State.PAUSED)
+	var y_before := float((enc.active[0] as Dictionary)["y"])
+	var t_before: float = enc.time
+	duel.advance_for(5.0)
+	check("paused words do not move", float((enc.active[0] as Dictionary)["y"]) == y_before)
+	check("paused time is not counted", enc.time == t_before)
+	duel.handle_key(KEY_DOWN)
+	duel.handle_key(KEY_ENTER)
+	check("the journal opens from the pause menu", duel.state == duel.State.JOURNAL)
+	duel.advance_for(3.0)
+	check("reading the journal is safe", enc.nick_health == enc.nick_health_max and enc.time == t_before)
+	duel.handle_key(KEY_ESCAPE)
+	duel.handle_key(KEY_ESCAPE)
+	check("escape resumes the fight", duel.state == duel.State.FIGHT)
+	duel._notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
+	check("focus loss pauses the fight", duel.state == duel.State.PAUSED)
+	duel.handle_key(KEY_ESCAPE)
+
+	_type(duel, text.substr(1))
+	check("finishing the word fires one attack", enc.attacks.size() == 1 and enc.completed.size() == 1)
+	check("the learned word is in the campaign journal", main.campaign.has_vocabulary(String(word["id"])))
+
+	# Defeat on purpose.
+	guard = 0
+	while enc.phase != enc.PHASE_DEFEAT and guard < 40000:
+		guard += 1
+		duel.advance_for(0.05)
+	check("passive play defeats Nick", duel.state == duel.State.DEFEAT)
+	check("defeat grants no shield emitter", not main.campaign.has_component("shield_emitter"))
+	check("defeat sets no boss flag", not main.campaign.has_flag("sky_remnant_defeated"))
+	check("defeat keeps the journal", main.campaign.has_vocabulary(String(word["id"])))
+	check("defeat keeps earlier components", main.campaign.has_component("navigation_chip") and main.campaign.has_component("power_core"))
+	var deck_before := str(enc.deck)
+	duel.handle_key(KEY_R)
+	check("retry restarts the fight", duel.state == duel.State.FIGHT and enc.is_fighting())
+	check("retry restores both health bars", enc.nick_health == enc.nick_health_max and enc.boss_health == enc.boss_health_max)
+	check("retry reuses the deck", str(enc.deck) == deck_before)
+	check("retry does not count journal words as damage", enc.completed.is_empty())
+
+	# Win through real key input.
+	guard = 0
+	while not enc.is_over() and guard < 40000:
+		guard += 1
+		duel.advance_for(0.05)
+		if not enc.active.is_empty() and enc.is_fighting():
+			_type(duel, String((enc.active[0] as Dictionary)["text"]))
+	check("the Sky Remnant can be defeated by typing", enc.phase == enc.PHASE_VICTORY)
+	duel.handle_key(KEY_ENTER)
+	check("continue waits for the defeat animation", main.dialogue == null and not duel.finished)
+	duel.advance_for(3.0)
+	duel.handle_key(KEY_ENTER)
+	duel._confirm_victory()
+	check("the shield emitter is awarded", main.campaign.has_component("shield_emitter"))
+	check("the shield emitter is awarded once", _component_count("shield_emitter") == 1)
+	check("the boss flag is set", main.campaign.has_flag("sky_remnant_defeated"))
+	check("every deck word is in the journal", main.campaign.vocabulary_journal.size() >= enc.deck.size())
+	finish_dialogue()
+
+
+func _dawn_archive_and_workshop() -> void:
+	print("")
+	print("-- Dawn archive and the reconstruction workshop " + "-".repeat(10))
+	check("the Dawn archive opens", main.screen == main.Screen.ARCHIVE and main._archive_id == "dawn_archive", str(main.screen))
+	main.archive_screen._finish()
+	check("the Dawn archive is restored", main.campaign.has_flag("dawn_archive_restored") and main.campaign.is_archive_restored("dawn_archive"))
+	check("the workshop is unlocked", main.campaign.has_flag("workshop_unlocked"))
+	check("the stage is reconstruction", main.campaign.stage == main.campaign.STAGE_RECONSTRUCTION)
+	check("the workshop opens", main.screen == main.Screen.WORKSHOP and main.workshop_screen != null)
+	check("Bill introduces the workshop", main.dialogue != null)
+	finish_dialogue()
+
+	var ws = main.workshop_screen
+	ws.workshop.set_fuel(0.0)
+	ws._design_changed()
+	var bad: Dictionary = ws.run_simulation()
+	check("an unfuelled design fails the simulation", not bool(bad["valid"]))
+	var refused: Dictionary = ws.fabricate()
+	check("a failing design cannot be fabricated", not bool(refused["ok"]) and not main.campaign.is_ready_for_final_assembly())
+
+	ws.handle_key(KEY_ESCAPE)
+	check("leaving the workshop returns to the crash-site base", main.screen == main.Screen.WORLD and main.zone == "crash_site")
+	main._on_world_interact("crash_vela", main.world.prop_by_id("crash_vela"))
+	check("the wreck reopens the workshop", main.screen == main.Screen.WORKSHOP)
+	ws = main.workshop_screen
+	check("the workshop kept the revised selection", float(ws.workshop.selection["fuel_kg"]) == 0.0)
+
+	ws.workshop.set_fuel(float(ws.preview["totals"]["propellant_needed_kg"]))
+	ws._design_changed()
+	var good: Dictionary = ws.run_simulation()
+	check("the revised design passes", bool(good["valid"]), ", ".join(good["failures"]))
+	ws.workshop.adjust_fuel(1)
+	ws._design_changed()
+	check("a design change invalidates the report", not ws.report_is_current())
+	ws.workshop.adjust_fuel(-1)
+	ws._design_changed()
+	ws.run_simulation()
+	ws.scavenge()
+	var inv_before := str(main.campaign.inventory)
+	var done: Dictionary = ws.fabricate()
+	check("the passing design is fabricated", bool(done["ok"]), String(done["message"]))
+	check("fabrication spent salvage", str(main.campaign.inventory) != inv_before)
+	check("READY_FOR_FINAL_ASSEMBLY is reached", main.campaign.is_ready_for_final_assembly())
+	check("the stage is ready for final assembly", main.campaign.stage == main.campaign.STAGE_READY)
+	finish_dialogue()
+	check("the ready summary is shown", main.screen == main.Screen.CHECKPOINT, str(main.screen))
+
+
+func _ready_and_continue() -> void:
+	print("")
+	print("-- READY_FOR_FINAL_ASSEMBLY, save and continue " + "-".repeat(11))
+	check("a save exists at the ready point", SFSave.has_valid_save())
+	main._checkpoint_key(KEY_ENTER)
+	check("the ready summary returns to the title", main.screen == main.Screen.TITLE)
+	main._continue_game()
+	check("continue restores the ready stage", main.campaign.stage == main.campaign.STAGE_READY)
+	check("continue shows the ready summary", main.screen == main.Screen.CHECKPOINT)
+	check("continue keeps all three components once", _component_count("navigation_chip") == 1 and _component_count("power_core") == 1 and _component_count("shield_emitter") == 1)
+	check("continue keeps the journal", main.campaign.vocabulary_journal.size() >= 20)
+	check("continue keeps the committed design", main.campaign.reconstruction.has("committed"))
+	check("the escape is not implemented (Phase 4)", not main.campaign.content.chapter("return_home").is_empty() and String(main.campaign.content.chapter("return_home")["stage"]) == "deferred")
+	main._checkpoint_key(KEY_ENTER)
+	check("the ready summary stays the stopping point", main.screen == main.Screen.TITLE)
 
 
 func SFCampaign_STAGE_COMPLETE() -> String:

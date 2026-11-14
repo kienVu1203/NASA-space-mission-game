@@ -7,7 +7,7 @@ extends RefCounted
 const SFContent := preload("res://core/star_fall/sf_content.gd")
 const SFDesign := preload("res://core/star_fall/sf_design.gd")
 
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 
 # Campaign stages. The stage is the only thing that decides which screen runs.
 const STAGE_MENU := "menu"
@@ -28,6 +28,13 @@ const STAGE_COAST_ARCHIVE := "coast_archive"
 const STAGE_BASE_RETURN := "base_return"
 const STAGE_PHASE_TWO_COMPLETE := "phase_two_complete"
 const STAGE_COMPLETE := "complete"
+# Phase 3. "complete" stays where it was so Phase 2 saves still resolve; the
+# Phase 2 summary now continues into the Dawn Tower instead of ending.
+const STAGE_DAWN_INTRO := "dawn_intro"
+const STAGE_DAWN_BOSS := "dawn_boss"
+const STAGE_DAWN_ARCHIVE := "dawn_archive"
+const STAGE_RECONSTRUCTION := "reconstruction"
+const STAGE_READY := "ready_for_final_assembly"
 
 ## Legal forward transitions. Save loading clamps back into this graph.
 const STAGE_ORDER := [
@@ -49,16 +56,23 @@ const STAGE_ORDER := [
 	STAGE_BASE_RETURN,
 	STAGE_PHASE_TWO_COMPLETE,
 	STAGE_COMPLETE,
+	STAGE_DAWN_INTRO,
+	STAGE_DAWN_BOSS,
+	STAGE_DAWN_ARCHIVE,
+	STAGE_RECONSTRUCTION,
+	STAGE_READY,
 ]
 
 const CHAPTER_PRESENT := "present_day_earth"
 const CHAPTER_CRASH := "crash_site"
 const CHAPTER_CITY := "forgotten_city"
 const CHAPTER_COAST := "silent_coast"
+const CHAPTER_DAWN := "dawn_tower"
 
 const MEMORY_GREEN_CITY := "memory_green_city"
 const MEMORY_CITY_GREEN := "memory_city_green"
 const MEMORY_GREEN_COAST := "memory_green_coast"
+const MEMORY_HEALTHY_FOREST := "memory_healthy_forest"
 
 const MISSION_SIGNAL := "signal_investigation"
 const MISSION_RETURN := "return_with_evidence"
@@ -69,6 +83,7 @@ const COMPONENT_SHIELD_EMITTER := "shield_emitter"
 
 const ARCHIVE_CITY := "city_archive"
 const ARCHIVE_COAST := "coast_archive"
+const ARCHIVE_DAWN := "dawn_archive"
 
 # Quest flags.
 const FLAG_BRIEFING_READ := "briefing_read"
@@ -97,6 +112,15 @@ const FLAG_COAST_LESSON_PRESERVED := "coast_lesson_preserved"
 const FLAG_DAWN_TOWER_UNLOCKED := "dawn_tower_unlocked"
 const FLAG_BASE_RETURNED := "base_returned"
 const FLAG_PHASE_TWO_COMPLETE := "phase_two_complete"
+# Phase 3.
+const FLAG_DAWN_ENTERED := "dawn_entered"
+const FLAG_DAWN_CHECKPOINT := "dawn_checkpoint"
+const FLAG_TYPING_TUTORIAL_SEEN := "typing_tutorial_seen"
+const FLAG_SKY_REMNANT_DEFEATED := "sky_remnant_defeated"
+const FLAG_DAWN_ARCHIVE_RESTORED := "dawn_archive_restored"
+const FLAG_WORKSHOP_UNLOCKED := "workshop_unlocked"
+const FLAG_RETURN_SIMULATION_PASSED := "return_simulation_passed"
+const FLAG_READY_FOR_FINAL_ASSEMBLY := "ready_for_final_assembly"
 
 var content
 
@@ -119,6 +143,13 @@ var mission_manifest: Dictionary = {}
 var recovered_components: Array = []
 var restored_archives: Array = []
 var active_mission: String = MISSION_SIGNAL
+
+# Phase 3 progression. The journal lists vocabulary ids the player has typed
+# successfully at least once; it is study material and never boss damage. The
+# reconstruction dictionary holds the workshop selection and, once fabricated,
+# the committed design and its passing report summary.
+var vocabulary_journal: Array = []
+var reconstruction: Dictionary = {}
 
 var play_seconds: float = 0.0
 
@@ -147,6 +178,8 @@ func reset_campaign() -> void:
 	recovered_components = []
 	restored_archives = []
 	active_mission = MISSION_SIGNAL
+	vocabulary_journal = []
+	reconstruction = {}
 	play_seconds = 0.0
 
 
@@ -176,7 +209,9 @@ func _update_chapter_for_stage() -> void:
 			chapter_id = CHAPTER_CITY
 		STAGE_SILENT_INTRO, STAGE_COAST_BOSS, STAGE_COAST_ARCHIVE:
 			chapter_id = CHAPTER_COAST
-		STAGE_BASE_RETURN, STAGE_PHASE_TWO_COMPLETE, STAGE_COMPLETE:
+		STAGE_DAWN_INTRO, STAGE_DAWN_BOSS, STAGE_DAWN_ARCHIVE:
+			chapter_id = CHAPTER_DAWN
+		STAGE_BASE_RETURN, STAGE_PHASE_TWO_COMPLETE, STAGE_COMPLETE, STAGE_RECONSTRUCTION, STAGE_READY:
 			# The campaign ends back at the crash-site base, looking at what the
 			# two recovered components make possible.
 			chapter_id = CHAPTER_CRASH
@@ -441,6 +476,75 @@ func complete_silent_coast() -> bool:
 	return true
 
 
+# ---------------------------------------------------------------- phase 3
+
+## Applies a boss victory once: sets the reward flag and awards the component.
+## Returns false when the flag was already set, so a replayed or double result
+## can never duplicate the reward.
+func complete_boss(reward_flag: String, component_id: String) -> bool:
+	if reward_flag == "" or has_flag(reward_flag):
+		return false
+	set_flag(reward_flag)
+	if component_id != "":
+		award_component(component_id)
+	return true
+
+
+## Applies the Dawn Tower outcome: the final archive is restored and the full
+## reconstruction workshop opens. Idempotent.
+func complete_dawn_tower() -> bool:
+	if has_flag(FLAG_WORKSHOP_UNLOCKED):
+		return false
+	set_flag(FLAG_DAWN_ARCHIVE_RESTORED)
+	set_flag(FLAG_WORKSHOP_UNLOCKED)
+	return true
+
+
+## Records a vocabulary entry in the journal. Returns true when it is new.
+func record_vocabulary(entry_id: String) -> bool:
+	if entry_id == "" or vocabulary_journal.has(entry_id):
+		return false
+	vocabulary_journal.append(entry_id)
+	return true
+
+
+func has_vocabulary(entry_id: String) -> bool:
+	return vocabulary_journal.has(entry_id)
+
+
+## The propulsion the VELA launched with on day one, which the workshop can
+## repair. Defaults to the light thruster for a save without a manifest.
+func original_propulsion_id() -> String:
+	var slots: Dictionary = confirmed_design.get("slots", {}) as Dictionary
+	var id := String(slots.get("propulsion", ""))
+	return id if id != "" else "propulsion_light"
+
+
+## Stores the workshop selection while the player is still revising. Free.
+func store_reconstruction_selection(selection: Dictionary) -> void:
+	if has_flag(FLAG_READY_FOR_FINAL_ASSEMBLY):
+		return
+	reconstruction["selection"] = selection.duplicate(true)
+
+
+## Called once by SFReconstruction.commit() after materials are spent.
+func commit_reconstruction(selection: Dictionary, report: Dictionary) -> void:
+	reconstruction["selection"] = selection.duplicate(true)
+	reconstruction["committed"] = selection.duplicate(true)
+	reconstruction["report"] = {
+		"route_id": String(report.get("route_id", "")),
+		"signature": String(report.get("signature", "")),
+		"seed": int(report.get("seed", 0)),
+		"totals": (report.get("totals", {}) as Dictionary).duplicate(true),
+	}
+	set_flag(FLAG_RETURN_SIMULATION_PASSED)
+	set_flag(FLAG_READY_FOR_FINAL_ASSEMBLY)
+
+
+func is_ready_for_final_assembly() -> bool:
+	return has_flag(FLAG_READY_FOR_FINAL_ASSEMBLY)
+
+
 ## The two Phase 2 rewards, as a readout for the base-return screen.
 func repair_progress() -> Array:
 	var out: Array = []
@@ -566,6 +670,8 @@ func to_save_dict() -> Dictionary:
 		"recovered_components": recovered_components.duplicate(),
 		"restored_archives": restored_archives.duplicate(),
 		"active_mission": active_mission,
+		"vocabulary_journal": vocabulary_journal.duplicate(),
+		"reconstruction": reconstruction.duplicate(true),
 		"play_seconds": play_seconds,
 	}
 
@@ -664,6 +770,21 @@ func apply_save_dict(data: Dictionary) -> Array:
 		active_mission = MISSION_RETURN
 	else:
 		active_mission = MISSION_SIGNAL
+
+	# Phase 3 (save version 3). Older saves simply have neither field.
+	var journal_raw: Variant = data.get("vocabulary_journal", [])
+	if journal_raw is Array:
+		for j in (journal_raw as Array):
+			if j is String and String(j) != "" and not vocabulary_journal.has(String(j)):
+				vocabulary_journal.append(String(j))
+	var recon_raw: Variant = data.get("reconstruction", {})
+	if recon_raw is Dictionary:
+		reconstruction = (recon_raw as Dictionary).duplicate(true)
+	# A ready flag without the committed design it describes cannot be trusted:
+	# reopen the workshop rather than claim an assembly that has no record.
+	if has_flag(FLAG_READY_FOR_FINAL_ASSEMBLY) and not reconstruction.has("committed"):
+		warnings.append("Assembled design record missing; the workshop will reopen.")
+		flags.erase(FLAG_READY_FOR_FINAL_ASSEMBLY)
 
 	play_seconds = maxf(0.0, float(data.get("play_seconds", 0.0)))
 	return warnings

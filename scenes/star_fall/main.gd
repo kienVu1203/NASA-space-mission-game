@@ -1082,15 +1082,10 @@ func _begin_launch() -> void:
 
 func _launch_key(key: int) -> void:
 	match key:
-		KEY_ESCAPE:
-			# Skipping a cutscene never skips state: the finish routine applies
-			# every required flag, stage change and save.
-			_finish_launch_state()
+		# The launch sequence cannot be skipped; only the signal minigame takes input.
 		KEY_E, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if launch_phase == LaunchPhase.SIGNAL:
 				_signal_lock()
-			elif launch_phase == LaunchPhase.CRASH or launch_phase == LaunchPhase.RIFT:
-				_finish_launch_state()
 
 
 func _signal_lock() -> void:
@@ -1127,8 +1122,8 @@ func _finish_launch_state() -> void:
 
 
 func _show_crash_intro() -> void:
-	var lines: Array = campaign.content.dialogue_lines("crash")
-	_open_dialogue(lines, "IMPACT", Callable(self, "_on_crash_intro_done"))
+	# The "crash" lines already played as captions during the cutscene.
+	_on_crash_intro_done()
 
 
 func _on_crash_intro_done() -> void:
@@ -1143,7 +1138,9 @@ func _process_launch(delta: float) -> void:
 	launch_timer += delta
 	match launch_phase:
 		LaunchPhase.COUNTDOWN:
-			if (launch_timer - delta < 0.8 and launch_timer >= 0.8) or (launch_timer - delta < 1.8 and launch_timer >= 1.8):
+			# One beep per displayed number (T-3, T-2, T-1), in step with _draw_countdown.
+			var step: int = int(launch_timer / 0.85)
+			if (launch_timer <= delta or step != int((launch_timer - delta) / 0.85)) and step < 3:
 				if audio.has_method("sfx_countdown"):
 					audio.sfx_countdown()
 			if launch_timer > 2.6:
@@ -1180,7 +1177,7 @@ func _process_launch(delta: float) -> void:
 				audio.sfx_impact()
 		LaunchPhase.CRASH:
 			crash_shake = maxf(0.0, crash_shake - delta * 4.0)
-			if launch_timer > 2.6:
+			if launch_timer > 3.8:
 				launch_phase = LaunchPhase.DONE
 				_finish_launch_state()
 
@@ -1806,9 +1803,8 @@ func _draw_countdown() -> void:
 	if n < 0:
 		n = 0
 	skin.text_c(self, VW * 0.5, 92, "LAUNCH CLEARANCE GRANTED", SFPalette.PAPER)
-	skin.text_c(self, VW * 0.5, 130, "T-%d" % (n + 1) if n > 0 else "IGNITION", SFPalette.GOLD, 3)
+	skin.text_c(self, VW * 0.5, 130, "T-%d" % n if n > 0 else "IGNITION", SFPalette.GOLD, 3)
 	skin.text_c(self, VW * 0.5, 190, "VELA / SIGNAL INVESTIGATION", SFPalette.PAPER_DIM)
-	skin.text_c(self, VW * 0.5, VH - 18, "ESC SKIP SEQUENCE", SFPalette.ASH_LIGHT)
 
 
 func _draw_ascent() -> void:
@@ -1860,7 +1856,6 @@ func _draw_ascent() -> void:
 	var idx: int = mini(int(t * lines.size()), maxi(0, lines.size() - 1))
 	if not lines.is_empty():
 		skin.text_c(self, VW * 0.5, VH - 34, String(lines[idx]), SFPalette.PAPER)
-	skin.text_c(self, VW * 0.5, VH - 16, "ESC SKIP SEQUENCE", SFPalette.ASH_LIGHT)
 
 
 func _draw_signal() -> void:
@@ -1882,7 +1877,7 @@ func _draw_signal() -> void:
 	# Moving marker.
 	var mx := track.position.x + (track.size.x - 4) * signal_marker
 	draw_rect(Rect2(mx, track.position.y - 2, 4, track.size.y + 4), SFPalette.PAPER, true)
-	skin.text_c(self, dial.position.x + dial.size.x * 0.5, dial.end.y - 20, "PRESS E WHEN THE MARKER CROSSES THE LOCK ZONE", SFPalette.PAPER_DIM)
+	skin.text_c(self, dial.position.x + dial.size.x * 0.5, dial.end.y - 20, "PRESS E WHEN MARKER HITS THE ZONE", SFPalette.PAPER_DIM)
 	skin.text_c(self, VW * 0.5, 214, "THE SIGNAL IS NOT WHERE THE BRIEF SAID IT WOULD BE.", SFPalette.PAPER)
 	if signal_attempts > 0 and signal_locks == 0:
 		skin.text_c(self, VW * 0.5, 228, "Keep trying. The sequence resolves either way.", SFPalette.ASH_LIGHT)
@@ -1892,7 +1887,6 @@ func _draw_signal() -> void:
 		var amp: float = 4.0 + float(signal_locks) * 3.0
 		var y := 270.0 + sin(float(i) * 0.35 + time * 5.0) * amp
 		draw_rect(Rect2(x, y, 2, 1), SFPalette.CYAN_DIM, true)
-	skin.text_c(self, VW * 0.5, VH - 16, "ESC SKIP SEQUENCE", SFPalette.ASH_LIGHT)
 
 
 func _draw_rift() -> void:
@@ -1943,7 +1937,6 @@ func _draw_rift() -> void:
 	if not lines.is_empty():
 		draw_rect(Rect2(0, VH - 54, VW, 20), Color(0.02, 0.02, 0.05, 0.75), true)
 		skin.text_c(self, VW * 0.5, VH - 48, String(lines[idx]), SFPalette.PAPER)
-	skin.text_c(self, VW * 0.5, VH - 16, "ESC SKIP SEQUENCE", SFPalette.ASH_LIGHT)
 
 
 func _draw_crash() -> void:
@@ -2009,12 +2002,12 @@ func _draw_crash() -> void:
 	if launch_timer < 0.14:
 		draw_rect(Rect2(0, 0, VW, VH), Color(1.0, 0.96, 0.88, 0.7 * (1.0 - launch_timer / 0.14)), true)
 
+	# Captions start once the ship has settled.
 	var lines: Array = campaign.content.dialogue_lines("crash")
-	var idx: int = mini(int(launch_timer / 0.9), maxi(0, lines.size() - 1))
-	if not lines.is_empty():
+	if not lines.is_empty() and launch_timer >= 0.55:
+		var idx: int = mini(int((launch_timer - 0.55) / 1.0), lines.size() - 1)
 		draw_rect(Rect2(0, VH - 54, VW, 20), Color(0.02, 0.03, 0.03, 0.8), true)
 		skin.text_c(self, VW * 0.5, VH - 48, String(lines[idx]), SFPalette.PAPER)
-	skin.text_c(self, VW * 0.5, VH - 16, "ESC SKIP SEQUENCE", SFPalette.ASH_LIGHT)
 
 
 ## Ship drawing with a roll applied, used for the crash approach.

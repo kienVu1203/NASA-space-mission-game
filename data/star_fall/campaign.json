@@ -1,11 +1,11 @@
 {
-  "schema_version": 1,
-  "_note": "Campaign flow, dialogue and quest prose. IDs here are stable and referenced by save files.",
+  "schema_version": 2,
+  "_note": "Campaign flow, dialogue, memories and archive prose. IDs here are stable and referenced by save files.",
   "chapters": [
     {"id": "present_day_earth", "name": "Present-Day Earth", "stage": "briefing"},
     {"id": "crash_site", "name": "Crash Site", "stage": "crash_site"},
-    {"id": "forgotten_city", "name": "Forgotten City", "stage": "deferred"},
-    {"id": "silent_coast", "name": "Silent Coast", "stage": "deferred"},
+    {"id": "forgotten_city", "name": "Forgotten City", "stage": "forgotten_city"},
+    {"id": "silent_coast", "name": "Silent Coast", "stage": "silent_coast"},
     {"id": "dawn_tower", "name": "Dawn Tower", "stage": "deferred"},
     {"id": "return_home", "name": "Return Home", "stage": "deferred"}
   ],
@@ -27,12 +27,24 @@
         "A scientific sensor with resolution quality 2 or better",
         "Enough fuel and stored energy for the observation window"
       ]
+    },
+    {
+      "id": "return_with_evidence",
+      "name": "Return With Evidence",
+      "summary": "This is not an unknown world. It is home, later. Return to the present with the archive records.",
+      "requirements": [
+        "Restore the control-center archive",
+        "Recover the navigation chip from the Scrap King",
+        "Recover the power core from the Toxic Tide",
+        "Reach the Dawn Tower and its transmitter"
+      ]
     }
   ],
   "memories": [
     {
       "id": "memory_green_city",
       "title": "Green City",
+      "scene": "city",
       "frame": "The projection is small and slightly out of focus. Bill holds it steady.",
       "lines": [
         "Sunlight through leaves. A street with people on it.",
@@ -40,8 +52,134 @@
         "Bill: \"I do not know whose memory this is. I only know I was asked to keep it.\"",
         "Bill: \"The coordinates are attached to the file. I cannot tell you why.\""
       ]
+    },
+    {
+      "id": "memory_city_green",
+      "title": "Green City, Later",
+      "scene": "city",
+      "frame": "A second file, hidden behind the first. Bill hesitates before playing it.",
+      "lines": [
+        "The same street, years later. The leaves are still green.",
+        "Someone has painted a mural over a wall of circuit boards.",
+        "Bill: \"This is what the sorting crews were told they were protecting.\"",
+        "Bill: \"They kept the picture on the wall. Nobody kept the instructions.\"",
+        "Nick: \"Somebody believed it was worth keeping. That counts for something.\""
+      ]
+    },
+    {
+      "id": "memory_green_coast",
+      "title": "Green Coast",
+      "scene": "coast",
+      "frame": "Brine-stained film, projected at an angle. The sound is gone but the light is not.",
+      "lines": [
+        "A working harbor. Water clear enough to see the bottom.",
+        "Fishing boats, gulls, a child holding a net far too big for them.",
+        "Bill: \"The cleanup crews were shown this before every shift.\"",
+        "Bill: \"It was labeled 'the target condition'. They were not told how to stop making the other one.\"",
+        "Nick: \"Then we carry it out of here, at least.\""
+      ]
     }
   ],
+  "archives": {
+    "city_archive": {
+      "id": "city_archive",
+      "title": "Control Center Archive",
+      "subtitle": "Recovered electronic-waste records",
+      "entries": [
+        {
+          "heading": "SORTING LOG 4471",
+          "lines": [
+            "Incoming tonnage: rising for the eleventh consecutive year.",
+            "Recovered material: falling. The discrepancy is logged under 'consumer turnover'.",
+            "A margin note in another hand reads: 'Please stop calling it turnover. It is waste.'"
+          ]
+        },
+        {
+          "heading": "WARRANTY NOTICE",
+          "lines": [
+            "Service bulletin: devices are to be replaced on the upgrade cycle, not on failure.",
+            "Repair depots are to be converted to retail floors.",
+            "The board approved the change unanimously."
+          ]
+        },
+        {
+          "heading": "IGNORED WARNINGS",
+          "lines": [
+            "Groundwater survey: heavy metals above the recovery threshold.",
+            "Recommended action: relocate the sorting yards. Estimated cost: deferred.",
+            "Follow-up memo: the survey was accurate, the estimate was inconvenient, the item was tabled.",
+            "The item is still tabled."
+          ]
+        },
+        {
+          "heading": "SURFACE IMAGE 0012",
+          "lines": [
+            "An orbital image. Blue ocean, pale cloud, a coastline that curves the way home does.",
+            "The image is old, but the shape is unmistakable.",
+            "Nick: \"That's the coast. That's the shape of the coast where I trained.\""
+          ]
+        },
+        {
+          "heading": "MATCHING RECORDS",
+          "lines": [
+            "The archive's place names match the ones in the VELA's flight computer.",
+            "The archive's dates do not.",
+            "Nick: \"Every map is the same. Only the date is wrong. This is the same planet.\"",
+            "Nick: \"This is home. Later.\""
+          ]
+        }
+      ]
+    },
+    "coast_archive": {
+      "id": "coast_archive",
+      "title": "Environmental Archive",
+      "subtitle": "Recovered coastal facility records",
+      "entries": [
+        {
+          "heading": "CATCH REPORT",
+          "lines": [
+            "Year 01: abundance. Year 04: abundance, with a note about size.",
+            "Year 09: the note is now the report.",
+            "Year 14: the report is a formality."
+          ]
+        },
+        {
+          "heading": "DISCHARGE PERMIT",
+          "lines": [
+            "The facility was permitted to discharge into open water.",
+            "The permit was granted on the grounds that the ocean would dilute the output.",
+            "The permit did not measure what the ocean would keep."
+          ]
+        },
+        {
+          "heading": "SHORELINE SURVEY",
+          "lines": [
+            "Sampling points 1 through 9: dead. Point 10: the facility's own outfall.",
+            "Recommended action: deploy an autonomous cleanup unit.",
+            "The recommendation was funded. The source of the discharge was not addressed."
+          ]
+        },
+        {
+          "heading": "CLEANUP UNIT LOG",
+          "lines": [
+            "Unit designation T-9, marine cleanup and energy management.",
+            "The unit kept pumping after the water was gone.",
+            "Its classification routine was never updated: everything not seawater was contamination.",
+            "Including the people who came to shut it down."
+          ]
+        },
+        {
+          "heading": "HARBOR MEMORIAL",
+          "lines": [
+            "A photograph of the working harbor, filed under 'target condition'.",
+            "Nick: \"Bill showed me this. The boats, the gulls, the kid with the net.\"",
+            "Nick: \"They had the picture the whole time. They just never changed the process.\"",
+            "Bill: \"I can carry the picture. You can carry the proof.\""
+          ]
+        }
+      ]
+    }
+  },
   "dialogue": {
     "briefing_intro": [
       "Mission control tracking. This is the briefing they gave us.",
@@ -115,6 +253,91 @@
     "crash_rubble": [
       "A wall that used to carry signage. Whatever it said has rusted away.",
       "The stone is warm. Not from the crash. From underneath."
+    ],
+    "city_intro": [
+      "The route Bill gave us runs inland, through streets that were sorted into piles and left there.",
+      "Nick: \"Circuit boards in the gutters. Whole pallets of them. Somebody stacked this on purpose.\"",
+      "Bill: \"Sorting yards. They were told to recover everything. Then they were told to stop being paid.\"",
+      "Bill: \"The control center ahead kept the records. That is where the coordinates were sent from.\""
+    ],
+    "city_memory": [
+      "A maintenance shrine, still holding a charge after all this time.",
+      "Bill: \"This one was left for whoever came next. I think that was always going to be you.\""
+    ],
+    "city_checkpoint": [
+      "Nick: \"Rest stop. I will mark the route so I can find it again.\"",
+      "Bill: \"I will remember as well. Redundancy is a maintenance virtue.\""
+    ],
+    "city_boss_intro": [
+      "The control center doors are welded shut from the inside. Something moves behind them.",
+      "A heavy chassis unfolds out of the dark, trailing magnets and stripped cable.",
+      "Bill: \"Scrap King. It sorted waste for a living. Its control system no longer distinguishes waste from visitors.\"",
+      "Bill: \"It throws what it cannot sort. Point the shield at the throw. Let the green motes through untouched.\"",
+      "Bill: \"Absorbed motes charge your shield projector. When the meter above your head is full, press SPACE to send it back.\""
+    ],
+    "city_victory": [
+      "The Scrap King folds down into its own sorting pile. The magnets cut out one by one.",
+      "Bill: \"It is not dead. It is idle. There is a difference I would like to keep.\"",
+      "The control-center archive is drawing power again."
+    ],
+    "city_archive_done": [
+      "Nick: \"The place names match my charts. The coast, the ridge, all of it.\"",
+      "Nick: \"The dates do not. Every one of them is wrong by the same amount.\"",
+      "Nick: \"This is the same planet. This is Earth. Later.\"",
+      "Bill: \"Then the mission changes. You are not here to listen to a signal.\"",
+      "Bill: \"You are here to carry the record home.\"",
+      "Nick: \"Then we go to the coast. The archive there still has power.\""
+    ],
+    "coast_intro": [
+      "The coast road ends at a harbor that has not held water in a long time.",
+      "Nick: \"The tide line is a stain, not a line.\"",
+      "Bill: \"Marine cleanup facility ahead. Unit T-9 is still powered. Its classification routine is still wrong.\"",
+      "Bill: \"Take samples if you want. The records will make the case better than we can.\""
+    ],
+    "coast_memory": [
+      "A coastal projection, salt-stained and patient. Bill holds it steady.",
+      "Bill: \"This was the target condition. I was asked to keep it where the cleanup crews could see it.\""
+    ],
+    "coast_checkpoint": [
+      "Nick: \"Marking the harbor route. If the facility resets itself, we start from here.\"",
+      "Bill: \"The checkpoint is recorded. The facility's own logs are less reliable.\""
+    ],
+    "coast_boss_intro": [
+      "Pumps engage along the outfall. The water is gone, but the machine is still treating it.",
+      "Toxic Tide unfolds from the pump housing: tanks, hoses, articulated arms, all of it corroded.",
+      "Bill: \"It classifies everything as contamination. Including us.\"",
+      "Bill: \"Different rhythm than the Scrap King. Shorter warning, wider spread. Keep rotating.\""
+    ],
+    "coast_victory": [
+      "The pumps slow, then stop. Toxic Tide settles into the mud with a sound like a long exhale.",
+      "Bill: \"The environmental archive is intact. The unit was treating the records as contamination too.\"",
+      "Nick: \"Then let's take them somewhere they will be read.\""
+    ],
+    "coast_archive_done": [
+      "Nick: \"Catch reports, discharge permits, a survey with nine dead points out of ten.\"",
+      "Nick: \"They had the picture of the harbor the whole time. They just never changed the process.\"",
+      "Bill: \"The Dawn Tower is the transmitter that sent the signal. It is inland, past the ridge.\"",
+      "Bill: \"With the navigation chip and the power core, the VELA's frame can be made to move again.\"",
+      "Nick: \"Then we go back to the crash site and build it.\""
+    ],
+    "bill_phase_two": [
+      "Bill: \"I am carrying the archive. It is heavier than I expected.\"",
+      "Bill: \"We are two components from a plan. That is more than we had at the crash site.\"",
+      "Bill: \"Point the shield with the mouse. The machine does not need you to be brave, only accurate.\""
+    ],
+    "bill_phase_two_after_reveal": [
+      "Bill: \"You said the maps match. I have checked them eleven times. They match.\"",
+      "Bill: \"I do not know what to do with that. I know what to carry.\"",
+      "Bill: \"The coast archive is next. Then the tower.\""
+    ],
+    "base_return": [
+      "The crash site looks smaller than it did. The VELA's frame is still bent, still readable.",
+      "Bill: \"Navigation chip and power core. Two components recovered from two machines.\"",
+      "Bill: \"Dawn Tower is unlocked on the chart. We can start assembling what the frame needs.\""
+    ],
+    "phase_two_complete": [
+      "Nick: \"Two components. One transmitter left.\"",
+      "Bill: \"And the record. Do not forget the record.\""
     ]
   },
   "checkpoint": {
@@ -122,7 +345,7 @@
     "body": [
       "Bill holds the coordinates steady: a city, further inland than the crash site.",
       "The VELA will not fly again, but the manifest survived.",
-      "There is a route and there is a memory. Phase 1 ends here."
+      "The route to the Forgotten City is open."
     ],
     "next_chapter": "forgotten_city"
   }

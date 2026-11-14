@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "_note": "Gameplay parameters for the fictional setting. Mass is kg, fuel is kg of propellant, power is W, stored energy is Wh, cost is fictional construction credits, data is MB.",
+  "schema_version": 2,
+  "_note": "Gameplay parameters for the fictional setting. Mass is kg, fuel is kg of propellant, power is W, stored energy is Wh, cost is fictional construction credits, data is MB. Phase 2 adds salvage and interactables for the Forgotten City and Silent Coast.",
   "program": {
     "title": "STAR FALL",
     "ship_name": "VELA",
@@ -177,6 +177,26 @@
     "scrap_extra": {
       "material": "scrap_metal",
       "amount": 2
+    },
+    "salvage_city_scrap": {
+      "material": "circuitry",
+      "amount": 3
+    },
+    "salvage_city_boards": {
+      "material": "circuitry",
+      "amount": 2
+    },
+    "salvage_city_frame": {
+      "material": "scrap_metal",
+      "amount": 3
+    },
+    "salvage_coast_plate": {
+      "material": "scrap_metal",
+      "amount": 3
+    },
+    "salvage_coast_cable": {
+      "material": "polymer",
+      "amount": 2
     }
   },
   "materials": {
@@ -221,6 +241,42 @@
     "scrap_extra": {
       "name": "Torn Hull Plate",
       "interact_label": "Collect scrap metal"
+    },
+    "memory_city_green": {
+      "name": "Maintenance Shrine",
+      "interact_label": "View maintenance shrine"
+    },
+    "city_checkpoint": {
+      "name": "Route Checkpoint",
+      "interact_label": "Use checkpoint"
+    },
+    "city_boss_gate": {
+      "name": "Welded Control Door",
+      "interact_label": "Enter the control center"
+    },
+    "coast_records": {
+      "name": "Coastal Records Terminal",
+      "interact_label": "Read coastal records"
+    },
+    "sample_coast_water": {
+      "name": "Water Sampling Point",
+      "interact_label": "Take water sample"
+    },
+    "sample_coast_sediment": {
+      "name": "Sediment Sampling Point",
+      "interact_label": "Take sediment sample"
+    },
+    "memory_green_coast": {
+      "name": "Coastal Projector",
+      "interact_label": "View coastal projection"
+    },
+    "coast_checkpoint": {
+      "name": "Harbor Checkpoint",
+      "interact_label": "Use checkpoint"
+    },
+    "coast_boss_gate": {
+      "name": "Cleanup Facility Intake",
+      "interact_label": "Enter the cleanup facility"
     }
   },
   "repair_cost": {

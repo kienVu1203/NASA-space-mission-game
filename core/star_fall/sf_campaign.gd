@@ -7,7 +7,7 @@ extends RefCounted
 const SFContent := preload("res://core/star_fall/sf_content.gd")
 const SFDesign := preload("res://core/star_fall/sf_design.gd")
 
-const SAVE_VERSION := 1
+const SAVE_VERSION := 2
 
 # Campaign stages. The stage is the only thing that decides which screen runs.
 const STAGE_MENU := "menu"
@@ -19,6 +19,14 @@ const STAGE_CRASH_INTRO := "crash_intro"
 const STAGE_CRASH_SITE := "crash_site"
 const STAGE_MEMORY := "memory"
 const STAGE_CHECKPOINT := "checkpoint"
+const STAGE_CITY_INTRO := "city_intro"
+const STAGE_CITY_BOSS := "city_boss"
+const STAGE_CITY_ARCHIVE := "city_archive"
+const STAGE_SILENT_INTRO := "silent_intro"
+const STAGE_COAST_BOSS := "coast_boss"
+const STAGE_COAST_ARCHIVE := "coast_archive"
+const STAGE_BASE_RETURN := "base_return"
+const STAGE_PHASE_TWO_COMPLETE := "phase_two_complete"
 const STAGE_COMPLETE := "complete"
 
 ## Legal forward transitions. Save loading clamps back into this graph.
@@ -32,13 +40,35 @@ const STAGE_ORDER := [
 	STAGE_CRASH_SITE,
 	STAGE_MEMORY,
 	STAGE_CHECKPOINT,
+	STAGE_CITY_INTRO,
+	STAGE_CITY_BOSS,
+	STAGE_CITY_ARCHIVE,
+	STAGE_SILENT_INTRO,
+	STAGE_COAST_BOSS,
+	STAGE_COAST_ARCHIVE,
+	STAGE_BASE_RETURN,
+	STAGE_PHASE_TWO_COMPLETE,
 	STAGE_COMPLETE,
 ]
 
 const CHAPTER_PRESENT := "present_day_earth"
 const CHAPTER_CRASH := "crash_site"
+const CHAPTER_CITY := "forgotten_city"
+const CHAPTER_COAST := "silent_coast"
 
 const MEMORY_GREEN_CITY := "memory_green_city"
+const MEMORY_CITY_GREEN := "memory_city_green"
+const MEMORY_GREEN_COAST := "memory_green_coast"
+
+const MISSION_SIGNAL := "signal_investigation"
+const MISSION_RETURN := "return_with_evidence"
+
+const COMPONENT_NAVIGATION_CHIP := "navigation_chip"
+const COMPONENT_POWER_CORE := "power_core"
+const COMPONENT_SHIELD_EMITTER := "shield_emitter"
+
+const ARCHIVE_CITY := "city_archive"
+const ARCHIVE_COAST := "coast_archive"
 
 # Quest flags.
 const FLAG_BRIEFING_READ := "briefing_read"
@@ -52,6 +82,21 @@ const FLAG_POWER_REPAIRED := "power_repaired"
 const FLAG_BILL_ACTIVE := "bill_active"
 const FLAG_MEMORY_VIEWED := "memory_viewed"
 const FLAG_COORDINATES_RECEIVED := "coordinates_received"
+# Phase 2.
+const FLAG_CITY_ENTERED := "city_entered"
+const FLAG_CITY_CHECKPOINT := "city_checkpoint"
+const FLAG_SCRAP_KING_DEFEATED := "scrap_king_defeated"
+const FLAG_CITY_ARCHIVE_RESTORED := "city_archive_restored"
+const FLAG_FUTURE_EARTH_REVEALED := "future_earth_revealed"
+const FLAG_SILENT_COAST_UNLOCKED := "silent_coast_unlocked"
+const FLAG_COAST_ENTERED := "coast_entered"
+const FLAG_COAST_CHECKPOINT := "coast_checkpoint"
+const FLAG_TOXIC_TIDE_DEFEATED := "toxic_tide_defeated"
+const FLAG_COAST_ARCHIVE_RESTORED := "coast_archive_restored"
+const FLAG_COAST_LESSON_PRESERVED := "coast_lesson_preserved"
+const FLAG_DAWN_TOWER_UNLOCKED := "dawn_tower_unlocked"
+const FLAG_BASE_RETURNED := "base_returned"
+const FLAG_PHASE_TWO_COMPLETE := "phase_two_complete"
 
 var content
 
@@ -68,6 +113,12 @@ var collected_items: Array = []         # world object ids already picked up
 var flags: Dictionary = {}              # flag id -> true
 var viewed_memories: Array = []
 var mission_manifest: Dictionary = {}
+
+# Phase 2 progression. Recovered components are unique and stored once; the
+# active mission id changes only at the Future Earth reveal.
+var recovered_components: Array = []
+var restored_archives: Array = []
+var active_mission: String = MISSION_SIGNAL
 
 var play_seconds: float = 0.0
 
@@ -93,6 +144,9 @@ func reset_campaign() -> void:
 	flags = {}
 	viewed_memories = []
 	mission_manifest = {}
+	recovered_components = []
+	restored_archives = []
+	active_mission = MISSION_SIGNAL
 	play_seconds = 0.0
 
 
@@ -116,7 +170,15 @@ func advance_to(next_stage: String) -> bool:
 
 func _update_chapter_for_stage() -> void:
 	match stage:
-		STAGE_FLIGHT, STAGE_CRASH_INTRO, STAGE_CRASH_SITE, STAGE_MEMORY, STAGE_CHECKPOINT, STAGE_COMPLETE:
+		STAGE_FLIGHT, STAGE_CRASH_INTRO, STAGE_CRASH_SITE, STAGE_MEMORY, STAGE_CHECKPOINT:
+			chapter_id = CHAPTER_CRASH
+		STAGE_CITY_INTRO, STAGE_CITY_BOSS, STAGE_CITY_ARCHIVE:
+			chapter_id = CHAPTER_CITY
+		STAGE_SILENT_INTRO, STAGE_COAST_BOSS, STAGE_COAST_ARCHIVE:
+			chapter_id = CHAPTER_COAST
+		STAGE_BASE_RETURN, STAGE_PHASE_TWO_COMPLETE, STAGE_COMPLETE:
+			# The campaign ends back at the crash-site base, looking at what the
+			# two recovered components make possible.
 			chapter_id = CHAPTER_CRASH
 		_:
 			chapter_id = CHAPTER_PRESENT
@@ -308,6 +370,114 @@ func has_viewed_memory(memory_id: String) -> bool:
 	return viewed_memories.has(memory_id)
 
 
+# ---------------------------------------------------------------- phase 2
+
+## Awards a recovered component. Unique, awarded once, and never duplicated by
+## a replayed victory: a second call for the same id is a no-op.
+func award_component(component_id: String) -> bool:
+	if component_id == "" or recovered_components.has(component_id):
+		return false
+	recovered_components.append(component_id)
+	return true
+
+
+func has_component(component_id: String) -> bool:
+	return recovered_components.has(component_id)
+
+
+func recovered_component_ids() -> Array:
+	return recovered_components.duplicate()
+
+
+## The repair/progression readout: every future component, whether it has been
+## recovered. Order follows campaign.json, so the interface never reshuffles.
+func component_status() -> Array:
+	var out: Array = []
+	for entry in content.future_components:
+		var comp: Dictionary = entry
+		var id := String(comp.get("id", ""))
+		out.append({
+			"id": id,
+			"name": String(comp.get("name", id)),
+			"recovered": has_component(id),
+		})
+	return out
+
+
+## Marks an archive as restored. Returns false when it already was, so the
+## caller can decide whether to play the scene or jump straight to the outcome.
+func restore_archive(archive_id: String) -> bool:
+	if archive_id == "" or restored_archives.has(archive_id):
+		return false
+	restored_archives.append(archive_id)
+	return true
+
+
+func is_archive_restored(archive_id: String) -> bool:
+	return restored_archives.has(archive_id)
+
+
+## Applies the Future Earth reveal. Idempotent: the mission and flags only
+## change on the first call, so a skipped or replayed archive scene is safe.
+## Returns true when this call was the one that revealed it.
+func reveal_future_earth() -> bool:
+	if has_flag(FLAG_FUTURE_EARTH_REVEALED):
+		return false
+	set_flag(FLAG_FUTURE_EARTH_REVEALED)
+	set_flag(FLAG_CITY_ARCHIVE_RESTORED)
+	set_flag(FLAG_SILENT_COAST_UNLOCKED)
+	active_mission = MISSION_RETURN
+	return true
+
+
+## Applies the Silent Coast outcome. Idempotent, like the reveal above.
+func complete_silent_coast() -> bool:
+	if has_flag(FLAG_PHASE_TWO_COMPLETE):
+		return false
+	set_flag(FLAG_COAST_ARCHIVE_RESTORED)
+	set_flag(FLAG_COAST_LESSON_PRESERVED)
+	set_flag(FLAG_DAWN_TOWER_UNLOCKED)
+	set_flag(FLAG_PHASE_TWO_COMPLETE)
+	return true
+
+
+## The two Phase 2 rewards, as a readout for the base-return screen.
+func repair_progress() -> Array:
+	var out: Array = []
+	for entry in component_status():
+		out.append(entry)
+	return out
+
+
+func mission_id() -> String:
+	return active_mission
+
+
+func mission_data() -> Dictionary:
+	return content.mission(active_mission)
+
+
+func mission_name() -> String:
+	var m := mission_data()
+	return String(m.get("name", "Signal Investigation"))
+
+
+func mission_summary_text() -> String:
+	return String(mission_data().get("summary", ""))
+
+
+## Boss data for a chapter, or an empty dictionary when the chapter has none.
+## The encounter screen needs this and nothing else from the campaign.
+func boss_for_chapter(chapter_id_value: String) -> Dictionary:
+	if content.encounters == null:
+		return {}
+	return content.encounters.boss_for_chapter(chapter_id_value)
+
+
+func encounters():
+	return content.encounters
+
+
 # ---------------------------------------------------------------- design
 
 ## The design is previewable at any time. Confirmation is the atomic commit:
@@ -393,6 +563,9 @@ func to_save_dict() -> Dictionary:
 		"flags": flags.duplicate(true),
 		"viewed_memories": viewed_memories.duplicate(),
 		"mission_manifest": mission_manifest.duplicate(true),
+		"recovered_components": recovered_components.duplicate(),
+		"restored_archives": restored_archives.duplicate(),
+		"active_mission": active_mission,
 		"play_seconds": play_seconds,
 	}
 
@@ -464,6 +637,33 @@ func apply_save_dict(data: Dictionary) -> Array:
 	var manifest_raw: Variant = data.get("mission_manifest", {})
 	if manifest_raw is Dictionary:
 		mission_manifest = (manifest_raw as Dictionary).duplicate(true)
+
+	# Phase 2 progression. Unknown component ids are dropped rather than kept,
+	# so a save cannot grant a component the game does not know about.
+	var comp_raw: Variant = data.get("recovered_components", [])
+	if comp_raw is Array:
+		for c in (comp_raw as Array):
+			var id := String(c)
+			if id != "" and not recovered_components.has(id):
+				recovered_components.append(id)
+
+	var archive_raw: Variant = data.get("restored_archives", [])
+	if archive_raw is Array:
+		for a in (archive_raw as Array):
+			var archive_id := String(a)
+			if archive_id != "" and not restored_archives.has(archive_id):
+				restored_archives.append(archive_id)
+
+	# A version-1 save has no active_mission field. Recover it from the flags
+	# instead of defaulting to the old mission, or a resumed Phase 2 run would
+	# silently reset the objective.
+	var mission_raw := String(data.get("active_mission", ""))
+	if mission_raw == MISSION_SIGNAL or mission_raw == MISSION_RETURN:
+		active_mission = mission_raw
+	elif has_flag(FLAG_FUTURE_EARTH_REVEALED):
+		active_mission = MISSION_RETURN
+	else:
+		active_mission = MISSION_SIGNAL
 
 	play_seconds = maxf(0.0, float(data.get("play_seconds", 0.0)))
 	return warnings

@@ -23,6 +23,19 @@ static func build_all() -> Dictionary:
 	out["rubble"] = _tex(_rubble())
 	out["earth"] = _tex(_earth())
 	out["pad_beacon"] = _tex(_pad_beacon())
+	# Phase 2 exploration props.
+	out["waste_pile"] = _tex(_waste_pile())
+	out["board_stack"] = _tex(_board_stack())
+	out["street_lamp"] = _tex(_street_lamp())
+	out["control_door"] = _tex(_control_door())
+	out["shrine"] = _tex(_shrine())
+	out["checkpoint"] = _tex(_checkpoint())
+	out["harbor_crate"] = _tex(_harbor_crate())
+	out["drum"] = _tex(_drum())
+	out["pump"] = _tex(_pump())
+	out["sample_point"] = _tex(_sample_point())
+	out["record_terminal"] = _tex(_record_terminal())
+	out["bill_phase_two"] = _tex(_bill(true))
 	return out
 
 
@@ -543,4 +556,216 @@ static func _earth() -> Image:
 			_px(img, cxx, cy2, cloud)
 			if rng.randf() < 0.35:
 				_px(img, cxx, cy2 - 1, cloud)
+	return img
+
+
+# ---------------------------------------------------------------- phase 2 props
+## Broken electronics heaped into a pile. Read as salvage, not as furniture:
+## angular, layered, with a little cyan trace still lit.
+
+static func _waste_pile() -> Image:
+	var img := _img(26, 16)
+	var metal: Color = SFPalette.ASH
+	var light: Color = SFPalette.ASH_LIGHT
+	var dark: Color = SFPalette.ASH.darkened(0.35)
+	var board: Color = SFPalette.CYAN_DARK
+	_rect(img, 2, 10, 22, 5, dark)
+	_rect(img, 3, 9, 20, 4, metal)
+	_rect(img, 4, 6, 9, 4, metal)
+	_rect(img, 5, 5, 7, 2, light)
+	_rect(img, 14, 7, 9, 3, dark)
+	_rect(img, 15, 6, 7, 2, metal)
+	_rect(img, 7, 2, 5, 4, dark)
+	_rect(img, 8, 1, 3, 2, light)
+	# Circuit traces and terminals.
+	_rect(img, 5, 7, 6, 1, board)
+	_rect(img, 16, 8, 5, 1, board)
+	_px(img, 9, 6, SFPalette.CYAN_DIM)
+	_px(img, 18, 7, SFPalette.CYAN_DIM)
+	_px(img, 3, 12, SFPalette.RUST)
+	_px(img, 22, 11, SFPalette.RUST)
+	return img
+
+
+## A leaning stack of stripped circuit boards, like a shelf that gave up.
+static func _board_stack() -> Image:
+	var img := _img(14, 18)
+	var board: Color = SFPalette.CYAN_DARK
+	var board_light: Color = SFPalette.CYAN_DIM
+	var dark: Color = SFPalette.ASH.darkened(0.4)
+	for i in 7:
+		var w: int = 10 - (i % 3)
+		var x: int = 1 + (i % 3)
+		var y: int = 17 - i * 2
+		_rect(img, x, y, w, 2, board if i % 2 == 0 else dark)
+		_rect(img, x, y, w, 1, board_light if i % 3 == 0 else board)
+		if i % 2 == 0:
+			_px(img, x + 2, y + 1, SFPalette.CYAN)
+	return img
+
+
+## A bent street lamp that still works. The only warm light in the city.
+static func _street_lamp() -> Image:
+	var img := _img(14, 30)
+	var pole: Color = SFPalette.STEEL_DARK
+	var mid: Color = SFPalette.STEEL_MID
+	var rest: Color = SFPalette.RUST
+	_rect(img, 3, 27, 8, 3, SFPalette.CONCRETE_DARK)
+	_rect(img, 6, 8, 2, 20, pole)
+	_rect(img, 6, 8, 1, 20, mid)
+	_rect(img, 6, 7, 6, 2, pole)
+	_rect(img, 10, 7, 4, 3, SFPalette.GOLD.darkened(0.35))
+	_rect(img, 11, 8, 2, 1, SFPalette.GOLD)
+	_px(img, 7, 18, rest)
+	_px(img, 8, 23, rest)
+	return img
+
+
+## The control-center door: welded, warn, and too important to be a wall.
+static func _control_door() -> Image:
+	var img := _img(30, 34)
+	var frame: Color = SFPalette.RUIN
+	var panel: Color = SFPalette.STEEL_DARK
+	var light: Color = SFPalette.STEEL_MID
+	var rust: Color = SFPalette.RUST
+	_rect(img, 0, 2, 30, 32, frame)
+	_rect(img, 3, 5, 24, 29, panel)
+	_rect(img, 3, 5, 24, 1, light)
+	# Centre seam, welded over.
+	_rect(img, 14, 6, 2, 28, SFPalette.INK)
+	for i in 6:
+		_rect(img, 13, 8 + i * 4, 4, 1, rust)
+	# Hazard chevrons and a dead panel.
+	_rect(img, 5, 11, 7, 9, SFPalette.INK)
+	_px(img, 6, 12, SFPalette.CYAN_DARK)
+	_rect(img, 19, 11, 6, 9, SFPalette.INK)
+	_rect(img, 20, 13, 4, 1, SFPalette.CYAN_DIM)
+	_rect(img, 20, 16, 4, 1, SFPalette.ASH)
+	# Handle bar.
+	_rect(img, 9, 25, 12, 2, light)
+	return img
+
+
+## A little maintenance shrine: a picture, a lamp, and four bolts.
+static func _shrine() -> Image:
+	var img := _img(18, 22)
+	var metal: Color = SFPalette.STEEL_DARK
+	var light: Color = SFPalette.STEEL_MID
+	_rect(img, 2, 6, 14, 15, metal)
+	_rect(img, 2, 6, 14, 1, light)
+	_rect(img, 2, 20, 14, 1, SFPalette.INK)
+	# The picture in the frame: green, and deliberately still green.
+	_rect(img, 5, 9, 8, 8, SFPalette.GRASS_DARK)
+	_rect(img, 6, 10, 6, 3, SFPalette.LEAF)
+	_rect(img, 6, 14, 2, 2, SFPalette.LEAF_LIGHT)
+	_px(img, 10, 14, SFPalette.GRASS_LIGHT)
+	# Votive light.
+	_rect(img, 7, 1, 4, 4, SFPalette.CYAN_DIM)
+	_rect(img, 8, 2, 2, 2, SFPalette.CYAN)
+	_px(img, 5, 18, SFPalette.GOLD)
+	_px(img, 12, 18, SFPalette.GOLD)
+	return img
+
+
+## A checkpoint marker: a lit post with a ring, obvious from across the map.
+static func _checkpoint() -> Image:
+	var img := _img(16, 26)
+	var post: Color = SFPalette.STEEL_DARK
+	var gold: Color = SFPalette.GOLD
+	_rect(img, 3, 23, 10, 3, SFPalette.CONCRETE_DARK)
+	_rect(img, 7, 8, 2, 16, post)
+	# Ring.
+	_rect(img, 4, 4, 8, 2, gold)
+	_rect(img, 4, 9, 8, 2, gold)
+	_rect(img, 3, 6, 2, 3, gold)
+	_rect(img, 11, 6, 2, 3, gold)
+	_px(img, 8, 6, SFPalette.PAPER)
+	_px(img, 8, 8, SFPalette.PAPER)
+	return img
+
+
+## A harbour crate, slatted and salt-stained.
+static func _harbor_crate() -> Image:
+	var img := _img(20, 16)
+	var wood: Color = Color("5a4a38")
+	var wood_light: Color = Color("72604a")
+	var metal: Color = SFPalette.STEEL_DARK
+	_rect(img, 1, 4, 18, 12, wood)
+	_rect(img, 1, 4, 18, 2, wood_light)
+	for i in 3:
+		_rect(img, 2, 8 + i * 3, 16, 1, SFPalette.INK.darkened(0.2))
+	_rect(img, 1, 4, 2, 12, metal)
+	_rect(img, 17, 4, 2, 12, metal)
+	# Salt bloom.
+	_px(img, 6, 12, SFPalette.PAPER_DIM)
+	_px(img, 13, 6, SFPalette.PAPER_DIM)
+	return img
+
+
+## A corroded chemical drum, lid open.
+static func _drum() -> Image:
+	var img := _img(14, 18)
+	var body: Color = Color("4a5a52")
+	var light: Color = Color("66776d")
+	var rust: Color = SFPalette.RUST
+	_rect(img, 2, 4, 10, 14, body)
+	_rect(img, 2, 4, 10, 1, light)
+	_rect(img, 3, 2, 8, 2, SFPalette.STEEL_DARK)
+	_rect(img, 3, 8, 10, 1, SFPalette.INK.darkened(0.15))
+	_rect(img, 3, 13, 10, 1, SFPalette.INK.darkened(0.15))
+	_rect(img, 4, 6, 1, 9, rust)
+	_rect(img, 9, 9, 1, 6, rust)
+	_px(img, 6, 2, SFPalette.VIOLET_LIGHT)
+	return img
+
+
+## A marine pump housing, still connected to something.
+static func _pump() -> Image:
+	var img := _img(22, 24)
+	var metal: Color = Color("3e6b70")
+	var light: Color = Color("6fa3a8")
+	var dark: Color = SFPalette.STEEL_DARK
+	_rect(img, 1, 8, 20, 16, metal)
+	_rect(img, 1, 8, 20, 2, light)
+	_rect(img, 1, 22, 20, 1, SFPalette.INK)
+	# Cylinder cap and pipe.
+	_rect(img, 5, 4, 12, 5, dark)
+	_rect(img, 6, 3, 10, 1, light)
+	_rect(img, 15, 1, 4, 4, dark)
+	# Gauge and valve.
+	_rect(img, 4, 12, 6, 6, SFPalette.INK)
+	_px(img, 6, 14, SFPalette.CYAN_DIM)
+	_rect(img, 13, 13, 4, 2, light)
+	_rect(img, 13, 17, 4, 2, light)
+	_px(img, 2, 20, SFPalette.RUST_LIGHT)
+	_px(img, 19, 20, SFPalette.RUST)
+	return img
+
+
+## A sampling point: a small marked post with a vial.
+static func _sample_point() -> Image:
+	var img := _img(12, 14)
+	_rect(img, 3, 10, 6, 4, SFPalette.CONCRETE_DARK)
+	_rect(img, 5, 3, 2, 8, SFPalette.STEEL_MID)
+	_rect(img, 4, 1, 4, 3, SFPalette.STEEL_DARK)
+	_px(img, 5, 2, SFPalette.VIOLET_LIGHT)
+	_px(img, 6, 2, SFPalette.CYAN)
+	return img
+
+
+## A research record terminal, screen still faintly alive.
+static func _record_terminal() -> Image:
+	var img := _img(16, 24)
+	var metal: Color = SFPalette.STEEL_DARK
+	var light: Color = SFPalette.STEEL_MID
+	_rect(img, 2, 8, 12, 15, metal)
+	_rect(img, 2, 8, 12, 1, light)
+	_rect(img, 4, 3, 8, 7, metal)
+	_rect(img, 5, 4, 6, 5, SFPalette.INK)
+	_rect(img, 6, 5, 4, 1, SFPalette.CYAN_DIM)
+	_rect(img, 6, 7, 3, 1, SFPalette.CYAN_DARK)
+	# Keypad.
+	for row in 3:
+		for col in 3:
+			_px(img, 4 + col * 3, 12 + row * 3, SFPalette.ASH_LIGHT)
 	return img

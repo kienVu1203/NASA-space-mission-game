@@ -63,8 +63,8 @@ static func simulate(spec: Dictionary, data: Dictionary, seed_value: int) -> Dic
 			missing.append(String(id).replace("_", " "))
 	_add(checks, "components", missing.is_empty(),
 		"All three recovered components are installed." if missing.is_empty()
-		else "Missing recovered component: %s." % ", ".join(missing),
-		"Final assembly needs the navigation chip, power core and shield emitter.")
+		else "Not installed: %s." % ", ".join(missing),
+		"Select each recovered part in the component tray and press ENTER to install it.")
 
 	# 2. Mandatory payload.
 	var payload_ids: Array = []

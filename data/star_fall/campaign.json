@@ -427,16 +427,21 @@
     ],
     "typing_tutorial": [
       "Bill: \"Quick briefing. Type the first letter of a falling word to select it.\"",
-      "Bill: \"Finish the whole word to fire a pulse. No need to press Enter.\"",
+      "Bill: \"Every correct letter fires a shot. Finish the whole word to clear it. No need to press Enter.\"",
       "Bill: \"A wrong letter restarts that word from its first letter. It does not hurt you.\"",
       "Bill: \"A word that reaches the red line hits you. Missed words come back later, so nothing is lost for good.\"",
       "Bill: \"ESC pauses the fight and opens the vocabulary journal. Reading is always safe.\""
     ],
     "dawn_victory": [
       "The last pulse lands. The wings come apart into ordinary haze and drift down the slope, thinning as they go.",
-      "Bill: \"The shield is clear. The emitter is intact. That is the third component.\"",
-      "Nick: \"And the archive?\"",
-      "Bill: \"Waking up. It has been waiting longer than I have.\""
+      "Bill: \"The shield is clear. Look, the emitter came loose and fell onto the slope below the gate. It is intact.\"",
+      "Nick: \"Then I am going to go and get it.\"",
+      "Bill: \"Pick it up and the archive inside should wake up. It has been waiting longer than I have.\""
+    ],
+    "shield_collected": [
+      "The emitter is warm and lighter than it looks. Its lens pulses once, as if it recognises Nick's glove.",
+      "Bill: \"That is the third component. It will need fitting to the VELA at the workshop.\"",
+      "Bill: \"And there, the archive is answering. Let us read it.\""
     ],
     "dawn_archive_done": [
       "Nick: \"Four hundred species, then nine. And a transmitter that kept calling for help.\"",
@@ -445,6 +450,7 @@
     ],
     "workshop_intro": [
       "Bill: \"The full workshop is online. Every part we fit is salvage, and the fabricator can only shape so much.\"",
+      "Bill: \"First, fit the three parts we recovered. Pick one in the tray, check where it goes on the frame, press Enter.\"",
       "Bill: \"Choose an engine, a route, protection, storage and what we carry. Then run the simulation.\"",
       "Bill: \"Simulating costs nothing. Fabricating spends salvage once. If a report fails, change the design and run it again.\"",
       "Nick: \"No credits this time. Just what we found and what we can make.\""

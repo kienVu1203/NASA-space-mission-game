@@ -8,13 +8,26 @@ extends RefCounted
 ##   pending    deck entries not yet completed and not currently falling
 ##   active     falling word instances (at most one per entry)
 ##   completed  entries typed successfully; each pays out exactly once
-##   attacks    projectiles in flight; boss damage lands when one arrives
+##   attacks    shots in flight; boss damage lands when a credited shot arrives
+##   credited   "index:position" letter positions that already paid out
 ##
-## Accounting
-##   boss_health_max = deck.size() * damage_per_word. Only an arriving attack
-##   lowers it, and an attack is only created by the first completion of an
-##   entry, so the boss reaches zero exactly when the whole deck is complete and
-##   the last attack lands. Misses never change boss health.
+## Accounting (one shot per correct letter)
+##   Every correct letter accepted toward the target fires one visible shot,
+##   including the selecting letter and the last letter. Completing a word adds
+##   no extra shot. A wrong letter fires nothing.
+##   boss_health_max = (sum of the deck's word lengths) * damage_per_letter.
+##   A shot carries damage credit only the first time its (entry, letter
+##   position) is typed in this attempt; retyping a prefix after a reset, or a
+##   requeued word's already-typed letters, still fires a shot but deals no
+##   damage. Each position can be credited only by typing it, and the last
+##   position of a word is typed only by completing it, so boss health reaches
+##   zero exactly when every entry is complete and the last credited shot lands.
+##   Misses never change boss health.
+##
+## Order
+##   Each reset() is a new attempt: the same deck entries, reshuffled inside
+##   their stages (SFVocabulary.order_for_attempt), never identical to the
+##   previous attempt's order when another order exists.
 ##
 ## Time
 ##   Everything advances only through tick(dt), and the screen stops calling it
@@ -22,6 +35,10 @@ extends RefCounted
 ##   moves words, spawns, deals damage, or counts as typing delay.
 
 const SFTyping := preload("res://core/star_fall/sf_typing.gd")
+const SFVocabulary := preload("res://core/star_fall/sf_vocabulary.gd")
+## Spreads attempt numbers across the seed space so consecutive attempts
+## shuffle independently.
+const ATTEMPT_SEED_STEP := 7919
 
 const PHASE_INTRO := "intro"
 const PHASE_FIGHT := "fight"
@@ -30,7 +47,10 @@ const PHASE_DEFEAT := "defeat"
 
 var config: Dictionary = {}
 var boss: Dictionary = {}
-var deck: Array = []
+var deck: Array = []                # this attempt's play order
+var base_deck: Array = []           # the selected entries, as chosen
+var attempt: int = 0                # attempts started, including this one
+var last_order: Array = []          # ids of the previous attempt's order
 var typing = SFTyping.new()
 
 var phase: String = PHASE_INTRO
@@ -38,7 +58,9 @@ var time: float = 0.0               # fight time only
 var pending: Array = []             # [{"index", "not_before"}], kept in deck order
 var active: Array = []              # [{"uid", "index", "id", "text", "x", "y", "speed", "lane", "stage"}]
 var completed: Dictionary = {}      # deck index -> true
-var attacks: Array = []             # [{"index", "t", "flight"}]
+var attacks: Array = []             # [{"index", "position", "credit", "t", "flight"}]
+var credited: Dictionary = {}       # "index:position" -> true
+var shots_fired: int = 0
 var nick_health: int = 100
 var nick_health_max: int = 100
 var boss_health: int = 0
@@ -66,18 +88,26 @@ var _seed: int = 0
 
 
 ## `typing_data` is data/star_fall/typing.json; `deck_entries` comes from
-## SFVocabulary.select_deck().
-func setup(typing_data: Dictionary, deck_entries: Array, seed_value: int) -> void:
+## SFVocabulary.select_deck(). `attempts_before` and `previous_order` come from
+## the campaign, so a new attempt after leaving the fight (or reloading) still
+## gets a changed order.
+func setup(typing_data: Dictionary, deck_entries: Array, seed_value: int, attempts_before: int = 0, previous_order: Array = []) -> void:
 	config = typing_data
 	boss = typing_data.get("boss", {}) as Dictionary
-	deck = deck_entries.duplicate(true)
+	base_deck = deck_entries.duplicate(true)
 	_seed = seed_value
+	attempt = maxi(0, attempts_before)
+	last_order = previous_order.duplicate()
 	reset()
 
 
-## A retry: every encounter-local value returns to its starting state. The deck
-## is kept, so a retry practises the same words from the easy stage.
+## A new attempt (first entry or retry): every encounter-local value returns to
+## its starting state. The same entries are kept, so a retry practises the same
+## words from the easy stage, but in a changed order within each stage.
 func reset() -> void:
+	attempt += 1
+	deck = SFVocabulary.order_for_attempt(base_deck, _seed + attempt * ATTEMPT_SEED_STEP, last_order)
+	last_order = SFVocabulary.deck_ids(deck)
 	typing.reset()
 	phase = PHASE_INTRO
 	time = 0.0
@@ -87,9 +117,11 @@ func reset() -> void:
 	active = []
 	completed = {}
 	attacks = []
+	credited = {}
+	shots_fired = 0
 	nick_health_max = int(_health().get("nick_health", 100))
 	nick_health = nick_health_max
-	boss_health_max = deck.size() * damage_per_word()
+	boss_health_max = total_letters() * damage_per_letter()
 	boss_health = boss_health_max
 	victory_timer = 0.0
 	misses = 0
@@ -122,8 +154,16 @@ func is_over() -> bool:
 	return phase == PHASE_VICTORY or phase == PHASE_DEFEAT
 
 
-func damage_per_word() -> int:
-	return int(_health().get("damage_per_word", 10))
+func damage_per_letter() -> int:
+	return maxi(1, int(_health().get("damage_per_letter", 2)))
+
+
+## Every letter position in the deck: the number of creditable shots.
+func total_letters() -> int:
+	var n := 0
+	for e in deck:
+		n += String((e as Dictionary)["text"]).length()
+	return n
 
 
 func completed_count() -> int:
@@ -176,7 +216,12 @@ func type_letter(letter: String) -> Array:
 	keystrokes += 1
 	var had_target: bool = typing.has_target()
 	var result: Dictionary = typing.input(letter, active)
-	match String(result["kind"]):
+	var kind := String(result["kind"])
+	# Every correct letter (select, advance, complete) fires exactly one shot,
+	# before the word is removed by completion. Resets and no-matches never do.
+	if kind == "select" or kind == "advance" or kind == "complete":
+		events.append(_fire(int(result["uid"]), int(result["progress"]) - 1))
+	match kind:
 		"select":
 			_first_key_time = time
 			events.append({"kind": "select", "uid": int(result["uid"])})
@@ -193,6 +238,47 @@ func type_letter(letter: String) -> Array:
 				_first_key_time = time
 			events.append_array(_complete_word(int(result["uid"])))
 	return events
+
+
+## One shot for the letter at `position` of the active word `uid`. The shot
+## always flies; it carries damage only if that position was never credited
+## in this attempt.
+func _fire(uid: int, position: int) -> Dictionary:
+	var index := -1
+	for w in active:
+		if int((w as Dictionary)["uid"]) == uid:
+			index = int((w as Dictionary)["index"])
+			break
+	var key := "%d:%d" % [index, position]
+	var credit := index >= 0 and position >= 0 and not credited.has(key) and not completed.has(index)
+	if credit:
+		credited[key] = true
+	shots_fired += 1
+	attacks.append({"index": index, "position": position, "credit": credit, "t": 0.0,
+		"flight": float(_attack().get("flight_seconds", 0.45))})
+	return {"kind": "shot", "index": index, "position": position, "credit": credit}
+
+
+## Developer shortcut (debug builds, Ctrl+Shift+Alt+V): ends the fight as a
+## victory with consistent accounting, as if every letter had been typed and
+## had landed. Returns false outside a fight.
+func force_victory() -> bool:
+	if phase != PHASE_FIGHT and phase != PHASE_INTRO:
+		return false
+	for e in deck:
+		var entry: Dictionary = e
+		var index := int(entry["index"])
+		completed[index] = true
+		for pos in String(entry["text"]).length():
+			credited["%d:%d" % [index, pos]] = true
+	active.clear()
+	attacks.clear()
+	pending.clear()
+	typing.reset()
+	boss_health = 0
+	phase = PHASE_VICTORY
+	victory_timer = 0.0
+	return true
 
 
 ## Backspace: drop the current target without penalty.
@@ -216,7 +302,6 @@ func _complete_word(uid: int) -> Array:
 		# second completion must never pay out twice.
 		return events
 	completed[index] = true
-	attacks.append({"index": index, "t": 0.0, "flight": float(_attack().get("flight_seconds", 0.45))})
 	_record_observation(String(word["text"]).length())
 	clean_streak += 1
 	if clean_streak >= int(_pacing().get("pressure_clear_completions", 3)):
@@ -250,8 +335,10 @@ func tick(dt: float) -> Array:
 			landed.append(attack)
 	for a in landed:
 		attacks.erase(a)
-		boss_health = maxi(0, boss_health - damage_per_word())
-		events.append({"kind": "attack_hit", "index": int((a as Dictionary)["index"])})
+		var credit := bool((a as Dictionary)["credit"])
+		if credit:
+			boss_health = maxi(0, boss_health - damage_per_letter())
+		events.append({"kind": "attack_hit", "index": int((a as Dictionary)["index"]), "credit": credit})
 
 	if completed.size() >= deck.size():
 		# Every required entry is complete: no more spawns, no more word damage.

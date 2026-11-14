@@ -45,6 +45,9 @@ func _initialize() -> void:
 	_test_deck()
 	_test_typing_rules()
 	_test_encounter_accounting()
+	_test_per_letter_exploits()
+	_test_attempt_order()
+	_test_new_vocabulary()
 	_test_miss_and_requeue()
 	_test_retry_and_pause()
 	_test_simulated_typists()
@@ -60,6 +63,7 @@ func _extra_tests() -> void:
 	_test_workshop_designs()
 	_test_workshop_rules()
 	_test_campaign_rewards_and_save()
+	_test_shield_reward_states()
 
 
 # ---------------------------------------------------------------- vocabulary
@@ -229,10 +233,26 @@ func _count_kind(events: Array, kind: String) -> int:
 	return n
 
 
+func _count_credit(events: Array, credit: bool) -> int:
+	var n := 0
+	for e in events:
+		var ev: Dictionary = e
+		if String(ev["kind"]) == "shot" and bool(ev["credit"]) == credit:
+			n += 1
+	return n
+
+
+func _land_all(enc) -> int:
+	var hits := 0
+	for i in 40:
+		hits += _count_kind(enc.tick(0.05), "attack_hit")
+	return hits
+
+
 func _test_encounter_accounting() -> void:
-	section("Boss health and attack accounting")
+	section("Boss health and per-letter shot accounting")
 	var enc = _new_encounter()
-	check("boss health is deck size x damage per word", enc.boss_health_max == enc.deck.size() * enc.damage_per_word())
+	check("boss health is total deck letters x damage per letter", enc.boss_health_max == enc.total_letters() * enc.damage_per_letter())
 	enc.tick(5.0)
 	check("nothing spawns during the intro", enc.active.is_empty())
 	enc.begin()
@@ -241,41 +261,174 @@ func _test_encounter_accounting() -> void:
 	check("the opening word is a foundation word", String(vocab.entry(String(word["id"]))["band"]) == "foundation")
 	check("only one word is active at the start", enc.active.size() == 1)
 	var text := String(word["text"])
+	var first: Array = enc.type_letter(text[0])
+	check("the selecting letter fires one shot", _count_kind(first, "shot") == 1 and enc.attacks.size() == 1)
 	var partial: Array = []
-	for i in text.length() - 1:
+	for i in range(1, text.length() - 1):
 		partial.append_array(enc.type_letter(text[i]))
-	check("individual letters never fire", enc.attacks.is_empty() and _count_kind(partial, "complete") == 0)
-	enc.type_letter("q" if text[text.length() - 1] != "q" else "z")
+	check("each further correct letter fires exactly one shot", _count_kind(partial, "shot") == text.length() - 2 and enc.attacks.size() == text.length() - 1)
+	var wrong: Array = enc.type_letter("q" if text[text.length() - 1] != "q" else "z")
+	check("a wrong letter fires nothing", _count_kind(wrong, "shot") == 0 and enc.attacks.size() == text.length() - 1)
+	check("a wrong letter resets the word", _count_kind(wrong, "reset") == 1 and enc.typing.progress == 0)
 	check("a wrong letter does not hurt Nick", enc.nick_health == enc.nick_health_max)
+	check("boss health waits for shots to land", enc.boss_health == enc.boss_health_max)
+	_land_all(enc)
+	check("landed prefix shots deal one unit each", enc.boss_health == enc.boss_health_max - (text.length() - 1) * enc.damage_per_letter())
 	var events := _type_word(enc, text)
-	check("a completed word fires exactly one attack", _count_kind(events, "complete") == 1 and enc.attacks.size() == 1)
-	check("boss health waits for the attack to land", enc.boss_health == enc.boss_health_max)
-	var hits := 0
-	for i in 20:
-		hits += _count_kind(enc.tick(0.05), "attack_hit")
-	check("the attack lands once", hits == 1)
-	check("the landed attack deals one unit of damage", enc.boss_health == enc.boss_health_max - enc.damage_per_word())
+	check("retyping the word fires one shot per letter", _count_kind(events, "shot") == text.length())
+	check("completion adds no extra shot", _count_kind(events, "complete") == 1 and enc.attacks.size() == text.length())
+	check("only the never-credited last letter carries damage", _count_credit(events, true) == 1 and _count_credit(events, false) == text.length() - 1)
+	var hits := _land_all(enc)
+	check("every shot lands once", hits == text.length())
+	check("the word's total damage equals its letter count", enc.boss_health == enc.boss_health_max - text.length() * enc.damage_per_letter())
 	var idx := int(word["index"])
-	_type_word(enc, text)
-	check("an already completed entry cannot deal damage again", enc.completed.size() == 1 and enc.attacks.is_empty())
+	var still_active := false
+	for w in enc.active:
+		if int((w as Dictionary)["index"]) == idx:
+			still_active = true
+	check("a completed entry leaves the field and cannot pay again", enc.completed.size() == 1 and not still_active)
 
 	# Finish the deck: boss death only when every entry is complete.
 	var guard := 0
+	var early_zero := false
 	while not enc.is_over() and guard < 20000:
 		guard += 1
 		enc.tick(0.05)
+		if enc.boss_health <= 0 and enc.remaining_count() > 0:
+			early_zero = true
 		if not enc.active.is_empty() and enc.remaining_count() > 1:
 			_type_word(enc, String((enc.active[0] as Dictionary)["text"]))
 		elif not enc.active.is_empty():
 			check("the boss is alive while one entry remains", enc.boss_health > 0 and enc.phase == enc.PHASE_FIGHT)
 			_type_word(enc, String((enc.active[0] as Dictionary)["text"]))
-			check("the final attack is in flight before victory", enc.attacks.size() >= 1 and enc.phase == enc.PHASE_FIGHT)
+			check("the final shots are in flight before victory", enc.attacks.size() >= 1 and enc.phase == enc.PHASE_FIGHT)
+			var victories := 0
+			for i in 40:
+				victories += _count_kind(enc.tick(0.05), "victory")
+				enc.type_letter("a")
+			check("shots still in flight resolve into exactly one victory", victories == 1)
 		enc.nick_health = enc.nick_health_max
+	check("boss health never reaches zero before the deck is complete", not early_zero)
 	check("the encounter is won", enc.phase == enc.PHASE_VICTORY)
 	check("every deck entry was completed", enc.completed.size() == enc.deck.size())
 	check("boss health is exactly zero at victory", enc.boss_health == 0)
+	check("every letter position was credited exactly once", enc.credited.size() == enc.total_letters())
 	check("victory leaves no stray words or attacks", enc.active.is_empty() and enc.attacks.is_empty())
 	check("letters after victory do nothing", enc.type_letter("a").is_empty())
+	var h: int = enc.nick_health
+	enc.tick(30.0)
+	check("victory stops all falling-word damage", enc.nick_health == h and enc.active.is_empty())
+
+
+## Mistakes, resets and requeues can never farm damage.
+func _test_per_letter_exploits() -> void:
+	section("Per-letter damage cannot be farmed")
+	var enc = _new_encounter()
+	enc.begin()
+	var word := _wait_for_word(enc)
+	var text := String(word["text"])
+	var index := int(word["index"])
+	var wrong := "q" if text[1] != "q" else "z"
+	for i in 25:
+		enc.type_letter(text[0])
+		enc.type_letter(wrong)
+	_land_all(enc)
+	check("a prefix retyped 25 times is credited once", enc.boss_health == enc.boss_health_max - enc.damage_per_letter())
+	check("every retyped prefix still fired a visible shot", enc.shots_fired == 25)
+	# Let it fall, then wait for the requeued entry to come back.
+	enc.typing.release()
+	var t := 0.0
+	while t < 60.0 and enc.misses == 0:
+		enc.tick(0.05)
+		enc.nick_health = enc.nick_health_max
+		t += 0.05
+	var back: Dictionary = {}
+	t = 0.0
+	while t < 60.0 and back.is_empty():
+		enc.tick(0.05)
+		enc.nick_health = enc.nick_health_max
+		t += 0.05
+		for w in enc.active:
+			if int((w as Dictionary)["index"]) == index:
+				back = w
+	check("the missed word returns from the pending queue", not back.is_empty() and enc.misses >= 1)
+	if back.is_empty():
+		return
+	var before: int = enc.boss_health
+	# Target it directly so another word with the same first letter cannot be picked.
+	enc.typing.target_uid = int(back["uid"])
+	enc.typing.progress = 0
+	var events := _type_word(enc, text)
+	_land_all(enc)
+	check("a requeued word pays only its uncredited letters", enc.boss_health == before - (text.length() - 1) * enc.damage_per_letter(),
+		"%d -> %d" % [before, enc.boss_health])
+	check("the requeued word still fired one shot per letter", _count_kind(events, "shot") == text.length())
+
+
+## Each attempt reshuffles the same words inside their stages.
+func _test_attempt_order() -> void:
+	section("Word order changes on every attempt")
+	var deck: Array = vocab.select_deck(_stages(), 51207)
+	var sorted_ids := SFVocabulary.deck_ids(deck)
+	sorted_ids.sort()
+	var prev: Array = []
+	var all_changed := true
+	var all_staged := true
+	var all_same_words := true
+	var orders: Dictionary = {}
+	for attempt in 12:
+		var order: Array = SFVocabulary.order_for_attempt(deck, 51207 + attempt * 7919, prev)
+		var oid := SFVocabulary.deck_ids(order)
+		if oid == prev:
+			all_changed = false
+		var s2 := oid.duplicate()
+		s2.sort()
+		if s2 != sorted_ids:
+			all_same_words = false
+		var last := 0
+		for i in order.size():
+			var e: Dictionary = order[i]
+			if int(e["stage"]) < last or int(e["index"]) != i:
+				all_staged = false
+			last = int(e["stage"])
+		orders[str(oid)] = true
+		prev = oid
+	check("consecutive attempts never repeat the full order", all_changed)
+	check("every attempt keeps exactly the same words, each once", all_same_words)
+	check("every attempt keeps the easy-to-hard stage order", all_staged)
+	check("attempts produce varied orders", orders.size() >= 10, str(orders.size()))
+	check("the same seed reproduces the same order (test seed)",
+		str(SFVocabulary.order_for_attempt(deck, 77, [])) == str(SFVocabulary.order_for_attempt(deck, 77, [])))
+	var forced: Array = SFVocabulary.deck_ids(SFVocabulary.order_for_attempt(deck, 5, []))
+	check("an order equal to the previous one is rotated, not reshuffled forever",
+		SFVocabulary.deck_ids(SFVocabulary.order_for_attempt(deck, 5, forced)) != forced)
+	var single := [{"id": "a", "text": "aa", "stage": 0, "index": 0}]
+	check("a one-entry deck returns its only order without looping",
+		SFVocabulary.deck_ids(SFVocabulary.order_for_attempt(single, 1, ["a"])) == ["a"])
+	var enc = _new_encounter()
+	var first_order: Array = SFVocabulary.deck_ids(enc.deck)
+	enc.reset()
+	check("a retry changes the order", SFVocabulary.deck_ids(enc.deck) != first_order)
+	check("a retry still opens with a foundation word", String(vocab.entry(String((enc.deck[0] as Dictionary)["id"]))["band"]) == "foundation")
+	var enc2 = SFTypingEncounter.new()
+	enc2.setup(typing_data, deck, 51207, 3, SFVocabulary.deck_ids(enc.deck))
+	check("a new encounter continues the saved attempt count", enc2.attempt == 4)
+	check("a new encounter differs from the saved previous order", SFVocabulary.deck_ids(enc2.deck) != SFVocabulary.deck_ids(enc.deck))
+
+
+func _test_new_vocabulary() -> void:
+	section("New environmental vocabulary entries")
+	var added := {"v_mulch": "developing", "v_rainwater": "intermediate", "v_peatland": "advanced", "v_refurbish": "advanced"}
+	for id in added.keys():
+		var e: Dictionary = vocab.entry(String(id))
+		check("%s exists with a definition and example" % id, not e.is_empty() and String(e.get("definition", "")) != "" and String(e.get("example", "")) != "")
+		check("%s is in the %s band" % [id, added[id]], String(e.get("band", "")) == String(added[id]))
+		var selected := false
+		for seed_value in range(1, 400):
+			if SFVocabulary.deck_ids(vocab.select_deck(_stages(), seed_value)).has(String(id)):
+				selected = true
+				break
+		check("%s is reachable by real deck selection" % id, selected)
 
 
 func _test_miss_and_requeue() -> void:
@@ -309,7 +462,7 @@ func _test_miss_and_requeue() -> void:
 			ready_at = float((p as Dictionary)["not_before"])
 	check("the missed entry returns to the pending queue", requeued)
 	check("the missed entry waits a fair delay", ready_at >= enc.time + 1.0)
-	check("a miss does not damage the boss", enc.boss_health == enc.boss_health_max)
+	check("a miss deals no boss damage beyond the one letter typed", enc.boss_health == enc.boss_health_max - enc.damage_per_letter())
 	check("a miss does not complete the entry", not enc.completed.has(index))
 	check("a miss does not change the required deck", enc.deck.size() == enc.remaining_count())
 	# The entry must come back, and never twice at once.
@@ -359,7 +512,8 @@ func _test_retry_and_pause() -> void:
 	section("Defeat, retry and pause")
 	var enc = _new_encounter()
 	enc.begin()
-	var deck_before := str(enc.deck)
+	var deck_before := SFVocabulary.deck_ids(enc.deck)
+	deck_before.sort()
 	var guard := 0
 	_wait_for_word(enc)
 	_type_word(enc, String((enc.active[0] as Dictionary)["text"]))
@@ -377,7 +531,9 @@ func _test_retry_and_pause() -> void:
 	check("retry restores boss health", enc.boss_health == enc.boss_health_max)
 	check("retry clears completions and misses", enc.completed.is_empty() and enc.misses == 0)
 	check("retry clears typing progress", not enc.typing.has_target())
-	check("retry reuses the same deck", str(enc.deck) == deck_before)
+	var ids_now := SFVocabulary.deck_ids(enc.deck)
+	ids_now.sort()
+	check("retry keeps the same words", ids_now == deck_before)
 	check("retry restarts at the easy stage", enc.current_stage() == 0)
 	check("retry clears pacing adjustments", enc.travel_scale == 1.0 and enc.gap_scale == 1.0)
 	check("retry returns to the intro hold", enc.phase == enc.PHASE_INTRO)
@@ -583,6 +739,7 @@ func _test_workshop_rules() -> void:
 	var camp = _fresh_campaign()
 	for id in ALL_COMPONENTS:
 		camp.award_component(String(id))
+		camp.install_component(String(id))
 	var w = SFReconstruction.new()
 	w.setup(recon_data, camp.original_propulsion_id())
 	w.set_choice("route", "extended_arc")
@@ -627,6 +784,20 @@ func _test_workshop_rules() -> void:
 	w2.replenish(camp2)
 	var r2: Dictionary = w2.simulate(camp2.recovered_component_ids(), 9)
 	check("missing the shield emitter rejects final assembly", not bool(w2.commit(camp2, r2)["ok"]))
+	var camp3 = _fresh_campaign()
+	for id in ALL_COMPONENTS:
+		camp3.award_component(String(id))
+	camp3.install_component("navigation_chip")
+	camp3.install_component("power_core")
+	var w3 = SFReconstruction.new()
+	w3.setup(recon_data, "propulsion_light")
+	w3.set_fuel(460.0)
+	w3.replenish(camp3)
+	var r3: Dictionary = w3.simulate(camp3.installed_component_ids(), 9)
+	check("an uninstalled shield fails the simulation", not bool(r3["valid"]) and String(r3["failures"][0]).findn("shield emitter") >= 0)
+	var r3_forced: Dictionary = w3.simulate(ALL_COMPONENTS, 9)
+	var refused3: Dictionary = w3.commit(camp3, r3_forced)
+	check("a collected but uninstalled shield blocks final assembly", not bool(refused3["ok"]) and String(refused3["message"]).findn("install") >= 0)
 	var big = _design("propulsion_light", "fast_corridor", "rebuilt_cluster", "shield_amplifier", "storage_array", true, true)
 	check("an over-ambitious design exceeds fabrication capacity", big.fabrication_units() > big.fabrication_capacity())
 
@@ -676,3 +847,78 @@ func _test_campaign_rewards_and_save() -> void:
 		and String(camp.content.encounters.boss("toxic_tide").get("reward_component", "")) == "power_core")
 	check("Dawn Tower is now a playable chapter", String(camp.content.chapter("dawn_tower").get("stage", "")) == "dawn_tower")
 	check("Return Home stays deferred", String(camp.content.chapter("return_home").get("stage", "")) == "deferred")
+
+
+## The shield emitter's four explicit states, persistence and migration.
+func _test_shield_reward_states() -> void:
+	section("Shield drop states, save version 4 and migration")
+	var flag := "sky_remnant_defeated"
+	var comp := "shield_emitter"
+	var camp = _fresh_campaign()
+	camp.award_component("navigation_chip")
+	camp.award_component("power_core")
+	check("state 1: boss undefeated", camp.reward_state(flag, comp) == camp.REWARD_UNDEFEATED)
+	check("the drop cannot be collected before the victory", not camp.collect_boss_reward(flag, comp))
+	check("the victory is recorded once", camp.defeat_boss(flag) and not camp.defeat_boss(flag))
+	check("state 2: defeated, the drop waits in the world", camp.reward_state(flag, comp) == camp.REWARD_AVAILABLE and not camp.has_component(comp))
+	var path := "user://star_fall_phase3_shield_test.json"
+	SFSave.write_save(camp, path)
+	var l1 = SFCampaign.new()
+	SFSave.load_into(l1, path)
+	check("save/load keeps an uncollected drop", l1.reward_state(flag, comp) == l1.REWARD_AVAILABLE)
+	check("the shield cannot be installed before it is collected", not camp.install_component(comp))
+	check("collecting the drop grants the shield", camp.collect_boss_reward(flag, comp))
+	check("a second pickup grants nothing", not camp.collect_boss_reward(flag, comp) and camp.recovered_component_ids().count(comp) == 1)
+	check("state 3: collected", camp.reward_state(flag, comp) == camp.REWARD_COLLECTED)
+	SFSave.write_save(camp, path)
+	var l2 = SFCampaign.new()
+	SFSave.load_into(l2, path)
+	check("save/load keeps a collected shield, once", l2.reward_state(flag, comp) == l2.REWARD_COLLECTED and l2.recovered_component_ids().count(comp) == 1)
+	check("installing the shield works once", camp.install_component(comp) and not camp.install_component(comp))
+	check("state 4: installed", camp.reward_state(flag, comp) == camp.REWARD_INSTALLED)
+	camp.record_typing_attempt(5, ["v_soil", "v_air"])
+	SFSave.write_save(camp, path)
+	var l3 = SFCampaign.new()
+	var res: Dictionary = SFSave.load_into(l3, path)
+	check("a version 4 save loads", bool(res["ok"]) and int(l3.to_save_dict()["version"]) == 4)
+	check("save/load keeps the installed state", l3.reward_state(flag, comp) == l3.REWARD_INSTALLED and l3.installed_component_ids() == [comp])
+	check("save/load keeps the typing attempt history", l3.typing_attempts == 5 and l3.typing_last_order == ["v_soil", "v_air"])
+	SFSave.load_into(l3, path)
+	check("loading twice never duplicates installed parts", l3.installed_component_ids().size() == 1)
+
+	# Migration from version 3, where the victory awarded the shield directly.
+	var v3: Dictionary = camp.to_save_dict()
+	v3["version"] = 3
+	v3.erase("installed_components")
+	v3.erase("typing_attempts")
+	v3.erase("typing_last_order")
+	var m1 = SFCampaign.new()
+	m1.apply_save_dict(v3)
+	check("a v3 save with the shield keeps ownership as collected", m1.reward_state(flag, comp) == m1.REWARD_COLLECTED and m1.installed_component_ids().is_empty())
+	check("a v3 save gets a zero attempt history", m1.typing_attempts == 0 and m1.typing_last_order.is_empty())
+	var v3_done: Dictionary = v3.duplicate(true)
+	v3_done["reconstruction"] = {"committed": {"route": "extended_arc"}, "selection": {"route": "extended_arc"}}
+	v3_done["flags"]["ready_for_final_assembly"] = true
+	var m2 = SFCampaign.new()
+	var w2: Array = m2.apply_save_dict(v3_done)
+	check("a v3 assembled save maps every recovered part to installed", m2.all_required_installed() and m2.reward_state(flag, comp) == m2.REWARD_INSTALLED)
+	check("a v3 assembled save stays ready", m2.is_ready_for_final_assembly() and w2.is_empty())
+	var v3_early: Dictionary = v3.duplicate(true)
+	v3_early["flags"].erase(flag)
+	v3_early["recovered_components"] = ["navigation_chip", "power_core"]
+	var m3 = SFCampaign.new()
+	m3.apply_save_dict(v3_early)
+	check("a save that never earned the shield gains nothing", m3.reward_state(flag, comp) == m3.REWARD_UNDEFEATED)
+	var forged: Dictionary = camp.to_save_dict()
+	forged["installed_components"] = ["navigation_chip", "power_core"]
+	forged["reconstruction"] = {"committed": {"route": "extended_arc"}}
+	forged["flags"]["ready_for_final_assembly"] = true
+	var m4 = SFCampaign.new()
+	var w4: Array = m4.apply_save_dict(forged)
+	check("readiness without an installed shield is cleared", not m4.is_ready_for_final_assembly() and not w4.is_empty())
+	var ghost: Dictionary = camp.to_save_dict()
+	ghost["recovered_components"] = ["navigation_chip"]
+	var m5 = SFCampaign.new()
+	m5.apply_save_dict(ghost)
+	check("a save cannot install a part it never recovered", m5.installed_component_ids().is_empty())
+	SFSave.delete_save(path)

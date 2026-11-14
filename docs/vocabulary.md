@@ -6,23 +6,23 @@ content, its schema, how a fight selects words from it, and its review status.
 
 ## Size and coverage
 
-`data/star_fall/vocabulary.json` holds **199 entries**.
+`data/star_fall/vocabulary.json` holds **203 entries**.
 
 | Band | Entries | Meaning |
 |---|---|---|
 | `foundation` | 52 | Short, very familiar words with regular spelling (air, sun, tree, soil, seed) |
-| `developing` | 55 | Common environmental words, a little longer or less regular (reuse, litter, recycle, protect) |
-| `intermediate` | 55 | Longer or more conceptual words (habitat, compost, conserve, aquifer, runoff) |
-| `advanced` | 37 | Long, multi-part or abstract terms (pollution, ecosystem, biodiversity, sustainability) |
+| `developing` | 56 | Common environmental words, a little longer or less regular (reuse, litter, recycle, protect) |
+| `intermediate` | 56 | Longer or more conceptual words (habitat, compost, conserve, aquifer, runoff) |
+| `advanced` | 39 | Long, multi-part or abstract terms (pollution, ecosystem, biodiversity, sustainability) |
 
 | Category | Entries |
 |---|---|
 | nature | 31 |
-| water | 29 |
-| habitat | 23 |
+| water | 30 |
+| habitat | 24 |
 | energy | 20 |
-| recycling | 20 |
-| forest | 18 |
+| recycling | 21 |
+| forest | 19 |
 | pollution | 18 |
 | conservation | 17 |
 | responsibility | 12 |
@@ -88,7 +88,7 @@ The fight never uses the whole library.
 
 | Term | Meaning |
 |---|---|
-| Library | All 199 entries |
+| Library | All 203 entries |
 | Deck | The finite selection one attempt must complete: **30 entries** |
 | Pending queue | Deck entries not yet completed and not falling |
 | Active words | Words currently falling (at most one instance per entry) |
@@ -110,13 +110,35 @@ then filling from the rest of the band. Inside a stage, words are ordered from
 shorter to longer. The same seed always selects the same deck.
 
 The deck seed is the boss seed plus the current journal size. A **retry**
-inside the fight reuses its deck for consistent practice; leaving the tower and
-coming back draws a fresh deck.
+inside the fight keeps the same words for consistent practice; leaving the
+tower and coming back after learning new words draws a fresh deck.
+
+**Play order changes on every attempt.** Each attempt (first entry, retry,
+re-entry, reload) reshuffles the deck *inside each stage*
+(`order_for_attempt()`), so foundation words still come first and advanced
+words still come last. An order identical to the previous attempt's (saved in
+the campaign) is replaced by rotating one stage by one place, so consecutive
+attempts always differ when any other order exists.
+
+### Added in the Phase 3 fix
+
+Four entries absent from the library were added (the suggested `refill`,
+`repair`, `wetland` and `upcycle` were already present):
+
+| id | Text | Band | Category |
+|---|---|---|---|
+| `v_mulch` | mulch | developing | forest |
+| `v_rainwater` | rainwater | intermediate | water |
+| `v_peatland` | peatland | advanced | habitat |
+| `v_refurbish` | refurbish | advanced | recycling |
+
+All four pass validation and are reachable by real deck selection
+(`test_phase3.gd`).
 
 ## Journal
 
 Every completed word is recorded once in the campaign's
-`vocabulary_journal` (saved, save version 3) with its definition, example and
+`vocabulary_journal` (saved since save version 3) with its definition, example and
 note available for review:
 
 - in the fight: `Esc` → **Vocabulary journal** (the arena is frozen);

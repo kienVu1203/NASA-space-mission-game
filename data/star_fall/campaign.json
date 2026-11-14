@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "_note": "Campaign flow, dialogue and quest prose. IDs here are stable and referenced by save files.",
+  "chapters": [
+    {"id": "present_day_earth", "name": "Present-Day Earth", "stage": "briefing"},
+    {"id": "crash_site", "name": "Crash Site", "stage": "crash_site"},
+    {"id": "forgotten_city", "name": "Forgotten City", "stage": "deferred"},
+    {"id": "silent_coast", "name": "Silent Coast", "stage": "deferred"},
+    {"id": "dawn_tower", "name": "Dawn Tower", "stage": "deferred"},
+    {"id": "return_home", "name": "Return Home", "stage": "deferred"}
+  ],
+  "future_components": [
+    {"id": "navigation_chip", "name": "Navigation Chip"},
+    {"id": "power_core", "name": "Power Core"},
+    {"id": "shield_emitter", "name": "Shield Emitter"}
+  ],
+  "missions": [
+    {
+      "id": "signal_investigation",
+      "name": "Signal Investigation",
+      "summary": "Investigate the anomalous signal and return with usable scientific data.",
+      "requirements": [
+        "A functional flight computer",
+        "Propulsion that can lift the assembled ship",
+        "An electrical power source",
+        "Communications for telemetry",
+        "A scientific sensor with resolution quality 2 or better",
+        "Enough fuel and stored energy for the observation window"
+      ]
+    }
+  ],
+  "memories": [
+    {
+      "id": "memory_green_city",
+      "title": "Green City",
+      "frame": "The projection is small and slightly out of focus. Bill holds it steady.",
+      "lines": [
+        "Sunlight through leaves. A street with people on it.",
+        "A woman waves at someone just off the edge of the frame.",
+        "Bill: \"I do not know whose memory this is. I only know I was asked to keep it.\"",
+        "Bill: \"The coordinates are attached to the file. I cannot tell you why.\""
+      ]
+    }
+  ],
+  "dialogue": {
+    "briefing_intro": [
+      "Mission control tracking. This is the briefing they gave us.",
+      "An anomalous signal has repeated for eleven days. Every model says it should not exist.",
+      "We take the VELA out, we listen, we record, and we come back with data."
+    ],
+    "briefing_requirements": [
+      "Flight computer. Propulsion. Power. Comms. A sensor that can resolve the signal.",
+      "Enough fuel to hold the observation window, and enough stored energy for the instruments.",
+      "You have construction credits. Spend them on the ship, not on apologies."
+    ],
+    "briefing_outro": [
+      "The console is beside the ship frame. Put VELA together, then run the preflight check.",
+      "If the check fails, revise the design. Nothing launches until it passes."
+    ],
+    "construction_intro": [
+      "This is the assembly console. Every part earns its mass.",
+      "Preview a part before installing it. Previewing costs nothing."
+    ],
+    "preflight_pass": [
+      "All checks green. The VELA is cleared for launch.",
+      "Nick: \"Then let's go listen to the impossible thing.\""
+    ],
+    "preflight_fail": [
+      "Preflight is holding the launch. Fix the design and try again."
+    ],
+    "launch": [
+      "Liftoff. The sky goes from blue to thin to black.",
+      "The signal is stronger than the brief said. It is not coming from where it is supposed to."
+    ],
+    "rift": [
+      "Nick: \"Control, the starfield is wrong. Every star on the port side just moved.\"",
+      "The signal folds inward. The VELA is pulled sideways out of the flight path.",
+      "Debris hits the hull before the alarm finishes its first tone."
+    ],
+    "crash": [
+      "Nick: \"VELA, report.\"",
+      "No answer. The hull is holding. Most of the ship is not.",
+      "Nick: \"Then I walk.\""
+    ],
+    "blueprint_memory": [
+      "The wreck is the same ship you built. The surviving mass sits where you put it.",
+      "The flight computer is intact. That is something to work with."
+    ],
+    "junction_repair": [
+      "The junction is dead. The wall is still warm, so something behind it still holds power.",
+      "Nick: \"Hand me the scrap and I can bridge this.\"",
+      "Bill's chest lights up. The door answers."
+    ],
+    "bill_activation": [
+      "Bill: \"Power restored. Maintenance unit B-4 online. You may call me Bill.\"",
+      "Nick: \"How long have you been sitting here?\"",
+      "Bill: \"A long time. You are the first thing that has asked.\"",
+      "Bill: \"Before we do anything useful, there is something I was asked to show the next person who arrives.\"",
+      "Bill: \"I would rather show you than explain it. My explanation is not good.\""
+    ],
+    "bill_idle": [
+      "Bill: \"The air is breathable. I am aware this is not reassuring.\"",
+      "Bill: \"I do not know this sky either. We have that in common.\"",
+      "Bill: \"I am told patience is a maintenance virtue. It is mostly what I have.\"",
+      "Bill: \"Your manifest survived. I have been reading it. You built a careful ship.\""
+    ],
+    "crash_vela": [
+      "The hull took the impact across the midsection. The frame is bent but readable.",
+      "Most of the science bay is gone. The flight computer is still inside.",
+      "Nick: \"At least I know what I am looking at.\""
+    ],
+    "crash_polymer": [
+      "Packed foam from the launch cradle. It saved the tanks, and it is worth carrying."
+    ],
+    "crash_rubble": [
+      "A wall that used to carry signage. Whatever it said has rusted away.",
+      "The stone is warm. Not from the crash. From underneath."
+    ]
+  },
+  "checkpoint": {
+    "title": "Phase 1 Complete",
+    "body": [
+      "Bill holds the coordinates steady: a city, further inland than the crash site.",
+      "The VELA will not fly again, but the manifest survived.",
+      "There is a route and there is a memory. Phase 1 ends here."
+    ],
+    "next_chapter": "forgotten_city"
+  }
+}

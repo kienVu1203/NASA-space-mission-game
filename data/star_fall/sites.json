@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "_note": "Authored world layouts. Positions are world pixels; the ground-contact point of a prop is (x, y). 'solid' is the ground footprint in pixels.",
+  "spaceport": {
+    "id": "spaceport",
+    "name": "Spaceport Workshop",
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "w": 640,
+      "h": 360
+    },
+    "player_start": {
+      "x": 250,
+      "y": 270
+    },
+    "props": [
+      {
+        "sprite": "tree",
+        "x": 26,
+        "y": 96,
+        "solid": [
+          22,
+          10
+        ]
+      },
+      {
+        "sprite": "tree",
+        "x": 74,
+        "y": 54,
+        "solid": [
+          22,
+          10
+        ]
+      },
+      {
+        "sprite": "tree",
+        "x": 596,
+        "y": 92,
+        "solid": [
+          22,
+          10
+        ]
+      },
+      {
+        "sprite": "tree",
+        "x": 548,
+        "y": 50,
+        "solid": [
+          22,
+          10
+        ]
+      },
+      {
+        "sprite": "tree",
+        "x": 120,
+        "y": 130,
+        "solid": [
+          22,
+          10
+        ]
+      },
+      {
+        "sprite": "tree",
+        "x": 620,
+        "y": 250,
+        "solid": [
+          22,
+          10
+        ]
+      },
+      {
+        "sprite": "bush",
+        "x": 14,
+        "y": 150,
+        "solid": [
+          16,
+          8
+        ]
+      },
+      {
+        "sprite": "bush",
+        "x": 150,
+        "y": 172,
+        "solid": [
+          16,
+          8
+        ]
+      },
+      {
+        "sprite": "bush",
+        "x": 580,
+        "y": 170,
+        "solid": [
+          16,
+          8
+        ]
+      },
+      {
+        "sprite": "bush",
+        "x": 500,
+        "y": 300,
+        "solid": [
+          16,
+          8
+        ]
+      },
+      {
+        "sprite": "bush",
+        "x": 286,
+        "y": 332,
+        "solid": [
+          16,
+          8
+        ]
+      },
+      {
+        "sprite": "lamp",
+        "x": 20,
+        "y": 268,
+        "solid": [
+          8,
+          8
+        ]
+      },
+      {
+        "sprite": "lamp",
+        "x": 616,
+        "y": 268,
+        "solid": [
+          8,
+          8
+        ]
+      },
+      {
+        "sprite": "lamp",
+        "x": 330,
+        "y": 318,
+        "solid": [
+          8,
+          8
+        ]
+      },
+      {
+        "sprite": "terminal",
+        "x": 96,
+        "y": 196,
+        "solid": [
+          18,
+          10
+        ],
+        "interact": "briefing",
+        "label": "Read mission briefing"
+      },
+      {
+        "sprite": "rocket_frame",
+        "x": 214,
+        "y": 176,
+        "solid": [
+          38,
+          16
+        ],
+        "interact": "vela",
+        "label": "Inspect VELA"
+      },
+      {
+        "sprite": "console",
+        "x": 300,
+        "y": 222,
+        "solid": [
+          26,
+          14
+        ],
+        "interact": "construction",
+        "label": "Use assembly console"
+      },
+      {
+        "sprite": "crates",
+        "x": 424,
+        "y": 252,
+        "solid": [
+          22,
+          10
+        ],
+        "interact": "crates",
+        "label": "Inspect crates",
+        "lines": [
+          "Launch-cradle spares. Nothing that helps the VELA.",
+          "Someone labelled the box 'DO NOT OPEN'. Someone else opened it."
+        ]
+      },
+      {
+        "sprite": "dish",
+        "x": 506,
+        "y": 140,
+        "solid": [
+          16,
+          10
+        ],
+        "interact": "dish",
+        "label": "Inspect telemetry dish",
+        "lines": [
+          "A ground relay, pointed at the sky. It is tracking the signal too.",
+          "The feed reads: SOURCE MOTION NEGATIVE. That is not a thing sources do."
+        ]
+      },
+      {
+        "sprite": "pad_beacon",
+        "x": 516,
+        "y": 252,
+        "solid": [
+          18,
+          10
+        ],
+        "interact": "launch",
+        "label": "Launch VELA"
+      }
+    ]
+  },
+  "crash_site": {
+    "id": "crash_site",
+    "name": "Crash Site",
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "w": 640,
+      "h": 360
+    },
+    "player_start": {
+      "x": 120,
+      "y": 250
+    },
+    "props": [
+      {
+        "sprite": "wreck",
+        "x": 392,
+        "y": 158,
+        "solid": [
+          54,
+          22
+        ],
+        "interact": "crash_vela",
+        "label": "Inspect VELA"
+      },
+      {
+        "sprite": "rubble",
+        "x": 186,
+        "y": 104,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 512,
+        "y": 214,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 566,
+        "y": 112,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "rubble",
+        "x": 160,
+        "y": 306,
+        "solid": [
+          18,
+          8
+        ]
+      },
+      {
+        "sprite": "salvage",
+        "x": 276,
+        "y": 206,
+        "solid": [
+          10,
+          6
+        ],
+        "interact": "salvage_plate",
+        "label": "Collect scrap metal"
+      },
+      {
+        "sprite": "salvage",
+        "x": 432,
+        "y": 244,
+        "solid": [
+          10,
+          6
+        ],
+        "interact": "salvage_polymer",
+        "label": "Collect polymer"
+      },
+      {
+        "sprite": "salvage",
+        "x": 330,
+        "y": 300,
+        "solid": [
+          10,
+          6
+        ],
+        "interact": "salvage_circuit",
+        "label": "Collect circuitry"
+      },
+      {
+        "sprite": "salvage",
+        "x": 524,
+        "y": 160,
+        "solid": [
+          10,
+          6
+        ],
+        "interact": "scrap_extra",
+        "label": "Collect scrap metal"
+      },
+      {
+        "sprite": "junction",
+        "x": 74,
+        "y": 150,
+        "solid": [
+          12,
+          8
+        ],
+        "interact": "power_connection",
+        "label": "Repair power connection"
+      },
+      {
+        "sprite": "bill_off",
+        "x": 140,
+        "y": 196,
+        "solid": [
+          12,
+          8
+        ],
+        "interact": "bill_body",
+        "label": "Inspect robot"
+      }
+    ]
+  }
+}

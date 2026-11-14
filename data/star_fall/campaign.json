@@ -1,12 +1,12 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "_note": "Campaign flow, dialogue, memories and archive prose. IDs here are stable and referenced by save files.",
   "chapters": [
     {"id": "present_day_earth", "name": "Present-Day Earth", "stage": "briefing"},
     {"id": "crash_site", "name": "Crash Site", "stage": "crash_site"},
     {"id": "forgotten_city", "name": "Forgotten City", "stage": "forgotten_city"},
     {"id": "silent_coast", "name": "Silent Coast", "stage": "silent_coast"},
-    {"id": "dawn_tower", "name": "Dawn Tower", "stage": "deferred"},
+    {"id": "dawn_tower", "name": "Dawn Tower", "stage": "dawn_tower"},
     {"id": "return_home", "name": "Return Home", "stage": "deferred"}
   ],
   "future_components": [
@@ -77,6 +77,19 @@
         "Bill: \"The cleanup crews were shown this before every shift.\"",
         "Bill: \"It was labeled 'the target condition'. They were not told how to stop making the other one.\"",
         "Nick: \"Then we carry it out of here, at least.\""
+      ]
+    },
+    {
+      "id": "memory_healthy_forest",
+      "title": "Dawn Forest",
+      "scene": "forest",
+      "frame": "The projector hums. For a moment the dead trunks outside have leaves again.",
+      "lines": [
+        "A forest so thick the light comes through in pieces.",
+        "Researchers in green jackets walk a boardwalk between the trunks, counting birds out loud.",
+        "Bill: \"This is the Dawn Project survey, the year the tower was built. Every tree on this slope is in the archive.\"",
+        "Bill: \"They built the shield to protect the records, not the forest. The forest was supposed to protect itself.\"",
+        "Nick: \"Then the records are all that is left of it. We take them home.\""
       ]
     }
   ],
@@ -175,6 +188,53 @@
             "Nick: \"Bill showed me this. The boats, the gulls, the kid with the net.\"",
             "Nick: \"They had the picture the whole time. They just never changed the process.\"",
             "Bill: \"I can carry the picture. You can carry the proof.\""
+          ]
+        }
+      ]
+    },
+    "dawn_archive": {
+      "id": "dawn_archive",
+      "title": "Dawn Project Archive",
+      "subtitle": "The final records, held behind the shield",
+      "entries": [
+        {
+          "heading": "PROJECT CHARTER",
+          "lines": [
+            "The Dawn Project will record the living state of this region before it changes.",
+            "Every species, every stream, every season, for as long as the tower stands.",
+            "A note in the margin: 'So that someone, someday, can see what we were given.'"
+          ]
+        },
+        {
+          "heading": "FOREST SURVEY 0001-0240",
+          "lines": [
+            "Survey 0001: four hundred and twelve bird species counted on the north slope.",
+            "Survey 0120: two hundred and six. Logging permits approved for the lower valley.",
+            "Survey 0240: nine. The counting team requests reassignment. The request is granted."
+          ]
+        },
+        {
+          "heading": "SHIELD PROGRAM",
+          "lines": [
+            "The archive shield was built to keep smog and debris away from the record vaults.",
+            "Its control interface accepts environmental archive terms as targeting signatures.",
+            "The engineers called it 'teaching the defense what it protects'. It worked until the smog learned to live inside it."
+          ]
+        },
+        {
+          "heading": "TRANSMITTER LOG",
+          "lines": [
+            "The tower's transmitter repeats one packet: the archive index and a set of coordinates.",
+            "Destination field: 'anyone who can still change it'.",
+            "Nick: \"That's the signal. The one I was sent to listen to. It was always addressed to us.\""
+          ]
+        },
+        {
+          "heading": "MAINTENANCE ASSIGNMENT B-4",
+          "lines": [
+            "Unit B-4 assigned to carry the Dawn archive index and the green-city memory to the crash corridor.",
+            "Instruction: wait for a visitor who arrives from the signal. Show them what was lost. Help them leave.",
+            "Bill: \"I did not know the last line was in there. I think I would have waited anyway.\""
           ]
         }
       ]
@@ -338,6 +398,61 @@
     "phase_two_complete": [
       "Nick: \"Two components. One transmitter left.\"",
       "Bill: \"And the record. Do not forget the record.\""
+    ],
+    "dawn_intro": [
+      "Past the ridge the road climbs into what used to be a forest. The trunks are still standing. Nothing else is.",
+      "Nick: \"No leaves. No birds. Just the trunks, like fence posts.\"",
+      "Bill: \"The Dawn Tower is at the top. The project archive is inside, behind the shield the facility built to protect it.\"",
+      "Bill: \"The shield emitter is the last component the VELA needs. Something is nesting around it. I can hear it from here.\""
+    ],
+    "dawn_memory": [
+      "A survey projector, bolted to a boardwalk post. Its lens is clean. Someone kept cleaning it.",
+      "Bill: \"This is the last memory in my index. I would like you to see it before we go up.\""
+    ],
+    "dawn_checkpoint": [
+      "Nick: \"Marking the boardwalk. If the tower throws me out, I start from here.\"",
+      "Bill: \"Recorded. The vocabulary you learn up there will stay with you even if the fight does not.\""
+    ],
+    "dawn_terminal": [
+      "A Dawn Project defense console, still warm. Its screen scrolls a word list: soil, habitat, conservation.",
+      "Bill: \"The facility's defense interface reads environmental archive terms as control signatures.\"",
+      "Bill: \"Type a term completely and the console fires a stabilizing pulse at whatever is in the shield.\"",
+      "Bill: \"In plain words: the words are the keys. This is how the facility was built, not how real machines work.\""
+    ],
+    "dawn_boss_intro": [
+      "The shield flickers open. Smog pours out of it and folds itself into wings, a skull of fused debris, two ember eyes.",
+      "Bill: \"Sky Remnant. The smog that settled over this forest, living inside the shield it was supposed to be kept out by.\"",
+      "Bill: \"It is shedding archive terms as it moves. The defense console will accept every one of them.\"",
+      "Nick: \"Then I read them back to it. One word at a time.\""
+    ],
+    "typing_tutorial": [
+      "Bill: \"Quick briefing. Type the first letter of a falling word to select it.\"",
+      "Bill: \"Finish the whole word to fire a pulse. No need to press Enter.\"",
+      "Bill: \"A wrong letter restarts that word from its first letter. It does not hurt you.\"",
+      "Bill: \"A word that reaches the red line hits you. Missed words come back later, so nothing is lost for good.\"",
+      "Bill: \"ESC pauses the fight and opens the vocabulary journal. Reading is always safe.\""
+    ],
+    "dawn_victory": [
+      "The last pulse lands. The wings come apart into ordinary haze and drift down the slope, thinning as they go.",
+      "Bill: \"The shield is clear. The emitter is intact. That is the third component.\"",
+      "Nick: \"And the archive?\"",
+      "Bill: \"Waking up. It has been waiting longer than I have.\""
+    ],
+    "dawn_archive_done": [
+      "Nick: \"Four hundred species, then nine. And a transmitter that kept calling for help.\"",
+      "Bill: \"The record is complete. Navigation chip, power core, shield emitter. The VELA can be rebuilt.\"",
+      "Nick: \"Then we go back to the crash site and build something that can carry all of this home.\""
+    ],
+    "workshop_intro": [
+      "Bill: \"The full workshop is online. Every part we fit is salvage, and the fabricator can only shape so much.\"",
+      "Bill: \"Choose an engine, a route, protection, storage and what we carry. Then run the simulation.\"",
+      "Bill: \"Simulating costs nothing. Fabricating spends salvage once. If a report fails, change the design and run it again.\"",
+      "Nick: \"No credits this time. Just what we found and what we can make.\""
+    ],
+    "workshop_ready": [
+      "Bill: \"Fabrication complete. The VELA is assembled and the return mission checks out.\"",
+      "Nick: \"Then all that is left is to fly it.\"",
+      "Bill: \"Ready for final assembly. I will be in the seat behind you.\""
     ]
   },
   "checkpoint": {

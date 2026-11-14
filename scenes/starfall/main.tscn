@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3 uid="uid://dkevog6x2hjys"]
 
 [ext_resource type="Script" path="res://scenes/starfall/main.gd" id="1_main"]
 

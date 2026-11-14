@@ -49,10 +49,8 @@ func _ready() -> void:
 	entries = archive.get("entries", []) as Array
 	index = 0
 	closed = false
-	if archive_id == campaign.ARCHIVE_CITY:
-		reveal_lines = campaign.content.dialogue_lines("city_archive_done")
-	elif archive_id == campaign.ARCHIVE_COAST:
-		reveal_lines = campaign.content.dialogue_lines("coast_archive_done")
+	# Each archive's caption is the dialogue key "<archive_id>_done".
+	reveal_lines = campaign.content.dialogue_lines(archive_id + "_done")
 	queue_redraw()
 
 

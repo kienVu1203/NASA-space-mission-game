@@ -1,41 +1,65 @@
 extends Node2D
-## The construction console: the whole spacecraft construction and preflight
-## loop as one self-contained screen.
+## The assembly workshop: the whole spacecraft construction and preflight loop
+## as one self-contained screen, laid out as a room.
+##
+## Parts sit on shelves along the walls, one shelf per slot, plus a fuel rack.
+## The frame stands on a cradle in the middle. The flight-readiness dashboard
+## runs along the bottom, so every number that gates launch is always visible.
+## The inspector is a clipboard that opens over the cradle with the focused
+## part's spec sheet and what installing it does to readiness.
 ##
 ## This screen owns no campaign state. It edits a working copy of the design
 ## through the campaign object and reports completion through signals; the main
 ## controller decides what happens next.
 ##
 ## Controls
-##   UP/DOWN      move the slot cursor
-##   LEFT/RIGHT   cycle the component in the current slot (preview, no cost)
+##   UP/DOWN      move between shelves
+##   LEFT/RIGHT   move along the shelf (on the fuel rack: adjust the load)
+##   ENTER        install the focused part, or remove it if it is installed
+##   I / TAB      open or close the inspector for the focused part
 ##   Q / E        adjust the fuel load in steps
 ##   V            run preflight validation
-##   ENTER        confirm the design (atomic: validates, then commits)
-##   ESC          leave the console (the working design is kept)
+##   L            confirm the design (atomic: validates, then commits)
+##   ESC          close the inspector, else leave the workshop (design is kept)
+##   Mouse        hover focuses a part, left click installs, right click inspects
 
 signal closed
 signal design_confirmed_ok
 
 const SFPalette := preload("res://core/star_fall/sf_palette.gd")
-const SFUI := preload("res://core/star_fall/sf_ui.gd")
 const SFDesign := preload("res://core/star_fall/sf_design.gd")
 const SFMenu := preload("res://core/star_fall/sf_menu.gd")
-const SFSkin := preload("res://core/star_fall/sf_skin.gd")
+
+const SHELVES := ["computer", "propulsion", "power", "communications", "sensor", "fuel"]
+const SHELF_W := 164.0
+const SHELF_H := 68.0
+const SHIP_GROUND := Vector2(320, 238)
+const DASH := Rect2(8, 258, 624, 76)
+const INSPECTOR := Rect2(196, 34, 248, 190)
 
 var skin
 var ui
 var campaign
 
-var slot_menu
-var current_slot: int = 0
-var checks: Array = []
+var shelf_index: int = 0
+var focus: Dictionary = {}      # slot -> focused item index on that shelf
+var inspecting: bool = false
 var checks_run: bool = false
+var checks: Array = []
+var slot_menu = null
+var current_slot: int:
+	get:
+		return shelf_index
+	set(val):
+		shelf_index = clampi(val, 0, SHELVES.size() - 1)
+		if slot_menu != null:
+			slot_menu.index = shelf_index
+
 var fuel_flash: float = 0.0
 var _blink: float = 0.0
-var _built_ship: Node2D = null
-
-var _slot_fuel_row: int = 5   # the fuel row sits after the five slots
+var _hits: Array = []           # [{rect, shelf, item}] rebuilt each draw, for the mouse
+var _check_btn := Rect2()
+var _confirm_btn := Rect2()
 
 
 func setup(skin_ref, ui_ref, campaign_ref) -> void:
@@ -46,102 +70,162 @@ func setup(skin_ref, ui_ref, campaign_ref) -> void:
 
 func _ready() -> void:
 	slot_menu = SFMenu.new()
-	_rebuild_slot_menu()
+	var menu_items: Array = []
+	for s in SHELVES:
+		menu_items.append({"id": String(s), "label": String(s).to_upper(), "enabled": true})
+	slot_menu.set_items(menu_items)
+
+	# Each shelf starts focused on whatever is already installed there.
+	for s in SFDesign.SLOTS:
+		var slot := String(s)
+		focus[slot] = maxi(0, _index_of(slot, String(campaign.design.slot_component(slot))))
 	queue_redraw()
 
 
-func _rebuild_slot_menu() -> void:
-	var items: Array = []
-	var d = campaign.design
-	for slot in SFDesign.SLOTS:
-		var id := String(slot)
-		items.append({
-			"id": id,
-			"label": SFPalette.SLOT_NAMES.get(id, id.to_upper()),
-			"detail": _component_name(d.slot_component(id)),
-			"enabled": true,
-		})
-	items.append({
-		"id": "fuel",
-		"label": "FUEL LOAD",
-		"detail": "%d KG" % int(d.fuel_kg),
-		"enabled": true,
-	})
-	slot_menu.set_items(items, String((items[current_slot] as Dictionary)["id"]))
-	current_slot = clampi(current_slot, 0, items.size() - 1)
+func _index_of(slot: String, id: String) -> int:
+	var options: Array = campaign.content.components_for_slot(slot)
+	for i in options.size():
+		if String((options[i] as Dictionary).get("id", "")) == id:
+			return i
+	return -1
 
 
-func _component_name(id: String) -> String:
-	if id == "":
-		return "EMPTY"
-	return String(campaign.content.component(id).get("name", id))
+func _current_slot() -> String:
+	return String(SHELVES[shelf_index])
+
+
+func _focused_part() -> Dictionary:
+	var slot := _current_slot()
+	if slot == "fuel":
+		return {}
+	var options: Array = campaign.content.components_for_slot(slot)
+	if options.is_empty():
+		return {}
+	var i: int = clampi(int(focus.get(slot, 0)), 0, options.size() - 1)
+	return options[i] as Dictionary
+
+
+func _shelf_rect(i: int) -> Rect2:
+	var x: float = 8.0 if i < 3 else 640.0 - 8.0 - SHELF_W
+	return Rect2(x, 34.0 + float(i % 3) * (SHELF_H + 4.0), SHELF_W, SHELF_H)
 
 
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		var hit := _hit_at(get_global_mouse_position())
+		if not hit.is_empty():
+			_focus_hit(hit)
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed:
+			_handle_click(mb.button_index, get_global_mouse_position())
+		return
 	if not (event is InputEventKey):
 		return
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
 		return
-	var key := key_event.keycode
-	match key:
+	match key_event.keycode:
 		KEY_UP, KEY_W:
-			slot_menu.move(-1)
-			current_slot = slot_menu.index
-			skin.audio.sfx_select()
-			queue_redraw()
+			_move_shelf(-1)
 		KEY_DOWN, KEY_S:
-			slot_menu.move(1)
-			current_slot = slot_menu.index
-			skin.audio.sfx_select()
-			queue_redraw()
+			_move_shelf(1)
 		KEY_LEFT, KEY_A:
-			_cycle_component(-1)
+			_move_item(-1)
 		KEY_RIGHT, KEY_D:
-			_cycle_component(1)
+			_move_item(1)
 		KEY_Q:
 			_adjust_fuel(-1)
 		KEY_E:
 			_adjust_fuel(1)
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+			_toggle_install()
+		KEY_I, KEY_TAB:
+			inspecting = not inspecting
+			skin.audio.sfx_select()
+			queue_redraw()
 		KEY_V:
 			_run_preflight()
-		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+		KEY_L:
 			_confirm()
 		KEY_ESCAPE:
 			skin.audio.sfx_back()
-			closed.emit()
+			if inspecting:
+				inspecting = false
+				queue_redraw()
+			else:
+				closed.emit()
 
 
-func _cycle_component(delta: int) -> void:
-	if slot_menu.current_id() == "fuel":
+func _hit_at(pos: Vector2) -> Dictionary:
+	for h in _hits:
+		if (h["rect"] as Rect2).has_point(pos):
+			return h
+	return {}
+
+
+func _focus_hit(hit: Dictionary) -> void:
+	shelf_index = int(hit["shelf"])
+	focus[_current_slot()] = int(hit["item"])
+	queue_redraw()
+
+
+func _handle_click(button: int, pos: Vector2) -> void:
+	if button == MOUSE_BUTTON_LEFT:
+		if _check_btn.has_point(pos):
+			_run_preflight()
+			return
+		if _confirm_btn.has_point(pos):
+			_confirm()
+			return
+	var hit := _hit_at(pos)
+	if hit.is_empty():
+		return
+	_focus_hit(hit)
+	if button == MOUSE_BUTTON_LEFT:
+		_toggle_install()
+	elif button == MOUSE_BUTTON_RIGHT:
+		inspecting = true
+		skin.audio.sfx_select()
+
+
+func _move_shelf(delta: int) -> void:
+	shelf_index = int(fposmod(float(shelf_index + delta), float(SHELVES.size())))
+	skin.audio.sfx_select()
+	queue_redraw()
+
+
+func _move_item(delta: int) -> void:
+	var slot := _current_slot()
+	if slot == "fuel":
 		_adjust_fuel(delta)
 		return
-	var slot: String = String(slot_menu.current_id())
-	var options: Array = campaign.content.components_for_slot(slot)
-	if options.is_empty():
+	var n: int = campaign.content.components_for_slot(slot).size()
+	if n == 0:
 		return
-	var current: String = String(campaign.design.slot_component(slot))
-	var index := -1
-	for i in options.size():
-		if String((options[i] as Dictionary).get("id", "")) == current:
-			index = i
-			break
-	# Cycle order: empty, then each option in file order, then back to empty.
-	var cursor: int = index + 1
-	var count: int = options.size() + 1
-	var next_position: int = int(fposmod(float(cursor + delta), float(count)))
-	if next_position == 0:
+	focus[slot] = int(fposmod(float(int(focus.get(slot, 0)) + delta), float(n)))
+	skin.audio.sfx_select()
+	queue_redraw()
+
+
+func _toggle_install() -> void:
+	var comp := _focused_part()
+	if comp.is_empty():
+		skin.audio.sfx_denied()
+		return
+	var slot := _current_slot()
+	var id := String(comp.get("id", ""))
+	if String(campaign.design.slot_component(slot)) == id:
 		campaign.design.clear_slot(slot)
 		skin.audio.sfx_remove()
 	else:
-		var comp: Dictionary = options[next_position - 1] as Dictionary
-		campaign.design.set_slot(slot, String(comp.get("id", "")))
+		campaign.design.set_slot(slot, id)
 		skin.audio.sfx_install()
 	# A design change always invalidates the previous validation result.
-	_invalidate()
-	_rebuild_slot_menu()
+	checks_run = false
 	queue_redraw()
 
 
@@ -156,15 +240,42 @@ func _adjust_fuel(steps: int) -> void:
 		else:
 			skin.audio.sfx_select()
 		fuel_flash = 0.25
+	checks_run = false
+	queue_redraw()
+
+
+func _cycle_component(delta: int = 1) -> void:
+	var slot_id: String = String(slot_menu.current_id()) if slot_menu != null else _current_slot()
+	if slot_id == "fuel":
+		_adjust_fuel(delta * 5)
+		return
+	var options: Array = campaign.content.components_for_slot(slot_id)
+	if options.is_empty():
+		return
+	var current: String = String(campaign.design.slot_component(slot_id))
+	var index := -1
+	for i in options.size():
+		if String((options[i] as Dictionary).get("id", "")) == current:
+			index = i
+			break
+	var cursor: int = index + 1
+	var count: int = options.size() + 1
+	var next_position: int = int(fposmod(float(cursor + delta), float(count)))
+	if next_position == 0:
+		campaign.design.clear_slot(slot_id)
+		skin.audio.sfx_remove()
+	else:
+		var comp: Dictionary = options[next_position - 1] as Dictionary
+		campaign.design.set_slot(slot_id, String(comp.get("id", "")))
+		focus[slot_id] = next_position - 1
+		skin.audio.sfx_install()
 	_invalidate()
-	_rebuild_slot_menu()
 	queue_redraw()
 
 
 func _invalidate() -> void:
-	if checks_run:
-		checks_run = false
-		checks = []
+	checks_run = false
+	checks = []
 
 
 # ---------------------------------------------------------------- actions
@@ -181,7 +292,6 @@ func _run_preflight() -> void:
 		else:
 			skin.audio.sfx_confirm()
 		Events.preflight_passed.emit()
-		ui.notify("Preflight passed.", "good")
 	else:
 		if skin.audio.has_method("sfx_preflight_fail"):
 			skin.audio.sfx_preflight_fail()
@@ -189,7 +299,6 @@ func _run_preflight() -> void:
 			skin.audio.sfx_denied()
 		var first: Dictionary = campaign.design.first_blocking_failure(campaign.content)
 		Events.preflight_failed.emit(String(first.get("message", "")))
-		ui.notify("Preflight failed.", "bad")
 	queue_redraw()
 
 
@@ -206,7 +315,6 @@ func _confirm() -> void:
 		design_confirmed_ok.emit()
 	else:
 		skin.audio.sfx_denied()
-		checks = result.get("checks", []) as Array
 		checks_run = true
 		var errors: Array = result.get("errors", []) as Array
 		var msg := "Design cannot be confirmed."
@@ -229,50 +337,339 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------- drawing
 
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, 640, 360), SFPalette.INK, true)
-	ui.header(self, "VELA ASSEMBLY CONSOLE", "Install components, then run preflight.",
+	_hits = []
+	_draw_room()
+	ui.header(self, "VELA ASSEMBLY WORKSHOP", "Pick parts off the shelves. Fly when the dashboard is all green.",
 		["BUDGET %d CR" % int(campaign.credits), "MISSION: SIGNAL INVESTIGATION"])
-
-	_draw_ship_column(Rect2(10, 32, 176, 296))
-	_draw_component_column(Rect2(192, 32, 214, 296))
-	_draw_summary_column(Rect2(412, 32, 218, 296))
-
+	for i in SHELVES.size():
+		var slot := String(SHELVES[i])
+		if slot == "fuel":
+			_draw_fuel_rack(i, _shelf_rect(i))
+		else:
+			_draw_shelf(i, slot, _shelf_rect(i))
+	_draw_assembled_ship(SHIP_GROUND)
+	_draw_dashboard(DASH)
+	if inspecting:
+		_draw_inspector(INSPECTOR)
 	ui.footer(self, [
-		"UP/DOWN:SLOT", "LEFT/RIGHT:PART", "Q/E:FUEL", "V:CHECK", "ENTER:OK", "ESC:BACK",
+		"UP/DOWN:SHELF", "LEFT/RIGHT:PART", "ENTER:INSTALL", "I:INSPECT",
+		"Q/E:FUEL", "V:CHECK", "L:CONFIRM", "ESC:BACK",
 	])
 	ui.toast(self)
 
 
-func _draw_ship_column(rect: Rect2) -> void:
-	draw_rect(rect, Color(0.07, 0.10, 0.12), true)
-	draw_rect(rect, SFPalette.STEEL_DARK, false, 1.0)
-	skin.text(self, rect.position + Vector2(6, 5), "ASSEMBLED FRAME", SFPalette.CYAN)
+func _draw_room() -> void:
+	draw_rect(Rect2(0, 0, 640, 360), SFPalette.INK, true)
+	# Back wall with panel seams, then the floor.
+	draw_rect(Rect2(0, 27, 640, 213), SFPalette.RUIN_DARK, true)
+	var x := 32.0
+	while x < 640.0:
+		draw_rect(Rect2(x, 27, 1, 213), SFPalette.RUIN, true)
+		x += 64.0
+	draw_rect(Rect2(0, 240, 640, 18), SFPalette.ASH_PLAIN, true)
+	draw_rect(Rect2(0, 240, 640, 1), SFPalette.ASH_PLAIN_LIGHT, true)
+	# Hazard stripe around the cradle.
+	var sx := 250.0
+	while sx < 390.0:
+		draw_rect(Rect2(sx, 244, 6, 2), SFPalette.GOLD, true)
+		sx += 12.0
+	# Work lamps over the cradle.
+	for lx in [280.0, 360.0]:
+		var fx := float(lx)
+		draw_rect(Rect2(fx - 1, 27, 2, 10), SFPalette.STEEL_DARK, true)
+		draw_rect(Rect2(fx - 5, 37, 10, 3), SFPalette.STEEL, true)
+		draw_rect(Rect2(fx - 3, 40, 6, 1), SFPalette.GOLD, true)
 
-	# The ship drawing is a real visual read of the installed components: the
-	# hull, propulsion pod size, power pod and sensor dome all change.
-	var base := rect.position + Vector2(rect.size.x * 0.5, 196)
-	_draw_assembled_ship(base)
 
-	# Slot indicator list under the ship: serial letters, state and short name.
-	var y := rect.position.y + 216.0
+func _draw_shelf(i: int, slot: String, r: Rect2) -> void:
+	var options: Array = campaign.content.components_for_slot(slot)
+	var focused_shelf: bool = i == shelf_index
+	var installed: String = String(campaign.design.slot_component(slot))
+	var fi: int = clampi(int(focus.get(slot, 0)), 0, maxi(0, options.size() - 1))
+
+	if focused_shelf:
+		draw_rect(r.grow(2), SFPalette.CYAN_DIM, false, 1.0)
+
+	# Shelf label tag and slot state.
+	skin.text(self, Vector2(r.position.x + 2, r.position.y), String(SFPalette.SLOT_NAMES.get(slot, slot)),
+		SFPalette.CYAN if focused_shelf else SFPalette.PAPER_DIM)
+	if installed == "":
+		var c: Color = SFPalette.RED
+		c.a = 0.6 + 0.4 * sin(_blink * 4.0)
+		skin.text_r(self, r.end.x - 2, r.position.y, "EMPTY", c)
+	else:
+		skin.text_r(self, r.end.x - 2, r.position.y, "INSTALLED", SFPalette.GREEN_OK)
+
+	# Wall bracket and plank.
+	var plank_y := r.position.y + 44.0
+	draw_rect(Rect2(r.position.x, plank_y, r.size.x, 4), SFPalette.STEEL_MID if focused_shelf else SFPalette.STEEL_DARK, true)
+	draw_rect(Rect2(r.position.x, plank_y + 4, r.size.x, 1), SFPalette.SOOT, true)
+	for bx in [r.position.x + 6.0, r.end.x - 9.0]:
+		draw_rect(Rect2(float(bx), plank_y + 5, 3, 7), SFPalette.STEEL_DARK, true)
+
+	# Parts on the plank, each in its own bay.
+	var bay_w := 44.0
+	var x0 := r.position.x + (r.size.x - bay_w * float(options.size())) * 0.5
+	for k in options.size():
+		var comp: Dictionary = options[k] as Dictionary
+		var id := String(comp.get("id", ""))
+		var bay := Rect2(x0 + bay_w * float(k) + 2.0, plank_y - 32.0, bay_w - 4.0, 32.0)
+		_hits.append({"rect": bay, "shelf": i, "item": k})
+		var is_focus: bool = focused_shelf and k == fi
+		var is_in: bool = id == installed
+		if is_focus:
+			draw_rect(bay, SFPalette.RUIN, true)
+			draw_rect(bay, SFPalette.CYAN, false, 1.0)
+		elif is_in:
+			draw_rect(bay, SFPalette.GREEN_OK.darkened(0.45), false, 1.0)
+		_draw_part_icon(Vector2(bay.position.x + bay.size.x * 0.5, plank_y - 2.0), comp, is_in or is_focus)
+		# Price tag hanging from the plank.
+		skin.text_c(self, bay.position.x + bay.size.x * 0.5, plank_y + 7.0, "%dCR" % int(comp.get("cost", 0)),
+			SFPalette.GOLD if is_focus else SFPalette.PAPER_DIM)
+
+	# Name line: the focused part on the active shelf, else what is installed.
+	var show: int = fi if focused_shelf else _index_of(slot, installed)
+	if show >= 0 and show < options.size():
+		var name := String(skin.font.fit(String((options[show] as Dictionary).get("name", "")), r.size.x - 4.0, 1))
+		skin.text_c(self, r.position.x + r.size.x * 0.5, plank_y + 16.0, name, SFPalette.PAPER if focused_shelf else SFPalette.PAPER_DIM)
+
+
+## Small pixel icon of a part, standing on the point p. Shape follows the slot;
+## size follows the stat that matters for that slot (lift, output, quality).
+func _draw_part_icon(p: Vector2, comp: Dictionary, lit: bool) -> void:
+	var glow: Color = SFPalette.CYAN if lit else SFPalette.CYAN_DIM
+	match String(comp.get("slot", "")):
+		"computer":
+			draw_rect(Rect2(p.x - 9, p.y - 14, 18, 14), SFPalette.STEEL_MID, true)
+			draw_rect(Rect2(p.x - 7, p.y - 11, 14, 4), SFPalette.INK, true)
+			draw_rect(Rect2(p.x - 6, p.y - 10, 8, 2), glow, true)
+			draw_rect(Rect2(p.x - 7, p.y - 5, 2, 2), SFPalette.GREEN_OK, true)
+		"propulsion":
+			var w: float = 10.0 + float(comp.get("thrust_capacity_kg", 0)) / 240.0
+			draw_rect(Rect2(p.x - w * 0.3, p.y - 22, w * 0.6, 8), SFPalette.STEEL_DARK, true)
+			draw_rect(Rect2(p.x - w * 0.5, p.y - 14, w, 12), SFPalette.STEEL_DARK, true)
+			draw_rect(Rect2(p.x - w * 0.5 + 1, p.y - 14, 3, 12), SFPalette.STEEL_MID, true)
+			draw_rect(Rect2(p.x - w * 0.5, p.y - 3, w, 3), SFPalette.RUST, true)
+		"power":
+			if float(comp.get("power_output_w", 0)) >= 400.0:
+				draw_rect(Rect2(p.x - 6, p.y - 22, 12, 22), SFPalette.ASH, true)
+				draw_rect(Rect2(p.x - 5, p.y - 16, 10, 2), SFPalette.GOLD, true)
+				draw_rect(Rect2(p.x - 5, p.y - 8, 10, 2), SFPalette.GOLD, true)
+			else:
+				draw_rect(Rect2(p.x - 14, p.y - 18, 28, 14), SFPalette.BLUE_ACCENT, true)
+				for k in 5:
+					draw_rect(Rect2(p.x - 12 + k * 6, p.y - 17, 1, 12), glow, true)
+				draw_rect(Rect2(p.x - 1, p.y - 4, 2, 4), SFPalette.STEEL_DARK, true)
+		"communications":
+			draw_rect(Rect2(p.x - 1, p.y - 14, 2, 14), SFPalette.STEEL_DARK, true)
+			draw_rect(Rect2(p.x - 8, p.y - 18, 16, 3), SFPalette.STEEL, true)
+			draw_rect(Rect2(p.x - 4, p.y - 23, 8, 5), SFPalette.STEEL_MID, true)
+			draw_rect(Rect2(p.x - 1, p.y - 22, 2, 2), glow, true)
+		"sensor":
+			var q := int(comp.get("sensor_quality", 0))
+			var r := 4.0 + float(q) * 2.0
+			draw_rect(Rect2(p.x - r, p.y - r * 2, r * 2, r * 2), SFPalette.STEEL_DARK, true)
+			draw_rect(Rect2(p.x - r + 1, p.y - r * 2 + 1, r * 2 - 2, r * 2 - 2), SFPalette.CYAN_DIM, true)
+			var lens: Color = SFPalette.CYAN
+			if q >= 3:
+				lens = SFPalette.GREEN_OK
+			elif q <= 1:
+				lens = SFPalette.RUST_LIGHT
+			draw_rect(Rect2(p.x - 2, p.y - r * 2 + 2, 4, 3), lens, true)
+
+
+func _draw_fuel_rack(i: int, r: Rect2) -> void:
+	var focused_shelf: bool = i == shelf_index
 	var d = campaign.design
-	var letters: Array = ["A", "B", "C", "D", "E"]
-	var index: int = 0
-	for slot in SFDesign.SLOTS:
-		var id := String(slot)
-		var comp_id: String = String(d.slot_component(id))
-		var filled: bool = comp_id != ""
-		var focused: bool = slot_menu.current_id() == id
-		var row := Rect2(rect.position.x + 6, y, rect.size.x - 12, 13)
-		if focused:
-			draw_rect(row, SFPalette.RUIN, true)
-			draw_rect(Rect2(row.position, Vector2(2, row.size.y)), SFPalette.CYAN, true)
-		var dot := Rect2(row.position.x + 7, row.position.y + 5, 4, 4)
-		draw_rect(dot, SFPalette.GREEN_OK if filled else SFPalette.ASH, true)
-		skin.text(self, Vector2(row.position.x + 16, row.position.y + 3), "%s %s" % [String(letters[index]), String(SFPalette.SLOT_NAMES.get(id, id))], SFPalette.PAPER if focused else SFPalette.PAPER_DIM)
-		skin.text_r(self, row.end.x - 5, row.position.y + 3, "SET" if filled else "EMPTY", SFPalette.GREEN_OK if filled else SFPalette.ASH_LIGHT)
-		y += 15.0
-		index += 1
+	var cap := float(campaign.content.hull.get("fuel_capacity_kg", 0.0))
+	var min_fuel := float(campaign.content.requirements.get("minimum_fuel_kg", 0.0))
+	var ok: bool = d.fuel_kg >= min_fuel
+
+	if focused_shelf:
+		draw_rect(r.grow(2), SFPalette.CYAN_DIM, false, 1.0)
+	skin.text(self, Vector2(r.position.x + 2, r.position.y), "FUEL RACK", SFPalette.CYAN if focused_shelf else SFPalette.PAPER_DIM)
+	skin.text_r(self, r.end.x - 2, r.position.y, "%d / %d KG" % [int(d.fuel_kg), int(cap)], SFPalette.PAPER if ok else SFPalette.RED)
+
+	# A horizontal propellant tank with a sight glass and the mission minimum.
+	var tank := Rect2(r.position.x + 10, r.position.y + 14, r.size.x - 20, 22)
+	draw_rect(tank, SFPalette.STEEL_DARK, true)
+	draw_rect(Rect2(tank.position.x + 2, tank.position.y + 2, tank.size.x - 4, 4), SFPalette.STEEL_MID, true)
+	var glass := Rect2(tank.position.x + 6, tank.position.y + 8, tank.size.x - 12, 9)
+	draw_rect(glass, SFPalette.INK, true)
+	var ratio := clampf(d.fuel_kg / maxf(1.0, cap), 0.0, 1.0)
+	var fill: Color = SFPalette.CYAN if ok else SFPalette.RED
+	if fuel_flash > 0.0:
+		fill = SFPalette.PAPER
+	draw_rect(Rect2(glass.position, Vector2(round(glass.size.x * ratio), glass.size.y)), fill, true)
+	var mx: float = glass.position.x + round(glass.size.x * clampf(min_fuel / maxf(1.0, cap), 0.0, 1.0))
+	draw_rect(Rect2(mx, glass.position.y - 2, 1, glass.size.y + 4), SFPalette.GOLD, true)
+	draw_rect(glass, SFPalette.STEEL_DARK, false, 1.0)
+	draw_rect(Rect2(tank.position.x + 8, tank.end.y, 4, 4), SFPalette.STEEL_DARK, true)
+	draw_rect(Rect2(tank.end.x - 12, tank.end.y, 4, 4), SFPalette.STEEL_DARK, true)
+	skin.text_c(self, mx, tank.end.y + 6, "MIN %d" % int(min_fuel), SFPalette.GOLD)
+	skin.text_c(self, r.position.x + r.size.x * 0.5, r.end.y - 9, "Q / E  ADJUST LOAD",
+		SFPalette.PAPER_DIM if focused_shelf else SFPalette.ASH_LIGHT)
+
+
+func _draw_dashboard(r: Rect2) -> void:
+	skin.panel(self, r, Color(0.05, 0.08, 0.09), SFPalette.STEEL_DARK, true)
+	var d = campaign.design
+	var s: Dictionary = d.summary(campaign.content)
+	var req: Dictionary = campaign.content.requirements
+	var budget := float(campaign.content.program.get("start_credits", 100.0))
+	var valid: bool = d.is_valid(campaign.content)
+	var all_slots: bool = int(s["slots_filled"]) == int(s["slots_total"])
+
+	skin.text(self, r.position + Vector2(6, 4), "FLIGHT READINESS", SFPalette.CYAN)
+	skin.text_r(self, r.end.x - 6, r.position.y + 4, "%d / %d SLOTS FILLED" % [int(s["slots_filled"]), int(s["slots_total"])],
+		SFPalette.GREEN_OK if all_slots else SFPalette.RED)
+
+	# One gauge per launch requirement: [label, value, target, ratio, at_most].
+	# at_most gauges pass when ratio <= 1 (mass, power, cost, data); the others
+	# pass when ratio >= 1 (fuel, energy, sensor).
+	var min_fuel := float(req.get("minimum_fuel_kg", 0.0))
+	var min_q := int(req.get("minimum_sensor_quality", 0))
+	var gauges: Array = [
+		["MASS", "%.0f KG" % float(s["wet_mass_kg"]), "/ %.0f LIMIT" % float(s["mass_limit_kg"]),
+			float(s["wet_mass_kg"]) / maxf(1.0, float(s["mass_limit_kg"])), true],
+		["FUEL", "%.0f KG" % float(s["fuel_kg"]), "/ %.0f MIN" % min_fuel,
+			float(s["fuel_kg"]) / maxf(1.0, min_fuel), false],
+		["POWER", "%.0f W" % float(s["power_demand_w"]), "/ %.0f SUPPLY" % float(s["power_output_w"]),
+			float(s["power_demand_w"]) / maxf(1.0, float(s["power_output_w"])), true],
+		["ENERGY", "%.0f WH" % float(s["energy_stored_wh"]), "/ %.0f NEED" % float(s["energy_required_wh"]),
+			float(s["energy_stored_wh"]) / maxf(1.0, float(s["energy_required_wh"])), false],
+		["BUDGET", "%d CR" % int(s["cost"]), "/ %d CR" % int(budget),
+			float(s["cost"]) / maxf(1.0, budget), true],
+		["SENSOR", "Q%d" % int(s["sensor_quality"]), "/ Q%d MIN" % min_q,
+			float(s["sensor_quality"]) / maxf(1.0, float(min_q)), false],
+		["DATA", "%.0f MB" % float(s["data_capture_mb"]), "/ %.0f CAP" % float(s["data_capacity_mb"]),
+			float(s["data_capture_mb"]) / maxf(1.0, float(s["data_capacity_mb"])), true],
+	]
+	var gw := (r.size.x - 12.0) / float(gauges.size())
+	var gy := r.position.y + 15.0
+	for k in gauges.size():
+		var g: Array = gauges[k] as Array
+		var gx := r.position.x + 6.0 + gw * float(k)
+		var ratio := float(g[3])
+		var good: bool = ratio <= 1.0 if bool(g[4]) else ratio >= 1.0
+		var c: Color = SFPalette.GREEN_OK if good else SFPalette.RED
+		skin.text(self, Vector2(gx, gy), String(g[0]), SFPalette.PAPER_DIM)
+		skin.text(self, Vector2(gx, gy + 9), String(g[1]), c)
+		skin.text(self, Vector2(gx, gy + 18), String(g[2]), SFPalette.ASH_LIGHT)
+		skin.bar(self, Vector2(gx, gy + 27), Vector2(gw - 8.0, 4), ratio, c)
+
+	# Status line: the first thing blocking launch, with its fix, and the buttons.
+	var sy := r.position.y + 51.0
+	draw_rect(Rect2(r.position.x + 6, sy - 3, r.size.x - 12, 1), SFPalette.STEEL_DARK, true)
+	_check_btn = Rect2(r.end.x - 198, sy + 1, 94, 16)
+	_confirm_btn = Rect2(r.end.x - 100, sy + 1, 94, 16)
+	skin.button(self, _check_btn, "V  PREFLIGHT", false, true)
+	skin.button(self, _confirm_btn, "L  CONFIRM", valid and checks_run, valid, SFPalette.GREEN_OK if valid else SFPalette.STEEL_DARK)
+	var msg_w := _check_btn.position.x - r.position.x - 24.0
+	var first: Dictionary = d.first_blocking_failure(campaign.content)
+	var dot_c: Color = SFPalette.GREEN_OK if first.is_empty() else SFPalette.RED
+	draw_rect(Rect2(r.position.x + 8, sy + 3, 4, 4), dot_c, true)
+	if first.is_empty():
+		var line := "ALL REQUIREMENTS MET." + ("  CONFIRM TO BUILD." if checks_run else "  RUN PREFLIGHT, THEN CONFIRM.")
+		skin.text(self, Vector2(r.position.x + 16, sy + 1), line, SFPalette.GREEN_OK)
+	else:
+		skin.text(self, Vector2(r.position.x + 16, sy + 1), String(skin.font.fit(String(first.get("message", "")), msg_w, 1)), SFPalette.RED)
+		skin.text(self, Vector2(r.position.x + 16, sy + 11), String(skin.font.fit(String(first.get("hint", "")), msg_w, 1)), SFPalette.GOLD)
+
+
+## Clipboard over the cradle: the focused part's spec sheet, and what the
+## design's readiness numbers become if it is installed (or removed).
+func _draw_inspector(box: Rect2) -> void:
+	skin.panel(self, box, Color(0.04, 0.07, 0.08, 0.97), SFPalette.CYAN, true)
+	var x := box.position.x + 8.0
+	var w := box.size.x - 16.0
+	var y := box.position.y + 6.0
+	var d = campaign.design
+	var content = campaign.content
+	var cur: Dictionary = d.summary(content)
+	var comp := _focused_part()
+
+	if comp.is_empty():
+		skin.text(self, Vector2(x, y), "FUEL RACK", SFPalette.CYAN)
+		y += 12.0
+		y = skin.wrap(self, Vector2(x, y), w,
+			"Rocket propellant, in kilograms. It is not electrical energy. Every kilogram loaded is launch mass the propulsion must lift.",
+			SFPalette.PAPER, 1, 5) + 4.0
+		skin.stat_row(self, Vector2(x, y), "LOADED", "%.0f KG" % float(cur["fuel_kg"]), SFPalette.PAPER, w)
+		y += 10.0
+		skin.stat_row(self, Vector2(x, y), "MISSION MINIMUM", "%.0f KG" % float(content.requirements.get("minimum_fuel_kg", 0.0)), SFPalette.GOLD, w)
+		y += 10.0
+		skin.stat_row(self, Vector2(x, y), "TANK CAPACITY", "%.0f KG" % float(cur["fuel_capacity_kg"]), SFPalette.PAPER, w)
+		y += 10.0
+		skin.stat_row(self, Vector2(x, y), "DRY MASS", "%.0f KG" % float(cur["dry_mass_kg"]), SFPalette.PAPER, w)
+		y += 10.0
+		skin.stat_row(self, Vector2(x, y), "LAUNCH MASS", "%.0f / %.0f KG" % [float(cur["wet_mass_kg"]), float(cur["mass_limit_kg"])],
+			SFPalette.PAPER if float(cur["wet_mass_kg"]) <= float(cur["mass_limit_kg"]) else SFPalette.RED, w)
+		skin.text_c(self, box.position.x + box.size.x * 0.5, box.end.y - 12, "I  CLOSE", SFPalette.PAPER_DIM)
+		return
+
+	var slot := String(comp.get("slot", ""))
+	var id := String(comp.get("id", ""))
+	var installed: bool = String(d.slot_component(slot)) == id
+	skin.text(self, Vector2(x, y), String(skin.font.fit(String(comp.get("name", id)).to_upper(), w - 44.0, 1)), SFPalette.CYAN)
+	skin.text_r(self, box.end.x - 8, y, "%d CR" % int(comp.get("cost", 0)), SFPalette.GOLD)
+	y += 10.0
+	skin.text(self, Vector2(x, y), String(SFPalette.SLOT_NAMES.get(slot, slot)), SFPalette.PAPER_DIM)
+	if installed:
+		skin.tag(self, Rect2(box.end.x - 60, y - 2, 52, 10), "INSTALLED", SFPalette.GREEN_OK)
+	y += 12.0
+	y = skin.wrap(self, Vector2(x, y), w, String(comp.get("description", "")), SFPalette.PAPER, 1, 4) + 2.0
+	draw_rect(Rect2(x, y, w, 1), SFPalette.STEEL_DARK, true)
+	y += 5.0
+
+	# Spec sheet: only the numbers this part actually has.
+	var specs: Array = [
+		["MASS", "mass_kg", "%d KG", true],
+		["POWER DRAW", "power_demand_w", "%d W", false],
+		["POWER OUTPUT", "power_output_w", "%d W", false],
+		["ENERGY STORAGE", "energy_storage_wh", "%d WH", false],
+		["LIFT CAPACITY", "thrust_capacity_kg", "%d KG", false],
+		["SENSOR QUALITY", "sensor_quality", "Q%d", false],
+		["DATA YIELD", "data_gain_mb", "%d MB", false],
+	]
+	for spec in specs:
+		var row: Array = spec as Array
+		var v := int(comp.get(String(row[1]), 0))
+		if v == 0 and not bool(row[3]):
+			continue
+		skin.stat_row(self, Vector2(x, y), String(row[0]), String(row[2]) % v, SFPalette.PAPER, w)
+		y += 10.0
+
+	# Readiness after the change, from a throwaway copy of the design.
+	y += 2.0
+	draw_rect(Rect2(x, y, w, 1), SFPalette.STEEL_DARK, true)
+	y += 5.0
+	skin.text(self, Vector2(x, y), "IF REMOVED" if installed else "IF INSTALLED", SFPalette.CYAN)
+	y += 10.0
+	var trial = SFDesign.new()
+	trial.load_dict(d.to_dict())
+	if installed:
+		trial.clear_slot(slot)
+	else:
+		trial.set_slot(slot, id)
+	var ts: Dictionary = trial.summary(content)
+	var budget := float(content.program.get("start_credits", 100.0))
+	_delta_row(x, y, w, "MASS", float(cur["wet_mass_kg"]), float(ts["wet_mass_kg"]), float(ts["mass_limit_kg"]), "KG", true)
+	y += 10.0
+	_delta_row(x, y, w, "POWER", float(cur["power_demand_w"]), float(ts["power_demand_w"]), float(ts["power_output_w"]), "W", true)
+	y += 10.0
+	_delta_row(x, y, w, "ENERGY", float(cur["energy_stored_wh"]), float(ts["energy_stored_wh"]), float(ts["energy_required_wh"]), "WH", false)
+	y += 10.0
+	_delta_row(x, y, w, "COST", float(cur["cost"]), float(ts["cost"]), budget, "CR", true)
+
+	skin.text_c(self, box.position.x + box.size.x * 0.5, box.end.y - 12,
+		"ENTER  REMOVE     I  CLOSE" if installed else "ENTER  INSTALL     I  CLOSE", SFPalette.PAPER_DIM)
+
+
+func _delta_row(x: float, y: float, w: float, label: String, before: float, after: float, target: float, unit: String, at_most: bool) -> void:
+	var good: bool = after <= target if at_most else after >= target
+	skin.text(self, Vector2(x, y), label, SFPalette.PAPER_DIM)
+	skin.text_r(self, x + w, y, "%.0f > %.0f / %.0f %s" % [before, after, target, unit], SFPalette.GREEN_OK if good else SFPalette.RED)
 
 
 ## Draws the ship at a ground point, its shape driven by the design.
@@ -384,206 +781,3 @@ func _draw_assembled_ship(ground: Vector2) -> void:
 			c.a = 0.55 + 0.35 * sin(_blink * 4.0)
 			draw_rect(Rect2(p.x - 3, p.y - 3, 6, 6), c, false, 1.0)
 			draw_rect(Rect2(p.x - 1, p.y - 1, 2, 2), c, true)
-
-
-func _draw_component_column(rect: Rect2) -> void:
-	draw_rect(rect, Color(0.07, 0.10, 0.12), true)
-	draw_rect(rect, SFPalette.STEEL_DARK, false, 1.0)
-
-	var current: String = String(slot_menu.current_id())
-	var d = campaign.design
-
-	if current == "fuel":
-		_draw_fuel_panel(rect)
-		return
-
-	var slot_name := String(SFPalette.SLOT_NAMES.get(current, current.to_upper()))
-	skin.text(self, rect.position + Vector2(6, 5), "SLOT: " + slot_name, SFPalette.CYAN)
-	skin.text(self, rect.position + Vector2(6, 16), "LEFT / RIGHT TO CYCLE", SFPalette.PAPER_DIM)
-
-	var installed: String = String(d.slot_component(current))
-	# Rows stop above the standing note at the bottom of the column.
-	var rows_bottom: float = rect.end.y - 34.0
-	var y := rect.position.y + 30.0
-	var options: Array = campaign.content.components_for_slot(current)
-
-	# The empty option is listed first so a player can always undo an install.
-	var rows: Array = [{}]
-	for o in options:
-		rows.append(o)
-	var drawn: int = 0
-
-	for row_data in rows:
-		var comp: Dictionary = row_data as Dictionary
-		var is_empty: bool = comp.is_empty()
-		var id := "" if is_empty else String(comp.get("id", ""))
-		var selected: bool = id == installed
-		var box_h := 20.0
-		if not is_empty:
-			# name line + stats line + up to two wrapped description lines
-			var desc: String = String(comp.get("description", ""))
-			var inner_w: float = rect.size.x - 30.0
-			var desc_lines: int = skin.font.wrap(desc, inner_w, 1).size()
-			box_h = 22.0 + float(mini(desc_lines, 2)) * 9.0
-		var row := Rect2(rect.position.x + 5, y, rect.size.x - 10, box_h)
-		if y + box_h > rows_bottom:
-			# Whatever does not fit is reported as a count, never as clipped text.
-			var hidden: int = rows.size() - drawn
-			skin.text(self, Vector2(rect.position.x + 8, rows_bottom - 9),
-				"+%d MORE - CYCLE TO SEE" % hidden, SFPalette.ASH_LIGHT)
-			break
-		var fill := Color(0.05, 0.08, 0.09)
-		if selected:
-			fill = SFPalette.RUIN
-		draw_rect(row, fill, true)
-		if selected:
-			draw_rect(Rect2(row.position, Vector2(2, row.size.y)), SFPalette.CYAN, true)
-			draw_rect(row, SFPalette.CYAN_DIM, false, 1.0)
-		else:
-			draw_rect(row, SFPalette.STEEL_DARK.darkened(0.2), false, 1.0)
-
-		if is_empty:
-			skin.text(self, Vector2(row.position.x + 7, row.position.y + 6), "(leave empty)", SFPalette.ASH_LIGHT)
-		else:
-			var name := String(comp.get("name", id))
-			var cost_txt := "%d CR" % int(comp.get("cost", 0))
-			# Fit the name into the space left of the price, so they never collide.
-			var price_w: float = skin.font.text_width(cost_txt, 1) + 10.0
-			var name_txt: String = String(skin.font.fit(name, row.size.x - price_w - 12.0, 1))
-			skin.text(self, Vector2(row.position.x + 7, row.position.y + 3), name_txt, SFPalette.PAPER if selected else SFPalette.PAPER_DIM)
-			skin.text_r(self, row.end.x - 6, row.position.y + 3, cost_txt, SFPalette.GOLD if selected else SFPalette.PAPER_DIM)
-
-			# Real numbers, with units, so the trade-offs are legible.
-			var power_delta: float = float(comp.get("power_output_w", 0)) - float(comp.get("power_demand_w", 0))
-			var stats := "%dKG  %+dW  %dWh" % [
-				int(comp.get("mass_kg", 0)),
-				int(round(power_delta)),
-				int(comp.get("energy_storage_wh", 0)),
-			]
-			skin.text(self, Vector2(row.position.x + 7, row.position.y + 12), stats, SFPalette.PAPER_DIM)
-			if String(comp.get("slot", "")) == "sensor":
-				skin.text_r(self, row.end.x - 6, row.position.y + 12, "QUALITY %d" % int(comp.get("sensor_quality", 0)), SFPalette.CYAN)
-			elif String(comp.get("slot", "")) == "propulsion":
-				skin.text_r(self, row.end.x - 6, row.position.y + 12, "LIFTS %dKG" % int(comp.get("thrust_capacity_kg", 0)), SFPalette.CYAN)
-			var desc: String = String(comp.get("description", ""))
-			var desc_txt: String = String(skin.font.clip_lines(desc, row.size.x - 14.0, 2, 1))
-			skin.wrap(self, Vector2(row.position.x + 7, row.position.y + 21), row.size.x - 14, desc_txt, SFPalette.ASH_LIGHT, 1, 2)
-		y += box_h + 3.0
-		drawn += 1
-
-	var note := "Previewing costs nothing. Confirm only when preflight passes."
-	skin.wrap(self, Vector2(rect.position.x + 6, rect.end.y - 26), rect.size.x - 12, note, SFPalette.ASH_LIGHT, 1, 2)
-
-
-func _draw_fuel_panel(rect: Rect2) -> void:
-	var d = campaign.design
-	var cap := float(campaign.content.hull.get("fuel_capacity_kg", 0.0))
-	skin.text(self, rect.position + Vector2(6, 5), "FUEL LOAD", SFPalette.CYAN)
-	skin.text(self, rect.position + Vector2(6, 16), "Q / E TO ADJUST", SFPalette.PAPER_DIM)
-
-	var big := Rect2(rect.position.x + 14, rect.position.y + 34, rect.size.x - 28, 46)
-	draw_rect(big, SFPalette.INK, true)
-	draw_rect(big, SFPalette.STEEL_DARK, false, 1.0)
-	var bar_color := SFPalette.CYAN
-	if d.fuel_kg < float(campaign.content.requirements.get("minimum_fuel_kg", 0.0)):
-		bar_color = SFPalette.RED
-	draw_rect(Rect2(big.position.x + 4, big.position.y + 26, big.size.x - 8, 10), SFPalette.RUIN_DARK, true)
-	var ratio: float = clampf(d.fuel_kg / maxf(1.0, cap), 0.0, 1.0)
-	draw_rect(Rect2(big.position.x + 4, big.position.y + 26, (big.size.x - 8) * ratio, 10), bar_color, true)
-	skin.text_c(self, big.position.x + big.size.x * 0.5, big.position.y + 6, "%d KG OF %d KG" % [int(d.fuel_kg), int(cap)], SFPalette.PAPER)
-	skin.text_c(self, big.position.x + big.size.x * 0.5, big.position.y + 38, "ROCKET PROPELLANT", SFPalette.PAPER_DIM)
-
-	# The minimum marker is a hard mission requirement, drawn on the bar.
-	var min_fuel := float(campaign.content.requirements.get("minimum_fuel_kg", 0.0))
-	if cap > 0.0:
-		var mx := big.position.x + 4 + (big.size.x - 8) * clampf(min_fuel / cap, 0.0, 1.0)
-		draw_rect(Rect2(mx, big.position.y + 23, 1, 16), SFPalette.GOLD, true)
-		skin.text_c(self, mx, big.position.y + 40, "MIN %d" % int(min_fuel), SFPalette.GOLD)
-
-	skin.wrap(self, Vector2(rect.position.x + 8, rect.position.y + 92), rect.size.x - 16,
-		"Fuel is propellant measured in kilograms. It is not electrical energy. Adding fuel raises launch mass, so a light thruster may no longer lift the ship.",
-		SFPalette.PAPER_DIM, 1, 5)
-
-	# Current budget impact.
-	var s: Dictionary = d.summary(campaign.content)
-	skin.text(self, Vector2(rect.position.x + 8, rect.position.y + 148), "DRY MASS", SFPalette.PAPER_DIM)
-	skin.text_r(self, rect.end.x - 8, rect.position.y + 148, "%.0f KG" % float(s["dry_mass_kg"]), SFPalette.PAPER)
-	skin.text(self, Vector2(rect.position.x + 8, rect.position.y + 160), "LAUNCH MASS", SFPalette.PAPER_DIM)
-	skin.text_r(self, rect.end.x - 8, rect.position.y + 160, "%.0f KG" % float(s["wet_mass_kg"]), SFPalette.PAPER)
-	skin.text(self, Vector2(rect.position.x + 8, rect.position.y + 172), "MASS LIMIT", SFPalette.PAPER_DIM)
-	skin.text_r(self, rect.end.x - 8, rect.position.y + 172, "%.0f KG" % float(s["mass_limit_kg"]), SFPalette.PAPER)
-
-
-func _draw_summary_column(rect: Rect2) -> void:
-	draw_rect(rect, Color(0.07, 0.10, 0.12), true)
-	draw_rect(rect, SFPalette.STEEL_DARK, false, 1.0)
-	skin.text(self, rect.position + Vector2(6, 5), "MISSION READINESS", SFPalette.CYAN)
-
-	var d = campaign.design
-	var s: Dictionary = d.summary(campaign.content)
-	var w := rect.size.x - 14.0
-	var y := rect.position.y + 20.0
-
-	_metric_row(rect.position.x + 7, y, w, "MASS", "%.0f kg" % float(s["wet_mass_kg"]), "limit %.0f" % float(s["mass_limit_kg"]), float(s["wet_mass_kg"]) <= float(s["mass_limit_kg"]))
-	y += 15.0
-	_metric_row(rect.position.x + 7, y, w, "FUEL", "%.0f kg" % float(s["fuel_kg"]), "min %.0f" % float(campaign.content.requirements.get("minimum_fuel_kg", 0.0)), float(s["fuel_kg"]) >= float(campaign.content.requirements.get("minimum_fuel_kg", 0.0)))
-	y += 15.0
-	_metric_row(rect.position.x + 7, y, w, "POWER", "%.0f W" % float(s["power_demand_w"]), "supply %.0f W" % float(s["power_output_w"]), float(s["power_demand_w"]) <= float(s["power_output_w"]))
-	y += 15.0
-	_metric_row(rect.position.x + 7, y, w, "ENERGY", "%.0f Wh" % float(s["energy_stored_wh"]), "need %.0f Wh" % float(s["energy_required_wh"]), float(s["energy_stored_wh"]) >= float(s["energy_required_wh"]))
-	y += 15.0
-	_metric_row(rect.position.x + 7, y, w, "COST", "%d cr" % int(s["cost"]), "budget %d" % int(campaign.content.program.get("start_credits", 100.0)), float(s["cost"]) <= float(campaign.content.program.get("start_credits", 100.0)))
-	y += 15.0
-	_metric_row(rect.position.x + 7, y, w, "DATA", "%.0f MB" % float(s["data_capture_mb"]), "cap %.0f MB" % float(s["data_capacity_mb"]), float(s["data_capture_mb"]) <= float(s["data_capacity_mb"]))
-	y += 15.0
-	_metric_row(rect.position.x + 7, y, w, "SENSOR", "Q%d" % int(s["sensor_quality"]), "need Q%d" % int(campaign.content.requirements.get("minimum_sensor_quality", 2)), int(s["sensor_quality"]) >= int(campaign.content.requirements.get("minimum_sensor_quality", 2)))
-
-	# Preflight block. The metrics above end at a known y, so start below it.
-	y = maxf(rect.position.y + 132.0, y + 10.0)
-	draw_rect(Rect2(rect.position.x + 6, y, rect.size.x - 12, 1), SFPalette.STEEL_DARK, true)
-	y += 5.0
-	skin.text(self, Vector2(rect.position.x + 6, y), "PREFLIGHT", SFPalette.CYAN)
-	y += 13.0
-
-	if not checks_run:
-		skin.wrap(self, Vector2(rect.position.x + 6, y), rect.size.x - 12,
-			"Not run. Press V to validate the design.", SFPalette.PAPER_DIM, 1, 2)
-		y += 22.0
-	else:
-		# Leave room for the confirm button and its caption at the bottom.
-		var list_bottom: float = rect.end.y - 56.0
-		var shown := 0
-		for c in checks:
-			var check: Dictionary = c
-			if not bool(check.get("blocking", true)):
-				continue
-			if shown >= 8 or y > list_bottom - 10.0:
-				break
-			var ok := bool(check.get("ok", false))
-			var color: Color = SFPalette.GREEN_OK if ok else SFPalette.RED
-			draw_rect(Rect2(rect.position.x + 7, y + 2, 4, 4), color, true)
-			var msg := String(check.get("message", ""))
-			# Advance by the height actually drawn, so a wrapped message never
-			# runs into the next one.
-			var next_y: float = skin.wrap(self, Vector2(rect.position.x + 15, y), rect.size.x - 22,
-				msg, SFPalette.PAPER if ok else SFPalette.RED, 1, 3)
-			y = next_y + 2.0
-			shown += 1
-		# Actionable hint from the first failure only, to keep it focused.
-		var first: Dictionary = d.first_blocking_failure(campaign.content)
-		var hint := String(first.get("hint", ""))
-		if hint != "" and y < list_bottom - 14.0:
-			y += 3.0
-			skin.wrap(self, Vector2(rect.position.x + 6, y), rect.size.x - 12, hint, SFPalette.GOLD, 1, 3)
-
-	var valid: bool = d.is_valid(campaign.content)
-	var confirm_rect := Rect2(rect.position.x + 6, rect.end.y - 38, rect.size.x - 12, 16)
-	skin.button(self, confirm_rect, "ENTER  CONFIRM DESIGN", valid and checks_run, valid, SFPalette.GREEN_OK if valid else SFPalette.STEEL_DARK)
-	skin.text_c(self, rect.position.x + rect.size.x * 0.5, rect.end.y - 18, "V  RUN PREFLIGHT CHECK", SFPalette.PAPER_DIM)
-
-
-func _metric_row(x: float, y: float, w: float, label: String, value: String, target: String, good: bool) -> void:
-	skin.text(self, Vector2(x, y), label, SFPalette.PAPER_DIM)
-	var c: Color = SFPalette.PAPER if good else SFPalette.RED
-	skin.text(self, Vector2(x + 60, y), value, c)
-	skin.text_r(self, x + w, y, target, SFPalette.ASH_LIGHT)

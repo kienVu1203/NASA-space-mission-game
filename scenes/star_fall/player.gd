@@ -17,8 +17,13 @@ var _moving: bool = false
 var _step_timer: float = 0.0
 var _bob: float = 0.0
 var _bob_time: float = 0.0
+var move_target: Vector2 = Vector2.ZERO
+var has_move_target: bool = false
+var mouse_run: bool = false
+var _stuck_timer: float = 0.0
 
 signal stepped
+signal target_reached
 
 
 func setup(skin_ref, walk_px: float, run_px: float) -> void:
@@ -37,10 +42,24 @@ func _ready() -> void:
 	add_child(collider)
 
 
+func set_move_target(target: Vector2, run_to_target: bool = false) -> void:
+	move_target = target
+	has_move_target = true
+	mouse_run = run_to_target
+	_stuck_timer = 0.0
+
+
+func clear_move_target() -> void:
+	has_move_target = false
+	mouse_run = false
+	_stuck_timer = 0.0
+
+
 func _physics_process(delta: float) -> void:
 	if not input_enabled:
 		velocity = Vector2.ZERO
 		_moving = false
+		clear_move_target()
 		queue_redraw()
 		return
 
@@ -48,14 +67,32 @@ func _physics_process(delta: float) -> void:
 		Input.get_action_strength("move_right") - Input.get_action_strength("move_left"),
 		Input.get_action_strength("move_down") - Input.get_action_strength("move_up")
 	)
-	# Normalised so diagonals are not faster than cardinals.
-	if dir.length() > 1.0:
-		dir = dir.normalized()
+	if dir != Vector2.ZERO:
+		clear_move_target()
+		if dir.length() > 1.0:
+			dir = dir.normalized()
+	elif has_move_target:
+		var to_target: Vector2 = move_target - position
+		if to_target.length() <= 4.5:
+			clear_move_target()
+			target_reached.emit()
+		else:
+			dir = to_target.normalized()
 
-	var running := Input.is_action_pressed("run")
+	var running := Input.is_action_pressed("run") or mouse_run
 	var speed := run_speed if running else walk_speed
+	var before_pos := position
 	velocity = dir * speed
 	move_and_slide()
+
+	if has_move_target and dir != Vector2.ZERO:
+		if position.distance_to(before_pos) < speed * delta * 0.2:
+			_stuck_timer += delta
+			if _stuck_timer > 0.28:
+				clear_move_target()
+				target_reached.emit()
+		else:
+			_stuck_timer = 0.0
 
 	_moving = dir != Vector2.ZERO
 	if _moving:

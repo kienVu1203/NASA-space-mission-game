@@ -355,14 +355,21 @@ func _notification(what: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# The construction console owns its own input while it is open.
+	if screen == Screen.CONSTRUCTION:
+		return
+
+	if event is InputEventMouseButton:
+		_handle_mouse_button(event as InputEventMouseButton)
+		return
+	if event is InputEventMouseMotion:
+		_handle_mouse_motion(event as InputEventMouseMotion)
+		return
+
 	if not (event is InputEventKey):
 		return
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
-		return
-
-	# The construction console owns its own keys while it is open.
-	if screen == Screen.CONSTRUCTION:
 		return
 
 	if key_event.keycode == KEY_M:
@@ -389,6 +396,101 @@ func _unhandled_input(event: InputEvent) -> void:
 			_checkpoint_key(key_event.keycode)
 		Screen.SAVE_ERROR:
 			_save_error_key(key_event.keycode)
+
+
+func _menu_item_at(menu, origin: Vector2, width: float, row_h: float, pos: Vector2) -> int:
+	if menu == null:
+		return -1
+	for i in menu.items.size():
+		var r := Rect2(origin.x, origin.y + float(i) * row_h, width, row_h - 2.0)
+		if r.has_point(pos):
+			return i
+	return -1
+
+
+func _handle_mouse_motion(mm: InputEventMouseMotion) -> void:
+	var pos: Vector2 = get_local_mouse_position()
+	if dialogue != null:
+		return
+	match screen:
+		Screen.TITLE:
+			var idx := _menu_item_at(title_menu, Vector2(421, 152), 174.0, 19.0, pos)
+			if idx >= 0 and idx != title_menu.index and bool((title_menu.items[idx] as Dictionary).get("enabled", true)):
+				title_menu.index = idx
+				audio.sfx_select()
+				queue_redraw()
+		Screen.SETTINGS:
+			var idx2 := _menu_item_at(settings_menu, Vector2(124, 100), 392.0, 22.0, pos)
+			if idx2 >= 0 and idx2 != settings_menu.index:
+				settings_menu.index = idx2
+				audio.sfx_select()
+				queue_redraw()
+		Screen.WORLD:
+			if world != null:
+				world.handle_mouse_motion()
+				if mm.button_mask & MOUSE_BUTTON_MASK_LEFT != 0:
+					world.handle_mouse_click((mm.button_mask & MOUSE_BUTTON_MASK_RIGHT) != 0)
+
+
+func _handle_mouse_button(mb: InputEventMouseButton) -> void:
+	if not mb.pressed:
+		return
+	var pos: Vector2 = get_local_mouse_position()
+
+	if dialogue != null:
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			_handle_dialogue_key(KEY_ENTER)
+		elif mb.button_index == MOUSE_BUTTON_RIGHT:
+			_handle_dialogue_key(KEY_ESCAPE)
+		return
+
+	match screen:
+		Screen.TITLE:
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				var idx := _menu_item_at(title_menu, Vector2(421, 152), 174.0, 19.0, pos)
+				if idx >= 0:
+					title_menu.index = idx
+					_title_activate()
+					queue_redraw()
+		Screen.SETTINGS:
+			if mb.button_index == MOUSE_BUTTON_RIGHT:
+				_settings_key(KEY_ESCAPE)
+			elif mb.button_index == MOUSE_BUTTON_LEFT:
+				var idx2 := _menu_item_at(settings_menu, Vector2(124, 100), 392.0, 22.0, pos)
+				if idx2 >= 0:
+					settings_menu.index = idx2
+					_settings_key(KEY_ENTER)
+				elif pos.y >= 336.0:
+					_settings_key(KEY_ESCAPE)
+		Screen.WORLD:
+			if mb.button_index == MOUSE_BUTTON_RIGHT:
+				audio.sfx_back()
+				_open_pause()
+			elif mb.button_index == MOUSE_BUTTON_LEFT and world != null:
+				# Check if player clicked the bottom-center interaction prompt or top-right zone/pause badge
+				if world.focused_prop() != null and Rect2(220, 290, 200, 28).has_point(pos):
+					world.try_interact()
+				elif Rect2(520, 4, 116, 22).has_point(pos):
+					audio.sfx_back()
+					_open_pause()
+				else:
+					world.handle_mouse_click(mb.double_click)
+		Screen.LAUNCH:
+			if mb.button_index == MOUSE_BUTTON_RIGHT or (mb.button_index == MOUSE_BUTTON_LEFT and pos.y >= 330.0):
+				_launch_key(KEY_ESCAPE)
+			elif mb.button_index == MOUSE_BUTTON_LEFT:
+				_launch_key(KEY_ENTER)
+		Screen.MEMORY:
+			if mb.button_index == MOUSE_BUTTON_RIGHT or (mb.button_index == MOUSE_BUTTON_LEFT and pos.y >= 336.0 and pos.x > 330.0):
+				_memory_key(KEY_ESCAPE)
+			elif mb.button_index == MOUSE_BUTTON_LEFT:
+				_memory_key(KEY_ENTER)
+		Screen.CHECKPOINT:
+			if mb.button_index == MOUSE_BUTTON_LEFT or mb.button_index == MOUSE_BUTTON_RIGHT:
+				_checkpoint_key(KEY_ENTER)
+		Screen.SAVE_ERROR:
+			if mb.button_index == MOUSE_BUTTON_LEFT or mb.button_index == MOUSE_BUTTON_RIGHT:
+				_save_error_key(KEY_ENTER)
 
 
 # ---------------------------------------------------------------- title
@@ -1546,6 +1648,35 @@ func _input(event: InputEvent) -> void:
 	if screen != Screen.WORLD or dialogue != null or world == null:
 		return
 	if world.player.input_enabled:
+		return
+	if event is InputEventMouseMotion:
+		var pos: Vector2 = get_local_mouse_position()
+		var idx := _menu_item_at(pause_menu, Vector2(216, 126), 208.0, 20.0, pos)
+		if idx >= 0 and idx != pause_menu.index:
+			pause_menu.index = idx
+			audio.sfx_select()
+			get_viewport().set_input_as_handled()
+			queue_redraw()
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed:
+			var pos2: Vector2 = get_local_mouse_position()
+			if mb.button_index == MOUSE_BUTTON_RIGHT:
+				get_viewport().set_input_as_handled()
+				audio.sfx_back()
+				_close_pause()
+				return
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				var idx2 := _menu_item_at(pause_menu, Vector2(216, 126), 208.0, 20.0, pos2)
+				get_viewport().set_input_as_handled()
+				if idx2 >= 0:
+					pause_menu.index = idx2
+					_pause_activate()
+				elif not Rect2(200, 96, 240, 146).has_point(pos2):
+					audio.sfx_back()
+					_close_pause()
+				queue_redraw()
 		return
 	if not (event is InputEventKey):
 		return

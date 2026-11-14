@@ -22,6 +22,8 @@ var camera: Camera2D
 var props: Array = []
 var _interactables: Array = []
 var _focused = null
+var _hovered_prop = null
+var _pending_prop = null
 var bounds: Rect2 = Rect2(0, 0, 1280, 720)
 var walk_speed: float = 58.0
 var run_speed: float = 98.0
@@ -182,6 +184,10 @@ func remove_prop(object_id: String) -> void:
 		return
 	if _focused == prop:
 		_clear_focus()
+	if _hovered_prop == prop:
+		_hovered_prop = null
+	if _pending_prop == prop:
+		_pending_prop = null
 	_interactables.erase(prop)
 	props.erase(prop)
 	prop.queue_free()
@@ -210,6 +216,17 @@ func _process(delta: float) -> void:
 		entry["p"] = p
 
 	_update_focus()
+	if _pending_prop != null and is_instance_valid(_pending_prop):
+		if player != null and player.input_enabled:
+			var dist_to_pending: float = player.position.distance_to(_pending_prop.position)
+			if dist_to_pending <= 34.0 or not player.has_move_target:
+				var target_p = _pending_prop
+				_pending_prop = null
+				player.clear_move_target()
+				if player.position.distance_to(target_p.position) <= 42.0:
+					interact_requested.emit(String(target_p.prop_id), target_p)
+		else:
+			_pending_prop = null
 	queue_redraw()
 
 
@@ -240,6 +257,10 @@ func _clear_focus() -> void:
 		_focused.highlighted = false
 		_focused = null
 		interactable_focus_changed.emit("")
+	if _hovered_prop != null and is_instance_valid(_hovered_prop):
+		_hovered_prop.mouse_hovered = false
+		_hovered_prop = null
+	_pending_prop = null
 
 
 func focused_prop():
@@ -252,11 +273,71 @@ func try_interact() -> void:
 	interact_requested.emit(String(_focused.prop_id), _focused)
 
 
+func _prop_at_world_point(wpos: Vector2):
+	var best = null
+	var best_dist := INF
+	for p in _interactables:
+		if not is_instance_valid(p):
+			continue
+		var r: Rect2 = p.hit_rect()
+		if r.has_point(wpos):
+			var d: float = wpos.distance_squared_to(p.position)
+			if d < best_dist:
+				best_dist = d
+				best = p
+	return best
+
+
+func handle_mouse_motion() -> void:
+	if player == null or not player.input_enabled:
+		return
+	var wpos: Vector2 = get_global_mouse_position()
+	var hit = _prop_at_world_point(wpos)
+	if hit != _hovered_prop:
+		if _hovered_prop != null and is_instance_valid(_hovered_prop):
+			_hovered_prop.mouse_hovered = false
+		_hovered_prop = hit
+		if _hovered_prop != null:
+			_hovered_prop.mouse_hovered = true
+
+
+func handle_mouse_click(run_mode: bool = false) -> void:
+	if player == null or not player.input_enabled:
+		return
+	var wpos: Vector2 = get_global_mouse_position()
+	var hit = _prop_at_world_point(wpos)
+	if hit != null:
+		if player.position.distance_to(hit.position) <= 36.0:
+			_pending_prop = null
+			player.clear_move_target()
+			interact_requested.emit(String(hit.prop_id), hit)
+		else:
+			_pending_prop = hit
+			var offset_dir: Vector2 = (player.position - hit.position).normalized()
+			if offset_dir == Vector2.ZERO:
+				offset_dir = Vector2(0, 1)
+			var approach: Vector2 = hit.position + Vector2(offset_dir.x * 16.0, maxf(8.0, offset_dir.y * 16.0))
+			player.set_move_target(_clamp_to_bounds(approach), run_mode)
+		return
+
+	_pending_prop = null
+	player.set_move_target(_clamp_to_bounds(wpos), run_mode)
+
+
+func _clamp_to_bounds(p: Vector2) -> Vector2:
+	return Vector2(
+		clampf(p.x, bounds.position.x + 10.0, bounds.end.x - 10.0),
+		clampf(p.y, bounds.position.y + 16.0, bounds.end.y - 10.0)
+	)
+
+
 func release_input() -> void:
 	# Called when the window loses focus, so movement cannot stick.
 	if player != null:
 		player.velocity = Vector2.ZERO
+		player.clear_move_target()
 		player.input_enabled = false
+	_pending_prop = null
 
 
 # ---------------------------------------------------------------- drawing
@@ -268,6 +349,13 @@ func _draw() -> void:
 		_draw_earth_ground(b)
 	else:
 		_draw_ruin_ground(b)
+
+	if player != null and player.input_enabled and player.has_move_target:
+		var tpos: Vector2 = player.move_target.round()
+		var pulse: float = 0.45 + 0.35 * sin(_time * 8.0)
+		var col := Color(SFPalette.CYAN.r, SFPalette.CYAN.g, SFPalette.CYAN.b, pulse)
+		draw_rect(Rect2(tpos.x - 5, tpos.y - 3, 10, 6), col, false, 1.0)
+		draw_rect(Rect2(tpos.x - 1, tpos.y - 1, 2, 2), col, true)
 
 
 ## Dithered ellipse used for drifting shade. Rows of pixels with a random

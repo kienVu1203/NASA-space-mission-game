@@ -32,7 +32,7 @@ enum Screen {
 	SAVE_ERROR,
 }
 
-enum LaunchPhase { COUNTDOWN, ASCENT, SIGNAL, RIFT, CRASH, DONE }
+enum LaunchPhase {COUNTDOWN, ASCENT, SIGNAL, RIFT, CRASH, DONE}
 
 const VW := 640
 const VH := 360
@@ -90,6 +90,12 @@ var save_available: bool = false
 var _world_scene: Node2D = null
 var _overlay_layer: CanvasLayer = null
 var _overlay: Node2D = null
+var _transition_layer: CanvasLayer = null
+var _transition_node: Node2D = null
+var transition_alpha: float = 0.0
+var transition_timer: float = 0.0
+var transition_duration: float = 0.28
+var transition_style: int = 0
 var _last_world_position: Vector2 = Vector2.ZERO
 var _has_last_world_position: bool = false
 var _last_zone: String = ""
@@ -118,6 +124,16 @@ func _ready() -> void:
 	_overlay.set_script(load("res://scenes/star_fall/hud_overlay.gd"))
 	_overlay.game = self
 	_overlay_layer.add_child(_overlay)
+
+	# Transition layer sits above everything (layer 80) for cinematic scene transitions
+	_transition_layer = CanvasLayer.new()
+	_transition_layer.name = "TransitionLayer"
+	_transition_layer.layer = 80
+	add_child(_transition_layer)
+	_transition_node = Node2D.new()
+	_transition_node.name = "TransitionOverlay"
+	_transition_node.draw.connect(_draw_transition)
+	_transition_layer.add_child(_transition_node)
 
 	_build_menus()
 	_refresh_save_state()
@@ -185,6 +201,7 @@ func _go(next: int) -> void:
 		queue_redraw()
 		return
 	previous_screen = screen
+	trigger_transition(0, 0.28)
 
 	# Tear down the previous screen's nodes.
 	if _world_scene != null:
@@ -206,21 +223,32 @@ func _go(next: int) -> void:
 	match next:
 		Screen.TITLE:
 			audio.set_ambience("none")
+			if audio.has_method("play_music"):
+				audio.play_music("title")
 			_refresh_save_state()
 		Screen.SETTINGS:
 			_rebuild_settings_menu()
 		Screen.WORLD:
 			_enter_world(zone)
 		Screen.CONSTRUCTION:
+			if audio.has_method("play_music"):
+				audio.play_music("construction")
 			_enter_construction()
 		Screen.LAUNCH:
+			if audio.has_method("play_music"):
+				audio.play_music("flight")
 			_begin_launch()
 		Screen.MEMORY:
+			if audio.has_method("play_music"):
+				audio.play_music("memory")
 			_begin_memory()
 		Screen.CHECKPOINT:
 			audio.set_ambience("none")
+			if audio.has_method("play_music"):
+				audio.play_music("checkpoint")
 		Screen.SAVE_ERROR:
-			pass
+			if audio.has_method("stop_music"):
+				audio.stop_music()
 	queue_redraw()
 
 
@@ -253,8 +281,46 @@ func _enter_world(zone_id: String) -> void:
 		world.set_player_position(_last_world_position)
 	world.set_input_enabled(true)
 	audio.set_ambience("earth" if zone_id == "spaceport" else "ruin")
+	if audio.has_method("play_music"):
+		audio.play_music("earth" if zone_id == "spaceport" else "ruin")
 	apply_focus_state()
 	queue_redraw()
+
+
+# ---------------------------------------------------------------- transitions
+
+func trigger_transition(style: int = 0, duration: float = 0.28) -> void:
+	if DisplayServer.get_name() == "headless":
+		transition_alpha = 0.0
+		return
+	transition_style = style
+	transition_duration = maxf(0.05, duration)
+	transition_timer = 0.0
+	transition_alpha = 1.0
+	if audio != null and audio.has_method("sfx_transition"):
+		audio.sfx_transition()
+	if _transition_node != null:
+		_transition_node.queue_redraw()
+
+
+func trigger_flash_transition(duration: float = 0.5) -> void:
+	trigger_transition(1, duration)
+
+
+func _draw_transition() -> void:
+	if transition_alpha <= 0.001 or _transition_node == null:
+		return
+	if transition_style == 1:
+		_transition_node.draw_rect(Rect2(0, 0, VW, VH), Color(1.0, 1.0, 1.0, transition_alpha), true)
+	elif transition_style == 2:
+		var slats: int = 16
+		var slat_h: float = float(VH) / float(slats)
+		for s in slats:
+			var bar_h: float = slat_h * transition_alpha
+			var y: float = float(s) * slat_h + (slat_h - bar_h) * 0.5
+			_transition_node.draw_rect(Rect2(0, y, VW, bar_h), SFPalette.INK, true)
+	else:
+		_transition_node.draw_rect(Rect2(0, 0, VW, VH), Color(SFPalette.INK.r, SFPalette.INK.g, SFPalette.INK.b, transition_alpha), true)
 
 
 func _enter_construction() -> void:
@@ -717,6 +783,8 @@ func _repair_junction() -> void:
 		return
 	var result: Dictionary = campaign.repair_junction()
 	if bool(result.get("ok", false)):
+		if audio.has_method("sfx_spark"):
+			audio.sfx_spark()
 		audio.sfx_power_up()
 		var lines: Array = campaign.content.dialogue_lines("junction_repair")
 		_open_dialogue(lines, "POWER RESTORED", Callable(self, "_on_junction_repaired"))
@@ -744,7 +812,10 @@ func _interact_bill(prop) -> void:
 			"The power junction across the site is dead. Nothing here will wake up without it.",
 		], "DORMANT ROBOT")
 		return
-	audio.sfx_power_up()
+	if audio.has_method("sfx_bill_boot"):
+		audio.sfx_bill_boot()
+	else:
+		audio.sfx_power_up()
 	var lines: Array = campaign.content.dialogue_lines("bill_activation")
 	_open_dialogue(lines, "MAINTENANCE UNIT B-4", Callable(self, "_on_bill_activated"))
 
@@ -789,7 +860,14 @@ func _handle_dialogue_key(key: int) -> void:
 	match key:
 		KEY_E, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			var finished: bool = dialogue.advance()
-			audio.sfx_blip()
+			if dialogue_title == "BILL" and audio.has_method("sfx_blip_bill"):
+				audio.sfx_blip_bill()
+			elif (dialogue_title.findn("CONTROL") >= 0 or dialogue_title.findn("COMM") >= 0 or dialogue_title.findn("RADIO") >= 0) and audio.has_method("sfx_blip_control"):
+				audio.sfx_blip_control()
+			elif audio.has_method("sfx_blip_nick"):
+				audio.sfx_blip_nick()
+			else:
+				audio.sfx_blip()
 			if finished:
 				var cb := dialogue_next
 				dialogue = null
@@ -860,7 +938,10 @@ func _signal_lock() -> void:
 	var dist := absf(signal_marker - signal_target)
 	if dist < 0.09:
 		signal_locks += 1
-		audio.sfx_confirm()
+		if audio.has_method("sfx_signal_lock"):
+			audio.sfx_signal_lock()
+		else:
+			audio.sfx_confirm()
 		signal_target = randf_range(0.2, 0.8)
 	else:
 		audio.sfx_denied()
@@ -893,6 +974,8 @@ func _show_crash_intro() -> void:
 func _on_crash_intro_done() -> void:
 	campaign.advance_to(SFCampaign.STAGE_CRASH_SITE)
 	campaign.set_checkpoint(SFCampaign.STAGE_CRASH_SITE, SFCampaign.CHAPTER_CRASH)
+	if audio.has_method("sfx_checkpoint"):
+		audio.sfx_checkpoint()
 	ui.notify("Explore the wreck site. E to interact.", "info", 3.0)
 
 
@@ -900,6 +983,9 @@ func _process_launch(delta: float) -> void:
 	launch_timer += delta
 	match launch_phase:
 		LaunchPhase.COUNTDOWN:
+			if (launch_timer - delta < 0.8 and launch_timer >= 0.8) or (launch_timer - delta < 1.8 and launch_timer >= 1.8):
+				if audio.has_method("sfx_countdown"):
+					audio.sfx_countdown()
 			if launch_timer > 2.6:
 				launch_phase = LaunchPhase.ASCENT
 				launch_timer = 0.0
@@ -908,6 +994,8 @@ func _process_launch(delta: float) -> void:
 			if launch_timer > 3.4:
 				launch_phase = LaunchPhase.SIGNAL
 				launch_timer = 0.0
+				if audio.has_method("sfx_signal_sweep"):
+					audio.sfx_signal_sweep()
 		LaunchPhase.SIGNAL:
 			signal_timer += delta
 			signal_marker = 0.5 + 0.42 * sin(signal_timer * 2.1)
@@ -919,9 +1007,16 @@ func _process_launch(delta: float) -> void:
 				audio.sfx_rift()
 		LaunchPhase.RIFT:
 			crash_shake = sin(launch_timer * 24.0) * 3.0
+			if launch_timer - delta < 1.0 and launch_timer >= 1.0:
+				if audio.has_method("sfx_alarm"):
+					audio.sfx_alarm()
+			if launch_timer - delta < 2.0 and launch_timer >= 2.0:
+				if audio.has_method("sfx_hull_creak"):
+					audio.sfx_hull_creak()
 			if launch_timer > 3.2:
 				launch_phase = LaunchPhase.CRASH
 				launch_timer = 0.0
+				trigger_flash_transition(0.6)
 				audio.sfx_impact()
 		LaunchPhase.CRASH:
 			crash_shake = maxf(0.0, crash_shake - delta * 4.0)
@@ -1027,6 +1122,14 @@ func _process(delta: float) -> void:
 	blink += delta
 	skin.tick(delta)
 	ui.tick(delta)
+	if transition_alpha > 0.0:
+		if DisplayServer.get_name() == "headless":
+			transition_alpha = 0.0
+		else:
+			transition_timer += delta
+			transition_alpha = maxf(0.0, 1.0 - (transition_timer / transition_duration))
+		if _transition_node != null:
+			_transition_node.queue_redraw()
 	if dialogue != null:
 		dialogue.tick(delta)
 	if screen == Screen.LAUNCH:

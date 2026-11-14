@@ -28,6 +28,7 @@ signal design_confirmed_ok
 
 const SFPalette := preload("res://core/star_fall/sf_palette.gd")
 const SFDesign := preload("res://core/star_fall/sf_design.gd")
+const SFMenu := preload("res://core/star_fall/sf_menu.gd")
 
 const SHELVES := ["computer", "propulsion", "power", "communications", "sensor", "fuel"]
 const SHELF_W := 164.0
@@ -44,6 +45,16 @@ var shelf_index: int = 0
 var focus: Dictionary = {}      # slot -> focused item index on that shelf
 var inspecting: bool = false
 var checks_run: bool = false
+var checks: Array = []
+var slot_menu = null
+var current_slot: int:
+	get:
+		return shelf_index
+	set(val):
+		shelf_index = clampi(val, 0, SHELVES.size() - 1)
+		if slot_menu != null:
+			slot_menu.index = shelf_index
+
 var fuel_flash: float = 0.0
 var _blink: float = 0.0
 var _hits: Array = []           # [{rect, shelf, item}] rebuilt each draw, for the mouse
@@ -58,6 +69,12 @@ func setup(skin_ref, ui_ref, campaign_ref) -> void:
 
 
 func _ready() -> void:
+	slot_menu = SFMenu.new()
+	var menu_items: Array = []
+	for s in SHELVES:
+		menu_items.append({"id": String(s), "label": String(s).to_upper(), "enabled": true})
+	slot_menu.set_items(menu_items)
+
 	# Each shelf starts focused on whatever is already installed there.
 	for s in SFDesign.SLOTS:
 		var slot := String(s)
@@ -218,21 +235,68 @@ func _adjust_fuel(steps: int) -> void:
 	if is_equal_approx(before, campaign.design.fuel_kg):
 		skin.audio.sfx_denied()
 	else:
-		skin.audio.sfx_select()
+		if skin.audio.has_method("sfx_fuel_tick"):
+			skin.audio.sfx_fuel_tick()
+		else:
+			skin.audio.sfx_select()
 		fuel_flash = 0.25
 	checks_run = false
 	queue_redraw()
 
 
+func _cycle_component(delta: int = 1) -> void:
+	var slot_id: String = String(slot_menu.current_id()) if slot_menu != null else _current_slot()
+	if slot_id == "fuel":
+		_adjust_fuel(delta * 5)
+		return
+	var options: Array = campaign.content.components_for_slot(slot_id)
+	if options.is_empty():
+		return
+	var current: String = String(campaign.design.slot_component(slot_id))
+	var index := -1
+	for i in options.size():
+		if String((options[i] as Dictionary).get("id", "")) == current:
+			index = i
+			break
+	var cursor: int = index + 1
+	var count: int = options.size() + 1
+	var next_position: int = int(fposmod(float(cursor + delta), float(count)))
+	if next_position == 0:
+		campaign.design.clear_slot(slot_id)
+		skin.audio.sfx_remove()
+	else:
+		var comp: Dictionary = options[next_position - 1] as Dictionary
+		campaign.design.set_slot(slot_id, String(comp.get("id", "")))
+		focus[slot_id] = next_position - 1
+		skin.audio.sfx_install()
+	_invalidate()
+	queue_redraw()
+
+
+func _invalidate() -> void:
+	checks_run = false
+	checks = []
+
+
 # ---------------------------------------------------------------- actions
 
 func _run_preflight() -> void:
+	if skin.audio.has_method("sfx_preflight_scan"):
+		skin.audio.sfx_preflight_scan()
+	checks = campaign.design.validate(campaign.content)
 	checks_run = true
-	if campaign.design.is_valid(campaign.content):
-		skin.audio.sfx_confirm()
+	var valid: bool = campaign.design.is_valid(campaign.content)
+	if valid:
+		if skin.audio.has_method("sfx_preflight_pass"):
+			skin.audio.sfx_preflight_pass()
+		else:
+			skin.audio.sfx_confirm()
 		Events.preflight_passed.emit()
 	else:
-		skin.audio.sfx_denied()
+		if skin.audio.has_method("sfx_preflight_fail"):
+			skin.audio.sfx_preflight_fail()
+		else:
+			skin.audio.sfx_denied()
 		var first: Dictionary = campaign.design.first_blocking_failure(campaign.content)
 		Events.preflight_failed.emit(String(first.get("message", "")))
 	queue_redraw()
@@ -243,7 +307,10 @@ func _confirm() -> void:
 	# atomic: the commit only happens when every blocking check is green.
 	var result: Dictionary = campaign.confirm_design()
 	if bool(result.get("ok", false)):
-		skin.audio.sfx_confirm()
+		if skin.audio.has_method("sfx_checkpoint"):
+			skin.audio.sfx_checkpoint()
+		else:
+			skin.audio.sfx_confirm()
 		campaign.set_checkpoint("construction")
 		design_confirmed_ok.emit()
 	else:

@@ -1,47 +1,94 @@
-# NASA Space Mission Game
+# STAR FALL
 
-A 2D strategy game where players design, manage and simulate a complete space mission: choosing objectives, spacecraft, instruments and launch vehicle under budget, mass and power limits, then seeing how those trade-offs shape the outcome.
+A single-player, offline pixel-art adventure. Nick, a human astronaut, builds the
+experimental spacecraft **VELA** in a present-day spaceport, flies out to
+investigate an anomalous signal, and is pulled through a spatial rift into a
+ruined, polluted world. There he meets **Bill**, an abandoned maintenance robot,
+who holds one memory of a green city.
 
-Built for the **NASA Space Apps Challenge** (48-hour hackathon, team of 6). The official brief and datasets are released on event day, so the game logic and data are placeholders until then.
+Chapter 1 (present-day Earth and the crash site) is complete and playable. The
+combat, crafting and later chapters are not built yet. Time travel and the VELA's
+drive are fictional story devices, not claims about real technology.
 
-> **Currently playable: Operation: Starfall.** The repo also contains a complete 2D top-down orbital-salvage satire built from `operation_starfall_story_bible_en.md`. It is self-contained under `scenes/starfall/`, `core/starfall/` and `data/starfall/`, is the project's main scene, and is documented in [docs/starfall.md](docs/starfall.md).
+**Everything is documented in [docs/star_fall_contract.md](docs/star_fall_contract.md)** —
+architecture, data schemas, stable IDs, save format, units and test commands.
+
+> **The repo also still contains Operation: Starfall**, a complete orbital-salvage
+> satire under `scenes/starfall/`, `core/starfall/` and `data/starfall/`. It stays
+> runnable (see [docs/starfall.md](docs/starfall.md)) but STAR FALL is the main scene.
 
 ## Quick facts (read this first, humans and Claude sessions)
 
 | Item | Value |
 |---|---|
-| Engine | **Godot 4.7.2 stable** (everyone must use this exact version) |
+| Engine | **Godot 4.0 stable**, the version installed here. Later 4.x releases will load the project. |
 | Language | GDScript (static typing) |
-| Renderer | Compatibility (`gl_compatibility`), required for web export |
-| Target | Web (HTML5), exported and hosted on itch.io or GitHub Pages |
-| Resolution | 1280x720, stretch mode `canvas_items` (Operation: Starfall draws at 480x270 and upscales with nearest filtering) |
-| Game type | 2D, UI-driven strategy (Control nodes, no physics) |
-| Flow | Main -> Design -> Simulation -> Result |
-| Status | Operation: Starfall is complete and playable; the NASA mission-planner skeleton is still folders and starter scripts |
+| Renderer | Compatibility (`gl_compatibility`) |
+| Target | Desktop, offline, no asset downloads |
+| Resolution | 640x360 base, window opens at 1280x720, `canvas_items`, nearest filtering |
+| Game type | 2D angled top-down exploration, Y-sorted, generated art and audio |
+| Flow | Menu -> Earth -> Briefing -> Construction -> Preflight -> Launch -> Rift -> Crash Site -> Salvage -> Bill -> Memory -> Checkpoint |
+| Status | **STAR FALL Chapter 1** complete and playable; later chapters deferred |
+| Also in repo | **Operation: Starfall**, a complete orbital-salvage satire in `scenes/starfall/` (see [docs/starfall.md](docs/starfall.md)) |
 
 ## Getting started
 
-1. Install Godot **4.7.2** (standard, not .NET) and Git. Install VSCode with the `godot-tools` extension.
+1. Install Godot **4.0** (standard, not .NET) and Git. Install VSCode with the `godot-tools` extension.
 2. Clone the repo and open the folder with the Godot project manager (Import -> `project.godot`).
 3. In VSCode, set `godotTools.editorPath.godot4` to your own Godot executable (a per-machine setting; do not commit it).
 4. In Godot: *Editor Settings -> Text Editor -> External* -> enable **Use External Editor**, set Exec Path to your `Code.exe`, Exec Flags to `{project} --goto {file}:{line}:{col}`.
 5. Keep the Godot editor open while coding in VSCode. The GDScript language server runs inside Godot (port 6008).
 
+## Run it
+
+Open `project.godot` in Godot 4.0 and press **F5**, or from a terminal:
+
+```bash
+godot --path .          # the main scene is scenes/star_fall/main.tscn
+```
+
+Headless checks (no display needed):
+
+```bash
+godot --headless --path . --script res://tests/star_fall/test_parse.gd
+godot --headless --path . --script res://tests/star_fall/test_logic.gd
+godot --headless --path . --script res://tests/star_fall/test_flow.gd
+```
+
+`tests/star_fall/capture.gd` renders key screens to `user://captures/` and
+needs a real display. Full commands and acceptance steps are in
+[docs/star_fall_contract.md](docs/star_fall_contract.md).
+
+### Controls
+
+| Key | Action |
+|---|---|
+| WASD / arrows | Move (diagonals normalised) |
+| Shift | Run |
+| E | Interact, advance dialogue |
+| Esc | Pause, back, skip a cutscene |
+| Enter / Space | Confirm, advance dialogue |
+| Left / Right, Q / E, V | Construction console: cycle part, adjust fuel, run preflight |
+
 ## Project structure
 
 ```
-autoload/    Global singletons: game_state.gd, events.gd (signal bus), data_loader.gd
-core/        Pure logic with no UI access: calculations.gd (delta-v), mission_rules.gd,
-             starfall/  (palette, font, sprites, synth, ship/debris simulation)
-scenes/      main/  design/  simulation/  result/   (one folder per screen)
-             starfall/  The playable Operation: Starfall game (main scene)
-data/        JSON game data + schema.md (replace with NASA data on event day)
-             starfall/  All Starfall tuning and prose: balance, debris, sectors, logs, endings
-tools/       Python scripts that fetch/convert NASA data into data/*.json
-assets/      ui/ (Theme, icons), sprites/, backgrounds/, fonts/, audio/, CREDITS.md
-tests/       Headless playtests (playtest, flow, botrun), synth check, screenshot tool
-docs/        roles.md, game_design.md, test_checklist.md, submission.md, pitch/
-.claude/     Claude Code subagents (agents/), rules (rules/), deny-list (settings.json)
+autoload/         game_state.gd (owns the campaign), events.gd (signal bus), data_loader.gd
+core/star_fall/   Pure logic + presentation kit, no nodes: design and preflight
+                  validation, campaign state, save/load, content loading, palette,
+                  bitmap font, generated sprites, synth audio, shared UI drawing
+scenes/star_fall/ main.tscn + main.gd (flow controller), world.gd, player.gd,
+                  prop.gd, hud_overlay.gd, construction_screen.gd
+data/star_fall/   ship_parts.json, campaign.json, sites.json: all tuning and prose
+tests/star_fall/  test_parse.gd, test_logic.gd, test_flow.gd, capture.gd
+docs/             star_fall_contract.md (source of truth), starfall.md, test_checklist.md, roles.md
+core/starfall/    Operation: Starfall: palette, font, sprites, synth, ship and debris models
+scenes/starfall/  Operation: Starfall: its own 480x270 screens
+data/starfall/    Operation: Starfall: balance, debris, sectors, logs, endings, upgrades
+tests/            Operation: Starfall suites (playtest, flow, botrun), synth check, capture tool
+core/             Legacy mission-planner skeleton: calculations.gd, mission_rules.gd
+data/             Legacy empty JSON files, untouched
+assets/           Placeholder folders and CREDITS.md (neither game loads asset files)
 ```
 
 ## Roles and folder ownership
@@ -50,7 +97,7 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
 
 | # | Role | Owns |
 |---|---|---|
-| 1 | Tech Lead | `autoload/`, `core/`, `scenes/main/`, `tests/`, `project.godot` |
+| 1 | Tech Lead | `autoload/`, `core/`, `scenes/`, `tests/`, `project.godot` |
 | 2 | Design UI | `scenes/design/` |
 | 3 | Simulation | `scenes/simulation/`, `scenes/result/` |
 | 4 | Data and Science | `data/`, `tools/` |
@@ -60,10 +107,12 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
 ## Architecture rules
 
 - Screens never call each other. They read and write state through `GameState` and communicate through signals on `Events`.
-- Game values (cost, mass, power, delta-v, probabilities) live in `data/*.json`, never hardcoded in scripts. Real NASA data will replace the placeholder files on event day, so only the JSON should need to change.
-- `core/` is pure functions with no scene or UI access, so formulas are easy to test and reuse.
-- UI only displays state and requests changes. Use `Container` nodes (not hand-placed positions) and the shared Theme in `assets/ui/`.
+- `core/star_fall/` is pure logic with no scene or UI access, so it is easy to test. The scene layer asks it questions and draws the answers.
+- Game values (cost, mass, power, fuel, probabilities) live in `data/star_fall/*.json`, never hardcoded in scripts. Balance changes should only ever touch JSON.
+- UI displays state and requests changes; it never owns campaign state.
+- Saving goes through `sf_save.gd` only. A corrupt save is reported, never silently replaced.
 - Autoloads are registered in `project.godot` as `GameState`, `Events`, `DataLoader`.
+- The legacy NASA mission-planner skeleton (`core/calculations.gd`, `core/mission_rules.gd`, `data/destinations.json`, …) is untouched and still loads. STAR FALL's campaign state is deliberately separate from its `budget_*` demo fields.
 
 ## Conventions
 
@@ -101,11 +150,18 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
 
 ## Not set up yet
 
-- **Git LFS:** add rules to `.gitattributes` (suggested: `*.png *.jpg *.ogg *.wav *.glb`) before the first large asset is committed.
-- **`export_presets.cfg`:** create via *Project -> Export* (Web preset) and do a trial export + upload to itch.io well before event day.
-- **Scenes:** no `.tscn` files yet. Each owner creates their screen in their own folder.
-- **Data:** `data/*.json` are empty arrays; `data/schema.md` is a draft to be updated in the first 3 hours of the event.
-- **`.editorconfig`** was discussed but not added (optional, e.g. `indent_style = tab`).
+- **`export_presets.cfg`:** no export preset exists. The game runs from the
+  editor or `godot --path .`; an export target still has to be created.
+- **Git LFS:** not enabled. The game currently ships no binary assets, so
+  nothing large needs it yet.
+- **`.editorconfig`** was discussed but not added (optional, e.g.
+  `indent_style = tab`).
+- **Chapter 2 onward:** combat, crafting, the Forgotten City, Silent Coast,
+  Dawn Tower and Return Home are declared in `data/star_fall/campaign.json` and
+  are not implemented. See `docs/star_fall_contract.md` section 11.
+- **Combined test runner:** there is no single script that runs both games'
+  suites. Run STAR FALL's three from the "Run it" section and Operation:
+  Starfall's from [docs/starfall.md](docs/starfall.md).
 
 ## Event-day timeline (48h)
 

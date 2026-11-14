@@ -1,0 +1,230 @@
+{
+  "schema_version": 1,
+  "_note": "Gameplay parameters for the fictional setting. Mass is kg, fuel is kg of propellant, power is W, stored energy is Wh, cost is fictional construction credits, data is MB.",
+  "program": {
+    "title": "STAR FALL",
+    "ship_name": "VELA",
+    "start_credits": 100,
+    "inventory_limit": 24,
+    "walk_speed": 58.0,
+    "run_speed": 98.0,
+    "fuel_step_kg": 20.0
+  },
+  "hull": {
+    "id": "standard_hull",
+    "name": "Standard Hull",
+    "description": "A single-stage experimental frame. Rated for one crew and a compact sensor suite.",
+    "mass_kg": 900,
+    "cost": 0,
+    "launch_mass_limit_kg": 2000,
+    "fuel_capacity_kg": 600,
+    "data_capacity_mb": 512
+  },
+  "mission_requirements": {
+    "required_slots": [
+      "computer",
+      "propulsion",
+      "power",
+      "communications",
+      "sensor"
+    ],
+    "minimum_sensor_quality": 2,
+    "minimum_fuel_kg": 180,
+    "minimum_stored_energy_wh": 350,
+    "observation_hours": 1.6
+  },
+  "components": [
+    {
+      "id": "flight_computer_standard",
+      "slot": "computer",
+      "name": "Flight Computer FC-3",
+      "description": "Guidance and navigation. The only flight computer rated for this frame.",
+      "mass_kg": 30,
+      "cost": 8,
+      "power_demand_w": 30,
+      "power_output_w": 0,
+      "energy_storage_wh": 0,
+      "thrust_capacity_kg": 0,
+      "sensor_quality": 0,
+      "data_gain_mb": 0
+    },
+    {
+      "id": "propulsion_light",
+      "slot": "propulsion",
+      "name": "Hydrolox Light Thruster",
+      "description": "Light and cheap. Lifts 1500 kg, so a heavy power plant and a full tank will not clear the pad.",
+      "mass_kg": 150,
+      "cost": 14,
+      "power_demand_w": 25,
+      "power_output_w": 0,
+      "energy_storage_wh": 0,
+      "thrust_capacity_kg": 1500,
+      "sensor_quality": 0,
+      "data_gain_mb": 0
+    },
+    {
+      "id": "propulsion_heavy",
+      "slot": "propulsion",
+      "name": "Hydrolox Heavy Cluster",
+      "description": "Heavier and costlier, but lifts 2400 kg. The hull limit, not the engine, becomes the constraint.",
+      "mass_kg": 300,
+      "cost": 26,
+      "power_demand_w": 45,
+      "power_output_w": 0,
+      "energy_storage_wh": 0,
+      "thrust_capacity_kg": 2400,
+      "sensor_quality": 0,
+      "data_gain_mb": 0
+    },
+    {
+      "id": "power_solar_array",
+      "slot": "power",
+      "name": "Folded Solar Array",
+      "description": "Cheap and light, 250 W of output and 380 Wh of storage. Enough for a balanced sensor, not for the Deep Fields Instrument.",
+      "mass_kg": 45,
+      "cost": 10,
+      "power_demand_w": 0,
+      "power_output_w": 250,
+      "energy_storage_wh": 380,
+      "thrust_capacity_kg": 0,
+      "sensor_quality": 0,
+      "data_gain_mb": 0
+    },
+    {
+      "id": "power_rtg_cell",
+      "slot": "power",
+      "name": "Radioisotope Power Cell",
+      "description": "Heavy and costly, but 520 W of output and 1050 Wh of storage runs any sensor through the observation window.",
+      "mass_kg": 120,
+      "cost": 24,
+      "power_demand_w": 0,
+      "power_output_w": 520,
+      "energy_storage_wh": 1050,
+      "thrust_capacity_kg": 0,
+      "sensor_quality": 0,
+      "data_gain_mb": 0
+    },
+    {
+      "id": "comms_standard",
+      "slot": "communications",
+      "name": "Standard Communications Module",
+      "description": "Slow but reliable telemetry link to mission control. Required before launch clearance.",
+      "mass_kg": 25,
+      "cost": 6,
+      "power_demand_w": 40,
+      "power_output_w": 0,
+      "energy_storage_wh": 0,
+      "thrust_capacity_kg": 0,
+      "sensor_quality": 0,
+      "data_gain_mb": 0
+    },
+    {
+      "id": "sensor_low_gain",
+      "slot": "sensor",
+      "name": "Low-Gain Sensor Package",
+      "description": "A minimal scientific sensor. Light and cheap, but it cannot resolve the signal.",
+      "mass_kg": 40,
+      "cost": 4,
+      "power_demand_w": 45,
+      "power_output_w": 0,
+      "energy_storage_wh": 0,
+      "thrust_capacity_kg": 0,
+      "sensor_quality": 1,
+      "data_gain_mb": 12
+    },
+    {
+      "id": "sensor_spectrometer",
+      "slot": "sensor",
+      "name": "Spectrometer Array",
+      "description": "The affordable viable sensor. Quality 2, modest mass, 90 W of demand.",
+      "mass_kg": 85,
+      "cost": 12,
+      "power_demand_w": 90,
+      "power_output_w": 0,
+      "energy_storage_wh": 0,
+      "thrust_capacity_kg": 0,
+      "sensor_quality": 2,
+      "data_gain_mb": 30
+    },
+    {
+      "id": "sensor_deep_field",
+      "slot": "sensor",
+      "name": "Deep Fields Instrument",
+      "description": "Superb science yield. Heavy, and it draws 190 W, which the solar array cannot support.",
+      "mass_kg": 150,
+      "cost": 22,
+      "power_demand_w": 190,
+      "power_output_w": 0,
+      "energy_storage_wh": 0,
+      "thrust_capacity_kg": 0,
+      "sensor_quality": 3,
+      "data_gain_mb": 55
+    }
+  ],
+  "salvage": {
+    "salvage_plate": {
+      "material": "scrap_metal",
+      "amount": 3
+    },
+    "salvage_circuit": {
+      "material": "circuitry",
+      "amount": 2
+    },
+    "salvage_polymer": {
+      "material": "polymer",
+      "amount": 4
+    },
+    "scrap_extra": {
+      "material": "scrap_metal",
+      "amount": 2
+    }
+  },
+  "materials": {
+    "scrap_metal": {
+      "name": "Scrap Metal",
+      "short": "SCRAP"
+    },
+    "circuitry": {
+      "name": "Circuitry",
+      "short": "CIRCUIT"
+    },
+    "polymer": {
+      "name": "Polymer",
+      "short": "POLY"
+    }
+  },
+  "site_items": {
+    "crash_vela": {
+      "name": "Damaged VELA",
+      "interact_label": "Inspect VELA"
+    },
+    "salvage_plate": {
+      "name": "Torn Hull Plate",
+      "interact_label": "Collect scrap metal"
+    },
+    "salvage_circuit": {
+      "name": "Exposed Circuitry",
+      "interact_label": "Collect circuitry"
+    },
+    "salvage_polymer": {
+      "name": "Cracked Polymer Foam",
+      "interact_label": "Collect polymer"
+    },
+    "power_connection": {
+      "name": "Emergency Power Junction",
+      "interact_label": "Repair power connection"
+    },
+    "bill_body": {
+      "name": "Dormant Robot",
+      "interact_label": "Inspect robot"
+    },
+    "scrap_extra": {
+      "name": "Torn Hull Plate",
+      "interact_label": "Collect scrap metal"
+    }
+  },
+  "repair_cost": {
+    "scrap_metal": 2,
+    "circuitry": 1
+  }
+}

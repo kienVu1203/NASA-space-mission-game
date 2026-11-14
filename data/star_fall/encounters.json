@@ -1,0 +1,525 @@
+{
+  "schema_version": 1,
+  "_note": "Phase 2 shield-defense encounters. All tuning is here: shield geometry, projectile types, health bands, pattern scheduling, telegraphs, rewards. Scripts contain no balance values.",
+  "arena": {
+    "width": 640,
+    "height": 360,
+    "nick": {
+      "x": 320,
+      "y": 244
+    },
+    "ground_y": 300
+  },
+  "shield": {
+    "radius": 44.0,
+    "coverage_degrees": 84.0,
+    "thickness": 5.0,
+    "min_cursor_distance": 14.0,
+    "body_radius": 8.0,
+    "initial_direction": {
+      "x": 0.0,
+      "y": 1.0
+    }
+  },
+  "combat": {
+    "counterattack_lock_seconds": 0.55,
+    "victory_hold_seconds": 1.6,
+    "defeat_hold_seconds": 0.9,
+    "projectile_life_seconds": 14.0,
+    "offscreen_margin": 48.0,
+    "min_telegraph_seconds": 0.5,
+    "max_telegraph_seconds": 1.6,
+    "opposite_direction_dot": -0.5,
+    "opposite_direction_gap_seconds": 0.4,
+    "opposite_direction_push_seconds": 0.5
+  },
+  "projectile_types": {
+    "bolt": {
+      "family": "hostile",
+      "name": "Magnetic Bolt",
+      "damage": 9,
+      "radius": 4.0,
+      "speed_scale": 1.0,
+      "shape": "chevron",
+      "color": "f2a05a",
+      "outline": "3a1a0c",
+      "trail": "e0703a"
+    },
+    "slug": {
+      "family": "hostile",
+      "name": "Scrap Slug",
+      "damage": 15,
+      "radius": 6.5,
+      "speed_scale": 0.82,
+      "shape": "shard",
+      "color": "e0603c",
+      "outline": "2a0f0c",
+      "trail": "8a4b2f"
+    },
+    "spray": {
+      "family": "hostile",
+      "name": "Pressure Spray",
+      "damage": 7,
+      "radius": 3.5,
+      "speed_scale": 1.18,
+      "shape": "dart",
+      "color": "f26a8a",
+      "outline": "33101c",
+      "trail": "a03a58"
+    },
+    "glob": {
+      "family": "hostile",
+      "name": "Toxic Glob",
+      "damage": 16,
+      "radius": 7.0,
+      "speed_scale": 0.7,
+      "shape": "blob",
+      "color": "d95a3a",
+      "outline": "2a100c",
+      "trail": "7d5f9b"
+    },
+    "arc": {
+      "family": "hostile",
+      "name": "Charge Arc",
+      "damage": 11,
+      "radius": 4.5,
+      "speed_scale": 1.05,
+      "shape": "bolt",
+      "color": "ff8a5c",
+      "outline": "3a1a0c",
+      "trail": "e5c04a"
+    },
+    "memory_mote": {
+      "family": "beneficial",
+      "name": "Memory Mote",
+      "damage": 0,
+      "charge": 34,
+      "radius": 6.0,
+      "speed_scale": 0.72,
+      "shape": "diamond",
+      "color": "7ef2c8",
+      "outline": "0a3327",
+      "trail": "2b8b84"
+    },
+    "brine_mote": {
+      "family": "beneficial",
+      "name": "Clean Brine",
+      "damage": 0,
+      "charge": 34,
+      "radius": 7.0,
+      "speed_scale": 0.62,
+      "shape": "orb",
+      "color": "62e0ff",
+      "outline": "0a2433",
+      "trail": "2b8b84"
+    }
+  },
+  "bosses": [
+    {
+      "id": "scrap_king",
+      "chapter_id": "forgotten_city",
+      "name": "SCRAP KING",
+      "subtitle": "CORRUPTED SALVAGE UNIT",
+      "boss_health": 100,
+      "nick_health": 100,
+      "charge_max": 100,
+      "counterattack_damage": 25,
+      "reward_component": "navigation_chip",
+      "reward_flag": "scrap_king_defeated",
+      "archive_id": "city_archive",
+      "seed": 71203,
+      "visual": {
+        "silhouette": "industrial",
+        "shell": "2f3a38",
+        "armor": "525d64",
+        "armor_light": "7d8a92",
+        "glow": "e0703a",
+        "eye": "e5c04a",
+        "screen": "e0603c",
+        "emitter_style": "magnetic"
+      },
+      "emitters": [
+        {
+          "id": "left",
+          "x": -14,
+          "y": 196,
+          "label": "west relay"
+        },
+        {
+          "id": "right",
+          "x": 654,
+          "y": 196,
+          "label": "east relay"
+        },
+        {
+          "id": "top_left",
+          "x": 128,
+          "y": -14,
+          "label": "north-west coil"
+        },
+        {
+          "id": "top_right",
+          "x": 512,
+          "y": -14,
+          "label": "north-east coil"
+        },
+        {
+          "id": "rear",
+          "x": 320,
+          "y": 96,
+          "label": "chassis vent"
+        }
+      ],
+      "beneficial": {
+        "type": "memory_mote",
+        "emitters": [
+          "left",
+          "right"
+        ],
+        "telegraph": 1.0,
+        "interval": 6.2
+      },
+      "limits": {
+        "min_fire_interval": 0.78,
+        "max_projectile_speed": 205.0,
+        "max_active": 14,
+        "max_volley": 3
+      },
+      "bands": [
+        {
+          "at_fraction": 1.0,
+          "fire_interval": 2.35,
+          "projectile_speed": 92.0,
+          "max_active": 6,
+          "telegraph": 1.2,
+          "beneficial_interval": 5.2,
+          "patterns": [
+            "lane_single",
+            "lane_single",
+            "lane_pair"
+          ]
+        },
+        {
+          "at_fraction": 0.72,
+          "fire_interval": 1.88,
+          "projectile_speed": 112.0,
+          "max_active": 8,
+          "telegraph": 1.05,
+          "beneficial_interval": 5.0,
+          "patterns": [
+            "lane_single",
+            "lane_pair",
+            "staggered_cross"
+          ]
+        },
+        {
+          "at_fraction": 0.45,
+          "fire_interval": 1.5,
+          "projectile_speed": 138.0,
+          "max_active": 10,
+          "telegraph": 0.9,
+          "beneficial_interval": 4.8,
+          "patterns": [
+            "lane_pair",
+            "staggered_cross",
+            "salvo_arc"
+          ]
+        },
+        {
+          "at_fraction": 0.18,
+          "fire_interval": 1.15,
+          "projectile_speed": 168.0,
+          "max_active": 13,
+          "telegraph": 0.78,
+          "beneficial_interval": 4.6,
+          "patterns": [
+            "staggered_cross",
+            "salvo_arc",
+            "pressure_wave"
+          ]
+        }
+      ],
+      "patterns": {
+        "lane_single": {
+          "emitters": [
+            "left",
+            "right"
+          ],
+          "count": 1,
+          "volley": 1,
+          "type": "bolt",
+          "spread_degrees": 0.0,
+          "jitter_degrees": 6.0,
+          "stagger": 0.0
+        },
+        "lane_pair": {
+          "emitters": [
+            "left",
+            "right"
+          ],
+          "count": 2,
+          "volley": 1,
+          "type": "bolt",
+          "spread_degrees": 0.0,
+          "jitter_degrees": 4.0,
+          "stagger": 0.8
+        },
+        "staggered_cross": {
+          "emitters": [
+            "top_left",
+            "right",
+            "top_right",
+            "left"
+          ],
+          "count": 3,
+          "volley": 1,
+          "type": "bolt",
+          "spread_degrees": 0.0,
+          "jitter_degrees": 5.0,
+          "stagger": 0.42
+        },
+        "salvo_arc": {
+          "emitters": [
+            "left",
+            "right"
+          ],
+          "count": 1,
+          "volley": 2,
+          "type": "slug",
+          "spread_degrees": 16.0,
+          "jitter_degrees": 3.0,
+          "stagger": 0.0
+        },
+        "pressure_wave": {
+          "emitters": [
+            "top_left",
+            "top_right",
+            "left",
+            "right"
+          ],
+          "count": 3,
+          "volley": 1,
+          "type": "slug",
+          "spread_degrees": 0.0,
+          "jitter_degrees": 8.0,
+          "stagger": 0.36
+        }
+      }
+    },
+    {
+      "id": "toxic_tide",
+      "chapter_id": "silent_coast",
+      "name": "TOXIC TIDE",
+      "subtitle": "CORRUPTED MARINE UNIT",
+      "boss_health": 132,
+      "nick_health": 100,
+      "charge_max": 100,
+      "counterattack_damage": 33,
+      "reward_component": "power_core",
+      "reward_flag": "toxic_tide_defeated",
+      "archive_id": "coast_archive",
+      "seed": 20477,
+      "visual": {
+        "silhouette": "marine",
+        "shell": "1f3538",
+        "armor": "3e6b70",
+        "armor_light": "6fa3a8",
+        "glow": "62e0ff",
+        "eye": "7ef2c8",
+        "screen": "62e0ff",
+        "emitter_style": "pumping"
+      },
+      "emitters": [
+        {
+          "id": "left",
+          "x": -14,
+          "y": 150,
+          "label": "intake line"
+        },
+        {
+          "id": "right",
+          "x": 654,
+          "y": 150,
+          "label": "outfall line"
+        },
+        {
+          "id": "top",
+          "x": 248,
+          "y": -14,
+          "label": "pressure stack"
+        },
+        {
+          "id": "top_2",
+          "x": 420,
+          "y": -14,
+          "label": "vent stack"
+        },
+        {
+          "id": "left_low",
+          "x": -14,
+          "y": 306,
+          "label": "pump housing"
+        },
+        {
+          "id": "right_low",
+          "x": 654,
+          "y": 306,
+          "label": "drain manifold"
+        }
+      ],
+      "beneficial": {
+        "type": "brine_mote",
+        "emitters": [
+          "left_low",
+          "right_low"
+        ],
+        "telegraph": 1.15,
+        "interval": 7.0
+      },
+      "limits": {
+        "min_fire_interval": 0.72,
+        "max_projectile_speed": 200.0,
+        "max_active": 14,
+        "max_volley": 3
+      },
+      "bands": [
+        {
+          "at_fraction": 1.0,
+          "fire_interval": 2.1,
+          "projectile_speed": 100.0,
+          "max_active": 7,
+          "telegraph": 1.15,
+          "beneficial_interval": 6.0,
+          "patterns": [
+            "tide_sweep",
+            "lane_pair",
+            "spray_arc"
+          ]
+        },
+        {
+          "at_fraction": 0.7,
+          "fire_interval": 1.7,
+          "projectile_speed": 124.0,
+          "max_active": 9,
+          "telegraph": 1.0,
+          "beneficial_interval": 5.6,
+          "patterns": [
+            "tide_sweep",
+            "spray_arc",
+            "staggered_cross"
+          ]
+        },
+        {
+          "at_fraction": 0.4,
+          "fire_interval": 1.34,
+          "projectile_speed": 150.0,
+          "max_active": 11,
+          "telegraph": 0.9,
+          "beneficial_interval": 5.2,
+          "patterns": [
+            "spray_arc",
+            "staggered_cross",
+            "salvo_arc"
+          ]
+        },
+        {
+          "at_fraction": 0.15,
+          "fire_interval": 1.02,
+          "projectile_speed": 178.0,
+          "max_active": 13,
+          "telegraph": 0.8,
+          "beneficial_interval": 4.8,
+          "patterns": [
+            "salvo_arc",
+            "tide_sweep",
+            "staggered_cross"
+          ]
+        }
+      ],
+      "patterns": {
+        "tide_sweep": {
+          "emitters": [
+            "left_low",
+            "right_low",
+            "left",
+            "right"
+          ],
+          "count": 3,
+          "volley": 1,
+          "type": "arc",
+          "spread_degrees": 0.0,
+          "jitter_degrees": 4.0,
+          "stagger": 0.46
+        },
+        "lane_pair": {
+          "emitters": [
+            "left",
+            "right"
+          ],
+          "count": 2,
+          "volley": 1,
+          "type": "arc",
+          "spread_degrees": 0.0,
+          "jitter_degrees": 3.0,
+          "stagger": 0.9
+        },
+        "spray_arc": {
+          "emitters": [
+            "top",
+            "top_2"
+          ],
+          "count": 2,
+          "volley": 2,
+          "type": "spray",
+          "spread_degrees": 22.0,
+          "jitter_degrees": 4.0,
+          "stagger": 0.55
+        },
+        "staggered_cross": {
+          "emitters": [
+            "top",
+            "right",
+            "top_2",
+            "left"
+          ],
+          "count": 3,
+          "volley": 1,
+          "type": "arc",
+          "spread_degrees": 0.0,
+          "jitter_degrees": 6.0,
+          "stagger": 0.4
+        },
+        "salvo_arc": {
+          "emitters": [
+            "left",
+            "right"
+          ],
+          "count": 2,
+          "volley": 1,
+          "type": "glob",
+          "spread_degrees": 0.0,
+          "jitter_degrees": 2.0,
+          "stagger": 0.7
+        }
+      }
+    }
+  ],
+  "archives": {
+    "city_archive": {
+      "id": "city_archive",
+      "boss_id": "scrap_king",
+      "title": "CONTROL CENTER ARCHIVE",
+      "subtitle": "ELECTRONIC WASTE LOGS",
+      "unlock_flag": "silent_coast_unlocked",
+      "reveal_flag": "future_earth_revealed"
+    },
+    "coast_archive": {
+      "id": "coast_archive",
+      "boss_id": "toxic_tide",
+      "title": "ENVIRONMENTAL ARCHIVE",
+      "subtitle": "COASTAL FACILITY RECORDS",
+      "unlock_flag": "dawn_tower_unlocked",
+      "reveal_flag": "coast_lesson_preserved"
+    }
+  }
+}

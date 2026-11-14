@@ -49,7 +49,6 @@ func _ready() -> void:
 		_build_ambient_earth()
 	else:
 		_build_ambient_ruin()
-
 	# Props are grouped in a Y-sorted branch so their draw order follows their
 	# ground-contact points automatically.
 	_sorted_root = Node2D.new()
@@ -135,11 +134,20 @@ func _build_ambient_earth() -> void:
 
 
 func _build_ambient_ruin() -> void:
-	for i in 30:
+	# Cities drift dust; the coast drifts salt. Same structure, different tones.
+	var dust := Color(0.5, 0.6, 0.7)
+	var count := 30
+	if theme_name == "city":
+		dust = Color(0.75, 0.62, 0.45)
+		count = 38
+	elif theme_name == "coast":
+		dust = Color(0.55, 0.72, 0.78)
+		count = 34
+	for i in count:
 		_ambient.append({
 			"p": Vector2(_rng.randf_range(0, bounds.size.x), _rng.randf_range(0, bounds.size.y)),
 			"speed": Vector2(_rng.randf_range(-3.0, 4.0), _rng.randf_range(-1.0, 1.0)),
-			"c": Color(0.5, 0.6, 0.7, _rng.randf_range(0.12, 0.35)),
+			"c": Color(dust.r, dust.g, dust.b, _rng.randf_range(0.12, 0.35)),
 		})
 	# No cloud shadows here: hard-edged rectangles read as rendering faults on
 	# a flat ash plain. The drifting motes alone carry the motion.
@@ -263,10 +271,15 @@ func release_input() -> void:
 func _draw() -> void:
 	var b := bounds
 	# Ground plane. Drawn in world space, under the sorted layer.
-	if theme_name == "earth":
-		_draw_earth_ground(b)
-	else:
-		_draw_ruin_ground(b)
+	match theme_name:
+		"earth":
+			_draw_earth_ground(b)
+		"city":
+			_draw_city_ground(b)
+		"coast":
+			_draw_coast_ground(b)
+		_:
+			_draw_ruin_ground(b)
 
 
 ## Dithered ellipse used for drifting shade. Rows of pixels with a random
@@ -539,3 +552,190 @@ func _draw_ruin_ground(b: Rect2) -> void:
 func _on_player_stepped() -> void:
 	if skin != null and skin.audio != null:
 		skin.audio.sfx_step()
+
+
+## Forgotten City ground: a cracked street plan under waste, with the distant
+## skyline from the ruin theme kept as a depth cue. The street reads as a place
+## people used to walk, not as a generic ash plain.
+func _draw_city_ground(b: Rect2) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4411
+	var brng := RandomNumberGenerator.new()
+	brng.seed = 6620
+
+	# Broken paving. Two-tone slabs with missing pieces, so it reads as a street.
+	draw_rect(b, Color("3a423c"), true)
+	var slab := 32.0
+	var y: float = b.position.y
+	while y < b.position.y + b.size.y:
+		var x: float = b.position.x
+		while x < b.position.x + b.size.x:
+			var present: bool = rng.randf() > 0.14
+			if present:
+				var tone: Color = Color("4b544c") if rng.randf() < 0.6 else Color("414a43")
+				draw_rect(Rect2(x + 1.0, y + 1.0, slab - 2.0, slab - 2.0), tone, true)
+				# Expansion-joint highlight along the top and left.
+				draw_rect(Rect2(x + 1.0, y + 1.0, slab - 2.0, 1.0), tone.lightened(0.10), true)
+				draw_rect(Rect2(x + 1.0, y + 1.0, 1.0, slab - 2.0), tone.lightened(0.06), true)
+			x += slab
+		y += slab
+
+	# Weeds pushing through the joints: green survives even here.
+	for i in 420:
+		var gx: float = rng.randf_range(b.position.x, b.position.x + b.size.x)
+		var gy: float = rng.randf_range(b.position.y + 60.0, b.position.y + b.size.y)
+		var c: Color = SFPalette.LEAF_DARK if rng.randf() < 0.7 else SFPalette.GRASS_DARK
+		c.a = 0.55
+		draw_rect(Rect2(floor(gx), floor(gy), 1, 2), c, true)
+
+	# Electronic waste silted into the gutters: circuit-board fragments.
+	for i in 260:
+		var px: float = rng.randf_range(b.position.x, b.position.x + b.size.x)
+		var py: float = rng.randf_range(b.position.y + 80.0, b.position.y + b.size.y)
+		var w: float = rng.randf_range(2.0, 6.0)
+		var tone2: Color = SFPalette.CYAN_DARK if rng.randf() < 0.35 else SFPalette.ASH.darkened(0.15)
+		draw_rect(Rect2(round(px), round(py), round(w), 2), tone2, true)
+		if rng.randf() < 0.12:
+			draw_rect(Rect2(round(px) + 1.0, round(py), 1, 1), SFPalette.CYAN_DIM, true)
+
+	# Scorch patches from things that burned where they were dropped.
+	for k in 12:
+		var sp := Vector2(rng.randf_range(b.position.x + 40.0, b.position.x + b.size.x - 40.0),
+			rng.randf_range(b.position.y + 120.0, b.position.y + b.size.y - 20.0))
+		var soot := Color(0.02, 0.03, 0.03, 0.35)
+		_soft_blob(sp, rng.randf_range(18.0, 42.0), soot, 0.55, rng)
+
+	# Painted road markings, worn almost away, suggesting this was a route.
+	var lane_y: float = b.position.y + b.size.y * 0.62
+	var dash_x: float = b.position.x + 30.0
+	while dash_x < b.position.x + b.size.x - 30.0:
+		if brng.randf() > 0.25:
+			draw_rect(Rect2(dash_x, lane_y, 18, 2), Color(0.72, 0.68, 0.55, 0.28), true)
+		dash_x += 34.0
+
+	# Skyline band at the back.
+	draw_rect(Rect2(b.position.x, b.position.y, b.size.x, 56), SFPalette.RUIN_BG, true)
+	var haze := 0
+	while haze < 5:
+		var hc: Color = SFPalette.RUIN_BG.lerp(SFPalette.RUIN_DARK, float(haze) / 5.0)
+		draw_rect(Rect2(b.position.x, b.position.y + 56 + haze * 2, b.size.x, 2), hc, true)
+		haze += 1
+	var bx: float = b.position.x
+	while bx < b.position.x + b.size.x:
+		var th: float = brng.randf_range(18.0, 48.0)
+		var tw: float = brng.randf_range(22.0, 44.0)
+		draw_rect(Rect2(bx, b.position.y + 56 - th, tw, th), SFPalette.RUIN, true)
+		draw_rect(Rect2(bx, b.position.y + 56 - th, tw, 1), SFPalette.ASH.darkened(0.45), true)
+		# The city's own screens still advertise, decades after anyone read them.
+		if brng.randf() < 0.22:
+			var ad_y: float = b.position.y + 56 - th + brng.randf_range(6.0, maxf(8.0, th - 12.0))
+			draw_rect(Rect2(bx + 4, ad_y, tw - 8, 5), SFPalette.CYAN_DARK, true)
+			draw_rect(Rect2(bx + 5, ad_y + 1, tw - 12, 1), SFPalette.CYAN_DIM, true)
+		for wy in range(6, int(th) - 4, 8):
+			if brng.randf() < 0.2:
+				draw_rect(Rect2(bx + tw * 0.4, b.position.y + 56 - th + wy, 2, 2), SFPalette.CYAN_DARK, true)
+		bx += tw * 0.82
+
+	for a in _ambient:
+		var entry: Dictionary = a
+		if bool(entry.get("cloud", false)):
+			continue
+		draw_rect(Rect2((entry["p"] as Vector2).floor(), Vector2(1, 1)), entry["c"] as Color, true)
+
+
+## Silent Coast ground: a concrete quay over a stalled, polluted tide. The water
+## is drawn as a still plane rather than animated foam, because nothing here is
+## moving any more; the violet stain is the point.
+func _draw_coast_ground(b: Rect2) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7817
+	var brng := RandomNumberGenerator.new()
+	brng.seed = 9931
+
+	# Water plane behind the quay. Dark, flat, and subtly banded.
+	draw_rect(b, Color("1c2a2c"), true)
+	var band := 0
+	while band < 14:
+		var t: float = float(band) / 14.0
+		var c: Color = Color("172326").lerp(Color("25383a"), t)
+		draw_rect(Rect2(b.position.x, b.position.y + b.size.y * 0.34 * t, b.size.x, b.size.y * 0.34 / 14.0 + 1.0), c, true)
+		band += 1
+
+	# The tide line: a wide crude-oil stain with a bright, sickly rim.
+	var tide_y: float = b.position.y + b.size.y * 0.30
+	for i in 26:
+		var sp := Vector2(rng.randf_range(b.position.x, b.position.x + b.size.x), tide_y + rng.randf_range(-10.0, 26.0))
+		_soft_blob(sp, rng.randf_range(18.0, 60.0), Color(0.36, 0.25, 0.45, 0.36), 0.6, rng)
+	var slick_x: float = b.position.x
+	while slick_x < b.position.x + b.size.x:
+		if brng.randf() < 0.6:
+			draw_rect(Rect2(slick_x, tide_y + brng.randf_range(-2.0, 2.0), brng.randf_range(8.0, 26.0), 1), Color(0.62, 0.48, 0.72, 0.34), true)
+		slick_x += brng.randf_range(14.0, 30.0)
+
+	# Floating debris: crates, drums, board fragments, all motionless.
+	for i in 60:
+		var dx: float = rng.randf_range(b.position.x + 10.0, b.position.x + b.size.x - 10.0)
+		var dy: float = rng.randf_range(b.position.y + 70.0, tide_y + 22.0)
+		var dw: float = rng.randf_range(3.0, 10.0)
+		var dc: Color = SFPalette.ASH.darkened(0.3) if rng.randf() < 0.6 else SFPalette.RUST.darkened(0.35)
+		draw_rect(Rect2(round(dx), round(dy), round(dw), 2), dc, true)
+
+	# Quay: pale concrete slabs with a hard buttressed edge.
+	var quay_top: float = b.position.y + b.size.y * 0.46
+	draw_rect(Rect2(b.position.x, quay_top, b.size.x, b.size.y - (quay_top - b.position.y)), Color("5a625c"), true)
+	draw_rect(Rect2(b.position.x, quay_top, b.size.x, 3), Color("6f7870"), true)
+	draw_rect(Rect2(b.position.x, quay_top + 3, b.size.x, 2), Color("3b423d"), true)
+	var qy: float = quay_top + 10.0
+	var row := 0
+	while qy < b.position.y + b.size.y:
+		var qx: float = b.position.x + (18.0 if row % 2 == 0 else 0.0)
+		while qx < b.position.x + b.size.x:
+			draw_rect(Rect2(qx, qy, 36, 1), Color("4a524c"), true)
+			draw_rect(Rect2(qx + 18, qy, 1, 18), Color("4a524c"), true)
+			qx += 36.0
+		qy += 18.0
+		row += 1
+
+	# Bollards along the quay edge: a row of clear, readable obstacles.
+	var bollard_x: float = b.position.x + 48.0
+	while bollard_x < b.position.x + b.size.x - 20.0:
+		if brng.randf() < 0.8:
+			draw_rect(Rect2(bollard_x, quay_top + 18.0, 6, 8), Color("3a423d"), true)
+			draw_rect(Rect2(bollard_x, quay_top + 18.0, 6, 2), Color("7a847c"), true)
+			draw_rect(Rect2(bollard_x, quay_top + 26.0, 8, 2), Color(0, 0, 0, 0.25), true)
+		bollard_x += 64.0
+
+	# Salt bloom and cracks in the concrete.
+	for i in 300:
+		var sx: float = rng.randf_range(b.position.x, b.position.x + b.size.x)
+		var sy: float = rng.randf_range(quay_top, b.position.y + b.size.y)
+		var tone: Color = SFPalette.PAPER_DIM if rng.randf() < 0.22 else Color("4a524c")
+		tone.a = 0.25
+		draw_rect(Rect2(floor(sx), floor(sy), 1, 1), tone, true)
+	var crack_x: float = b.position.x + 40.0
+	while crack_x < b.position.x + b.size.x - 20.0:
+		var cy2: float = quay_top + 22.0
+		while cy2 < b.position.y + b.size.y:
+			draw_rect(Rect2(crack_x + sin(cy2 * 0.2) * 3.0, cy2, 1, 4), Color(0.15, 0.18, 0.16, 0.5), true)
+			cy2 += 4.0
+		crack_x += brng.randf_range(70.0, 140.0)
+
+	# Distant facility silhouette, so the destination is always visible.
+	draw_rect(Rect2(b.position.x, b.position.y, b.size.x, 44), SFPalette.RUIN_BG, true)
+	var fx: float = b.position.x + 80.0
+	while fx < b.position.x + b.size.x - 40.0:
+		var fh: float = brng.randf_range(10.0, 30.0)
+		var fw: float = brng.randf_range(26.0, 60.0)
+		draw_rect(Rect2(fx, b.position.y + 44 - fh, fw, fh), SFPalette.RUIN, true)
+		draw_rect(Rect2(fx, b.position.y + 44 - fh, fw, 1), SFPalette.ASH.darkened(0.4), true)
+		# Stack pipes breaking the skyline.
+		if brng.randf() < 0.45:
+			draw_rect(Rect2(fx + fw * 0.4, b.position.y + 44 - fh - 12, 4, 12), SFPalette.RUIN_DARK, true)
+		fx += fw * 0.85
+	draw_rect(Rect2(b.position.x, b.position.y + 44, b.size.x, 3), SFPalette.RUIN_DARK, true)
+
+	for a in _ambient:
+		var entry: Dictionary = a
+		if bool(entry.get("cloud", false)):
+			continue
+		draw_rect(Rect2((entry["p"] as Vector2).floor(), Vector2(1, 1)), entry["c"] as Color, true)

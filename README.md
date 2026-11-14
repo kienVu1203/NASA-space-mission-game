@@ -6,9 +6,11 @@ investigate an anomalous signal, and is pulled through a spatial rift into a
 ruined, polluted world. There he meets **Bill**, an abandoned maintenance robot,
 who holds one memory of a green city.
 
-Chapter 1 (present-day Earth and the crash site) is complete and playable. The
-combat, crafting and later chapters are not built yet. Time travel and the VELA's
-drive are fictional story devices, not claims about real technology.
+Chapters 1 and 2 (present-day Earth, the crash site, the Forgotten City and the
+Silent Coast) are complete and playable, including both Phase 2 shield-defense
+boss fights. Dawn Tower, the final ending and crafting are not built yet. Time
+travel and the VELA's drive are fictional story devices, not claims about real
+technology.
 
 **Everything is documented in [docs/star_fall_contract.md](docs/star_fall_contract.md)** —
 architecture, data schemas, stable IDs, save format, units and test commands.
@@ -27,8 +29,8 @@ architecture, data schemas, stable IDs, save format, units and test commands.
 | Target | Desktop, offline, no asset downloads |
 | Resolution | 640x360 base, window opens at 1280x720, `canvas_items`, nearest filtering |
 | Game type | 2D angled top-down exploration, Y-sorted, generated art and audio |
-| Flow | Menu -> Earth -> Briefing -> Construction -> Preflight -> Launch -> Rift -> Crash Site -> Salvage -> Bill -> Memory -> Checkpoint |
-| Status | **STAR FALL Chapter 1** complete and playable; later chapters deferred |
+| Flow | Menu -> Earth -> Briefing -> Construction -> Preflight -> Launch -> Rift -> Crash Site -> Bill -> Memory -> Forgotten City -> Scrap King -> Archive -> Silent Coast -> Toxic Tide -> Archive -> Base |
+| Status | **STAR FALL Phases 1 and 2** complete and playable; Dawn Tower onwards deferred |
 | Also in repo | **Operation: Starfall**, a complete orbital-salvage satire in `scenes/starfall/` (see [docs/starfall.md](docs/starfall.md)) |
 
 ## Getting started
@@ -53,10 +55,12 @@ Headless checks (no display needed):
 godot --headless --path . --script res://tests/star_fall/test_parse.gd
 godot --headless --path . --script res://tests/star_fall/test_logic.gd
 godot --headless --path . --script res://tests/star_fall/test_flow.gd
+godot --headless --path . --script res://tests/star_fall/test_encounter.gd
 ```
 
-`tests/star_fall/capture.gd` renders key screens to `user://captures/` and
-needs a real display. Full commands and acceptance steps are in
+`tests/star_fall/capture.gd` renders 27 key screens to `user://captures/` and
+needs a real display (`-- --shots=17,18` re-renders just those screens). Full
+commands and acceptance steps are in
 [docs/star_fall_contract.md](docs/star_fall_contract.md).
 
 ### Controls
@@ -70,17 +74,52 @@ needs a real display. Full commands and acceptance steps are in
 | Enter / Space | Confirm, advance dialogue |
 | Left / Right, Q / E, V | Construction console: cycle part, adjust fuel, run preflight |
 
+**In a Phase 2 boss fight** (Nick is fixed in place):
+
+| Input | Action |
+|---|---|
+| Mouse | Rotate the shield. No button held; the shield is always active |
+| Space | Counterattack, only when the charge meter above Nick is full |
+| Esc | Pause: resume, restart the fight, or return to the menu |
+
+Block hostile energy with the shield. Let the green/cyan motes reach Nick
+untouched to build charge; a blocked mote gives nothing. Space fires the
+counterattack and consumes the whole meter.
+
+### Reaching each Phase 2 encounter
+
+1. **New Game** and finish Phase 1: briefing, build the VELA, preflight, launch,
+   crash site, salvage, repair the junction, wake Bill, watch the memory.
+2. At the Phase 1 summary press **Enter**. You enter the **Forgotten City**.
+3. Walk to the checkpoint marker (the gold ring post) and press **E**. The
+   control-center door will not open until you do.
+4. (Optional) Visit the maintenance shrine with the green picture and the city
+   salvage piles.
+5. At the welded door press **E**: **Scrap King** begins after Bill's briefing.
+   Win, then read the control-center archive.
+6. The archive closes into the **Silent Coast**. Use the harbor checkpoint, then
+   press **E** at the facility intake: **Toxic Tide** begins.
+7. Win, read the environmental archive, and the campaign returns to the
+   crash-site base, where both recovered components are shown fitted.
+8. **Enter** on the base shows the Phase 2 summary; **Enter** again returns to
+   the title with the save intact. **Continue** resumes there.
+
 ## Project structure
 
 ```
 autoload/         game_state.gd (owns the campaign), events.gd (signal bus), data_loader.gd
 core/star_fall/   Pure logic + presentation kit, no nodes: design and preflight
                   validation, campaign state, save/load, content loading, palette,
-                  bitmap font, generated sprites, synth audio, shared UI drawing
+                  bitmap font, generated sprites, synth audio, shared UI drawing,
+                  and the Phase 2 encounter parts (shield, projectiles, pattern
+                  scheduler, encounter model, encounter controller)
 scenes/star_fall/ main.tscn + main.gd (flow controller), world.gd, player.gd,
-                  prop.gd, hud_overlay.gd, construction_screen.gd
-data/star_fall/   ship_parts.json, campaign.json, sites.json: all tuning and prose
-tests/star_fall/  test_parse.gd, test_logic.gd, test_flow.gd, capture.gd
+                  prop.gd, hud_overlay.gd, construction_screen.gd,
+                  shield_duel.gd, archive_screen.gd, progression_screen.gd
+data/star_fall/   ship_parts.json, campaign.json, encounters.json, sites.json:
+                  all tuning and prose
+tests/star_fall/  test_parse.gd, test_logic.gd, test_flow.gd, test_encounter.gd,
+                  capture.gd
 docs/             star_fall_contract.md (source of truth), starfall.md, test_checklist.md, roles.md
 core/starfall/    Operation: Starfall: palette, font, sprites, synth, ship and debris models
 scenes/starfall/  Operation: Starfall: its own 480x270 screens
@@ -156,11 +195,11 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
   nothing large needs it yet.
 - **`.editorconfig`** was discussed but not added (optional, e.g.
   `indent_style = tab`).
-- **Chapter 2 onward:** combat, crafting, the Forgotten City, Silent Coast,
-  Dawn Tower and Return Home are declared in `data/star_fall/campaign.json` and
-  are not implemented. See `docs/star_fall_contract.md` section 11.
+- **Dawn Tower onward:** Dawn Tower, Return Home, the shield emitter, the final
+  ending and crafting are declared in `data/star_fall/campaign.json` and stay
+  `deferred`. See `docs/star_fall_contract.md` section 15.
 - **Combined test runner:** there is no single script that runs both games'
-  suites. Run STAR FALL's three from the "Run it" section and Operation:
+  suites. Run STAR FALL's four from the "Run it" section and Operation:
   Starfall's from [docs/starfall.md](docs/starfall.md).
 
 ## Event-day timeline (48h)

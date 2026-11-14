@@ -20,6 +20,9 @@ const SFSites := preload("res://core/star_fall/sf_sites.gd")
 const SFPalette := preload("res://core/star_fall/sf_palette.gd")
 const SFWorld := preload("res://scenes/star_fall/world.gd")
 const SFConstruction := preload("res://scenes/star_fall/construction_screen.gd")
+const SFDuel := preload("res://scenes/star_fall/shield_duel.gd")
+const SFArchive := preload("res://scenes/star_fall/archive_screen.gd")
+const SFProgression := preload("res://scenes/star_fall/progression_screen.gd")
 
 enum Screen {
 	TITLE,
@@ -29,6 +32,9 @@ enum Screen {
 	LAUNCH,
 	MEMORY,
 	CHECKPOINT,
+	DUEL,
+	ARCHIVE,
+	PROGRESSION,
 	SAVE_ERROR,
 }
 
@@ -65,6 +71,16 @@ var world = null
 var construction = null
 var zone: String = "spaceport"
 
+# Phase 2 screens.
+var duel = null
+var archive_screen = null
+var progression_screen = null
+var _archive_id: String = ""
+var _pending_boss_id: String = ""
+
+# Encounter dialogue is read over a frozen arena; the duel checks this.
+var encounter_input_locked: bool = false
+
 # Launch sequence.
 var launch_phase: int = LaunchPhase.COUNTDOWN
 var launch_timer: float = 0.0
@@ -79,6 +95,7 @@ var crash_shake: float = 0.0
 var memory_id: String = ""
 var memory_index: int = 0
 var memory_chars: float = 0.0
+var memory_next: Callable = Callable()
 
 # Settings.
 var setting_ambience: bool = true
@@ -197,6 +214,15 @@ func _go(next: int) -> void:
 	if construction != null:
 		construction.queue_free()
 		construction = null
+	if duel != null:
+		duel.queue_free()
+		duel = null
+	if archive_screen != null:
+		archive_screen.queue_free()
+		archive_screen = null
+	if progression_screen != null:
+		progression_screen.queue_free()
+		progression_screen = null
 
 	screen = next
 	blink = 0.0
@@ -216,9 +242,17 @@ func _go(next: int) -> void:
 		Screen.LAUNCH:
 			_begin_launch()
 		Screen.MEMORY:
-			_begin_memory()
+			# The memory screen is driven by _play_memory(); entering it directly
+			# must not restart the memory that was just set up.
+			audio.set_ambience("none")
 		Screen.CHECKPOINT:
 			audio.set_ambience("none")
+		Screen.DUEL:
+			_enter_duel()
+		Screen.ARCHIVE:
+			_enter_archive()
+		Screen.PROGRESSION:
+			_enter_progression()
 		Screen.SAVE_ERROR:
 			pass
 	queue_redraw()
@@ -237,7 +271,7 @@ func _enter_world(zone_id: String) -> void:
 	world.setup(
 		skin,
 		site,
-		"earth" if zone_id == "spaceport" else "ruin",
+		_world_theme(zone_id),
 		float(campaign.content.program.get("walk_speed", 58.0)),
 		float(campaign.content.program.get("run_speed", 98.0))
 	)
@@ -252,9 +286,33 @@ func _enter_world(zone_id: String) -> void:
 	if _has_last_world_position and not zone_changed:
 		world.set_player_position(_last_world_position)
 	world.set_input_enabled(true)
-	audio.set_ambience("earth" if zone_id == "spaceport" else "ruin")
+	audio.set_ambience(_world_ambience(zone_id))
 	apply_focus_state()
 	queue_redraw()
+
+
+## Which visual theme an authored site uses. Themes own ground drawing only;
+## gameplay never branches on them.
+func _world_theme(zone_id: String) -> String:
+	match zone_id:
+		"spaceport":
+			return "earth"
+		"forgotten_city":
+			return "city"
+		"silent_coast":
+			return "coast"
+	return "ruin"
+
+
+func _world_ambience(zone_id: String) -> String:
+	match zone_id:
+		"spaceport":
+			return "earth"
+		"forgotten_city":
+			return "city"
+		"silent_coast":
+			return "coast"
+	return "ruin"
 
 
 func _enter_construction() -> void:
@@ -271,6 +329,11 @@ func apply_focus_state() -> void:
 	var locked := dialogue != null or screen != Screen.WORLD
 	if world != null:
 		world.set_input_enabled(not locked)
+	# While a dialogue is open over the duel, the arena is frozen: the player is
+	# reading, so no attack may land and no key may be stolen from the dialogue.
+	encounter_input_locked = dialogue != null
+	if duel != null:
+		duel.input_locked = encounter_input_locked
 
 
 # ---------------------------------------------------------------- input
@@ -382,7 +445,15 @@ func _continue_game() -> void:
 ## Places the player where the saved campaign stage left off. This is the only
 ## place that maps campaign stages onto screens.
 func _resume_from_campaign() -> void:
-	zone = "spaceport" if campaign.chapter_id == SFCampaign.CHAPTER_PRESENT else "crash_site"
+	match campaign.chapter_id:
+		SFCampaign.CHAPTER_CITY:
+			zone = "forgotten_city"
+		SFCampaign.CHAPTER_COAST:
+			zone = "silent_coast"
+		SFCampaign.CHAPTER_PRESENT:
+			zone = "spaceport"
+		_:
+			zone = "crash_site"
 	match campaign.stage:
 		SFCampaign.STAGE_MENU:
 			campaign.advance_to(SFCampaign.STAGE_BRIEFING)
@@ -396,15 +467,38 @@ func _resume_from_campaign() -> void:
 		SFCampaign.STAGE_LAUNCH, SFCampaign.STAGE_FLIGHT:
 			campaign.advance_to(SFCampaign.STAGE_CRASH_INTRO)
 			_finish_launch_state()
-		SFCampaign.STAGE_CRASH_INTRO:
-			_go(Screen.WORLD)
-		SFCampaign.STAGE_CRASH_SITE:
+		SFCampaign.STAGE_CRASH_INTRO, SFCampaign.STAGE_CRASH_SITE:
 			_go(Screen.WORLD)
 		SFCampaign.STAGE_MEMORY:
 			_go(Screen.WORLD)
 			if campaign.has_flag(SFCampaign.FLAG_POWER_REPAIRED):
 				_begin_memory()
 		SFCampaign.STAGE_CHECKPOINT, SFCampaign.STAGE_COMPLETE:
+			# An old save that finished Phase 1 resumes at the Phase 1 summary,
+			# which now continues into the Forgotten City.
+			_go(Screen.CHECKPOINT)
+		SFCampaign.STAGE_CITY_INTRO:
+			_go(Screen.WORLD)
+			if not campaign.has_flag(SFCampaign.FLAG_CITY_ENTERED):
+				_show_city_intro()
+		SFCampaign.STAGE_CITY_BOSS:
+			# A partially completed fight is never serialised: the checkpoint
+			# before the encounter is the resume point.
+			_begin_city_boss()
+		SFCampaign.STAGE_CITY_ARCHIVE:
+			campaign.advance_to(SFCampaign.STAGE_CITY_ARCHIVE)
+			_enter_archive_scene(SFCampaign.ARCHIVE_CITY)
+		SFCampaign.STAGE_SILENT_INTRO:
+			_go(Screen.WORLD)
+			if not campaign.has_flag(SFCampaign.FLAG_COAST_ENTERED):
+				_show_coast_intro()
+		SFCampaign.STAGE_COAST_BOSS:
+			_begin_coast_boss()
+		SFCampaign.STAGE_COAST_ARCHIVE:
+			_enter_archive_scene(SFCampaign.ARCHIVE_COAST)
+		SFCampaign.STAGE_BASE_RETURN:
+			_go(Screen.PROGRESSION)
+		SFCampaign.STAGE_PHASE_TWO_COMPLETE:
 			_go(Screen.CHECKPOINT)
 		_:
 			_go(Screen.WORLD)
@@ -511,9 +605,75 @@ func _on_world_interact(object_id: String, prop) -> void:
 			_interact_bill(prop)
 		"power_connection":
 			_repair_junction()
+		# Phase 2: Forgotten City.
+		"memory_city_green":
+			var city_lines: Array = campaign.content.dialogue_lines("city_memory")
+			_open_dialogue(city_lines, "MAINTENANCE SHRINE", Callable(self, "_on_city_shrine_done"))
+		"city_checkpoint", "coast_checkpoint":
+			_use_checkpoint(object_id)
+		"city_boss_gate":
+			_approach_city_gate()
+		# Phase 2: Silent Coast.
+		"memory_green_coast":
+			var coast_lines: Array = campaign.content.dialogue_lines("coast_memory")
+			_open_dialogue(coast_lines, "COASTAL PROJECTOR", Callable(self, "_on_coast_shrine_done"))
+		"coast_records":
+			_read_coast_records()
+		"sample_coast_water", "sample_coast_sediment":
+			_take_sample(object_id)
+		"coast_boss_gate":
+			_approach_coast_gate()
 		_:
 			if object_id.begins_with("salvage") or object_id == "scrap_extra":
 				_collect_salvage(object_id)
+
+
+## After the city shrine's dialogue, play the optional memory itself. The memory
+## screen returns to the world, not to a chapter transition.
+func _on_city_shrine_done() -> void:
+	_view_chapter_memory(SFCampaign.MEMORY_CITY_GREEN, Callable(self, "_return_to_world"))
+
+
+func _on_coast_shrine_done() -> void:
+	_view_chapter_memory(SFCampaign.MEMORY_GREEN_COAST, Callable(self, "_return_to_world"))
+
+
+func _return_to_world() -> void:
+	audio.set_ambience(_world_ambience(zone))
+	_go(Screen.WORLD)
+
+
+## The control-center door. It refuses entry until the checkpoint is used, so
+## the player always has a resume point before the fight, and the refusal is
+## diegetic rather than a system message.
+func _approach_city_gate() -> void:
+	if campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED):
+		_open_dialogue(["The archive inside is already restored.", "The route south is open."], "CONTROL CENTER")
+		return
+	if not campaign.has_flag(SFCampaign.FLAG_CITY_CHECKPOINT):
+		audio.sfx_denied()
+		_open_dialogue([
+			"The door is welded shut. Something inside is already moving.",
+			"Nick: \"Not without a saved route. If this goes wrong I want to come back here, not to the ridge.\"",
+			"Use the checkpoint marker in the street first.",
+		], "CONTROL CENTER DOOR")
+		return
+	_begin_city_boss()
+
+
+func _approach_coast_gate() -> void:
+	if campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED):
+		_open_dialogue(["The facility is quiet. The archive inside is already restored."], "CLEANUP FACILITY")
+		return
+	if not campaign.has_flag(SFCampaign.FLAG_COAST_CHECKPOINT):
+		audio.sfx_denied()
+		_open_dialogue([
+			"The intake is still pumping. The unit inside treats everything as contamination.",
+			"Nick: \"Checkpoint first. I am not walking into that without a way back.\"",
+			"Use the harbor checkpoint on the quay.",
+		], "CLEANUP FACILITY INTAKE")
+		return
+	_begin_coast_boss()
 
 
 ## Launch is available only from a confirmed design. Pressing the beacon
@@ -831,12 +991,22 @@ func _process_launch(delta: float) -> void:
 # ---------------------------------------------------------------- memory
 
 func _begin_memory() -> void:
-	memory_id = SFCampaign.MEMORY_GREEN_CITY
+	_play_memory(SFCampaign.MEMORY_GREEN_CITY, Callable(self, "_finish_memory"))
+
+
+## Plays any memory from campaign.json, then runs `on_done`. Phase 1 uses this
+## for the Green City and the end-of-Phase-1 checkpoint; Phase 2 uses it for the
+## optional chapter memories, which return to the world instead.
+func _play_memory(id: String, on_done: Callable) -> void:
+	memory_id = id
 	memory_index = 0
 	memory_chars = 0.0
+	memory_next = on_done
 	audio.set_ambience("none")
 	audio.sfx_memory()
-	campaign.advance_to(SFCampaign.STAGE_MEMORY)
+	campaign.view_memory(id)
+	Events.memory_viewed.emit(id)
+	_save_quietly()
 	_go(Screen.MEMORY)
 
 
@@ -856,9 +1026,19 @@ func _memory_key(key: int) -> void:
 				memory_chars = 0.0
 				audio.sfx_blip()
 				if memory_index >= _memory_lines().size():
-					_finish_memory()
+					_finish_memory_playback()
 		KEY_ESCAPE:
-			_finish_memory()
+			_finish_memory_playback()
+
+
+## Leaves the memory screen and runs its completion callback. Used by both the
+## Phase 1 memory (which ends Phase 1) and the optional Phase 2 memories (which
+## return to exploration).
+func _finish_memory_playback() -> void:
+	var cb := memory_next
+	memory_next = Callable()
+	if cb.is_valid():
+		cb.call()
 
 
 func _finish_memory() -> void:
@@ -879,10 +1059,353 @@ func _checkpoint_key(key: int) -> void:
 	match key:
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE:
 			audio.sfx_confirm()
-			campaign.advance_to(SFCampaign.STAGE_COMPLETE)
-			campaign.set_checkpoint(SFCampaign.STAGE_COMPLETE, SFCampaign.CHAPTER_CRASH)
+			# Two different summaries share this screen. After Phase 2 the
+			# summary is the stopping point, so it returns to the title with the
+			# save intact. After Phase 1 it leads into the Forgotten City, which
+			# is where Bill's coordinates point.
+			if campaign.has_flag(SFCampaign.FLAG_PHASE_TWO_COMPLETE):
+				campaign.advance_to(SFCampaign.STAGE_COMPLETE)
+				campaign.set_checkpoint(SFCampaign.STAGE_COMPLETE, SFCampaign.CHAPTER_CRASH)
+				_save_quietly()
+				_go(Screen.TITLE)
+				return
+			campaign.advance_to(SFCampaign.STAGE_CITY_INTRO)
+			campaign.set_checkpoint(SFCampaign.STAGE_CITY_INTRO, SFCampaign.CHAPTER_CITY)
 			_save_quietly()
-			_go(Screen.TITLE)
+			zone = "forgotten_city"
+			_go(Screen.WORLD)
+			_show_city_intro()
+
+
+# ---------------------------------------------------------------- phase 2 world
+
+## Enters the Forgotten City exploration section. Idempotent: the intro only
+## plays once, and the checkpoint is only set on first entry.
+func _show_city_intro() -> void:
+	campaign.set_flag(SFCampaign.FLAG_CITY_ENTERED)
+	campaign.advance_to(SFCampaign.STAGE_CITY_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_CITY_INTRO, SFCampaign.CHAPTER_CITY)
+	_save_quietly()
+	var lines: Array = campaign.content.dialogue_lines("city_intro")
+	_open_dialogue(lines, "FORGOTTEN CITY", Callable(self, "_on_city_intro_done"))
+
+
+func _on_city_intro_done() -> void:
+	ui.notify("Follow the street. The control center is at the far end.", "info", 3.0)
+	if not campaign.has_flag(SFCampaign.FLAG_CITY_CHECKPOINT):
+		ui.notify("Use the checkpoint before the control door.", "warn", 4.0)
+
+
+func _show_coast_intro() -> void:
+	campaign.set_flag(SFCampaign.FLAG_COAST_ENTERED)
+	campaign.advance_to(SFCampaign.STAGE_SILENT_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_SILENT_INTRO, SFCampaign.CHAPTER_COAST)
+	_save_quietly()
+	var lines: Array = campaign.content.dialogue_lines("coast_intro")
+	_open_dialogue(lines, "SILENT COAST", Callable(self, "_on_coast_intro_done"))
+
+
+func _on_coast_intro_done() -> void:
+	ui.notify("Optional: samples and records are on the quay.", "info", 4.0)
+
+
+## The maintenance shrine: an optional memory, safe to view more than once.
+func _view_chapter_memory(id: String, done: Callable) -> void:
+	if campaign.has_viewed_memory(id):
+		audio.sfx_blip()
+		ui.notify("This projection has already been archived.", "info", 2.5)
+		return
+	_play_memory(id, done)
+
+
+func _use_checkpoint(object_id: String) -> void:
+	if object_id == "city_checkpoint":
+		var first: bool = not campaign.has_flag(SFCampaign.FLAG_CITY_CHECKPOINT)
+		campaign.set_flag(SFCampaign.FLAG_CITY_CHECKPOINT)
+		campaign.set_checkpoint(SFCampaign.STAGE_CITY_BOSS, SFCampaign.CHAPTER_CITY)
+		_save_quietly()
+		var lines: Array = campaign.content.dialogue_lines("city_checkpoint") if first else [
+			"Route marker confirmed. The control center is still ahead.",
+			"Saving here means a failed fight does not cost you the walk.",
+		]
+		_open_dialogue(lines, "CHECKPOINT")
+		return
+	if object_id == "coast_checkpoint":
+		var first_coast: bool = not campaign.has_flag(SFCampaign.FLAG_COAST_CHECKPOINT)
+		campaign.set_flag(SFCampaign.FLAG_COAST_CHECKPOINT)
+		campaign.set_checkpoint(SFCampaign.STAGE_COAST_BOSS, SFCampaign.CHAPTER_COAST)
+		_save_quietly()
+		var coast_lines: Array = campaign.content.dialogue_lines("coast_checkpoint") if first_coast else [
+			"Harbor marker confirmed. The facility intake is ahead.",
+			"Saving here means a failed fight does not cost you the quay.",
+		]
+		_open_dialogue(coast_lines, "CHECKPOINT")
+
+
+## The optional coastal research records: flavour, and a small material reward
+## for the first read. Never required to finish the chapter.
+func _read_coast_records() -> void:
+	if not campaign.is_collected("coast_records_read"):
+		campaign.mark_collected("coast_records_read")
+		var added: int = campaign.add_material("circuitry", 2)
+		if added > 0:
+			ui.notify("+%d Circuitry recovered from the terminal" % added, "salvage", 3.0)
+			_save_quietly()
+	_open_dialogue([
+		"Catch report, year 14: the report is a formality.",
+		"Discharge permit: the ocean was expected to dilute it.",
+		"A survey with nine dead sampling points out of ten. The tenth is the outfall.",
+		"Nick: \"They documented it. They just did not stop it.\"",
+	], "COASTAL RECORDS")
+
+
+func _take_sample(object_id: String) -> void:
+	var entry: Dictionary = {
+		"sample_coast_water": {
+			"material": "polymer",
+			"lines": ["A sealed sample. The vial fogs on the outside, not the inside.",
+				"Bill: \"Label it before the label dissolves. That has happened before.\""],
+		},
+		"sample_coast_sediment": {
+			"material": "circuitry",
+			"lines": ["Sediment with a rainbow sheen and a smell that survives the seal.",
+				"Bill: \"This is evidence. Please do not drop it.\""],
+		},
+	}.get(object_id, {}) as Dictionary
+	if object_id == "" or not campaign.is_collected(object_id):
+		campaign.mark_collected(object_id)
+		var material := String(entry.get("material", "polymer"))
+		var added: int = campaign.add_material(material, 1)
+		if added > 0:
+			ui.notify("+%d %s" % [added, campaign.content.material_name(material)], "salvage", 2.5)
+			_save_quietly()
+		else:
+			ui.notify("Carry limit reached. The sample can wait.", "warn", 2.5)
+	_open_dialogue(entry.get("lines", ["A sealed sample from the shoreline."]) as Array, "SAMPLE")
+
+
+# ---------------------------------------------------------------- phase 2 bosses
+
+func _begin_city_boss() -> void:
+	_start_encounter("scrap_king", "city_boss_intro")
+
+
+func _begin_coast_boss() -> void:
+	_start_encounter("toxic_tide", "coast_boss_intro")
+
+
+## Enters a shield-defense encounter. The intro dialogue plays over the arena,
+## and the fight does not start until it closes, so the player is never taking
+## damage while reading.
+func _start_encounter(boss_id: String, intro_key: String) -> void:
+	var boss_data: Dictionary = campaign.encounters().boss(boss_id)
+	if boss_data.is_empty():
+		push_error("Unknown encounter: %s" % boss_id)
+		return
+	var stage: String = SFCampaign.STAGE_CITY_BOSS
+	if boss_id == "toxic_tide":
+		stage = SFCampaign.STAGE_COAST_BOSS
+	campaign.advance_to(stage)
+	# The checkpoint is the pre-encounter marker, never mid-fight.
+	campaign.set_checkpoint(stage, campaign.chapter_id)
+	_save_quietly()
+
+	_go(Screen.DUEL)
+	# _go() built the duel and started it; hold the fight until the briefing ends.
+	if duel != null:
+		duel.encounter.intro_hold = true
+	var lines: Array = campaign.content.dialogue_lines(intro_key)
+	_open_dialogue(lines, String(boss_data.get("name", "ENCOUNTER")), Callable(self, "_on_encounter_intro_done"))
+
+
+func _on_encounter_intro_done() -> void:
+	if duel != null:
+		duel.encounter.begin()
+	audio.set_ambience("none")
+	audio.sfx_rift()
+
+
+func _enter_duel() -> void:
+	var boss_id := "scrap_king" if campaign.stage == SFCampaign.STAGE_CITY_BOSS else "toxic_tide"
+	var boss_data: Dictionary = campaign.encounters().boss(boss_id)
+	if boss_data.is_empty():
+		push_error("Duel screen requested with no boss data")
+		return
+	var all_data = campaign.encounters()
+	duel = SFDuel.new()
+	duel.name = "Duel"
+	duel.setup(skin, ui, boss_data, all_data)
+	duel.duel_finished.connect(_on_duel_finished)
+	duel.duel_aborted.connect(_on_duel_aborted)
+	add_child(duel)
+	duel.begin_attempt()
+	queue_redraw()
+
+
+## A duel ended. The screen reports only the outcome; every campaign change
+## happens here, exactly once, and is saved before the next screen opens.
+func _on_duel_finished(outcome: String) -> void:
+	var is_city: bool = campaign.stage == SFCampaign.STAGE_CITY_BOSS
+	if outcome != "victory":
+		return
+	if is_city:
+		if _award_boss_victory("scrap_king"):
+			_show_city_victory()
+	else:
+		if _award_boss_victory("toxic_tide"):
+			_show_coast_victory()
+
+
+## Applies a boss victory exactly once. Returns false when this boss was already
+## defeated, so a replayed or double-emitted result can never duplicate rewards.
+func _award_boss_victory(boss_id: String) -> bool:
+	var boss_data: Dictionary = campaign.encounters().boss(boss_id)
+	if boss_data.is_empty():
+		return false
+	var flag := String(boss_data.get("reward_flag", ""))
+	if flag != "" and campaign.has_flag(flag):
+		return false
+	if flag != "":
+		campaign.set_flag(flag)
+	var component := String(boss_data.get("reward_component", ""))
+	if component != "":
+		campaign.award_component(component)
+	_save_quietly()
+	return true
+
+
+func _show_city_victory() -> void:
+	audio.set_ambience("ruin")
+	var lines: Array = campaign.content.dialogue_lines("city_victory")
+	_open_dialogue(lines, "SCRAP KING DOWN", Callable(self, "_on_city_victory_done"))
+
+
+func _on_city_victory_done() -> void:
+	campaign.set_checkpoint(SFCampaign.STAGE_CITY_ARCHIVE, SFCampaign.CHAPTER_CITY)
+	_save_quietly()
+	_enter_archive_scene(SFCampaign.ARCHIVE_CITY)
+
+
+func _show_coast_victory() -> void:
+	audio.set_ambience("coast")
+	var lines: Array = campaign.content.dialogue_lines("coast_victory")
+	_open_dialogue(lines, "TOXIC TIDE DOWN", Callable(self, "_on_coast_victory_done"))
+
+
+func _on_coast_victory_done() -> void:
+	campaign.set_checkpoint(SFCampaign.STAGE_COAST_ARCHIVE, SFCampaign.CHAPTER_COAST)
+	_save_quietly()
+	_enter_archive_scene(SFCampaign.ARCHIVE_COAST)
+
+
+## Leaving the fight from its pause menu returns to exploration. The fight is
+## not marked as cleared, and the pre-encounter checkpoint is intact.
+func _on_duel_aborted() -> void:
+	campaign.set_checkpoint(campaign.stage, campaign.chapter_id)
+	_save_quietly()
+	match campaign.chapter_id:
+		SFCampaign.CHAPTER_CITY:
+			zone = "forgotten_city"
+		SFCampaign.CHAPTER_COAST:
+			zone = "silent_coast"
+		_:
+			zone = "crash_site"
+	_go(Screen.WORLD)
+
+
+# ---------------------------------------------------------------- archives
+
+func _enter_archive_scene(archive_id: String) -> void:
+	campaign.restore_archive(archive_id)
+	_archive_id = archive_id
+	_go(Screen.ARCHIVE)
+
+
+func _enter_archive() -> void:
+	archive_screen = SFArchive.new()
+	archive_screen.name = "Archive"
+	archive_screen.setup(skin, ui, campaign, _archive_id)
+	archive_screen.archive_closed.connect(_on_archive_closed)
+	add_child(archive_screen)
+	audio.set_ambience("none")
+	queue_redraw()
+
+
+## Closing an archive applies the chapter outcome. Both paths are idempotent, so
+## closing early, closing late or reloading the save all produce the same state.
+func _on_archive_closed() -> void:
+	if _archive_id == SFCampaign.ARCHIVE_CITY:
+		if campaign.reveal_future_earth():
+			_save_quietly()
+			_announce_mission_changed()
+		campaign.set_checkpoint(SFCampaign.STAGE_SILENT_INTRO, SFCampaign.CHAPTER_COAST)
+		_save_quietly()
+		zone = "silent_coast"
+		campaign.advance_to(SFCampaign.STAGE_SILENT_INTRO)
+		_go(Screen.WORLD)
+		_show_coast_intro()
+		return
+	if _archive_id == SFCampaign.ARCHIVE_COAST:
+		if campaign.complete_silent_coast():
+			_save_quietly()
+		campaign.set_checkpoint(SFCampaign.STAGE_BASE_RETURN, SFCampaign.CHAPTER_CRASH)
+		_save_quietly()
+		_enter_base_return(true)
+
+
+## Announces the mission change once, after the reveal. Kept out of the data
+## path because it is UI feedback, not campaign state.
+func _announce_mission_changed() -> void:
+	ui.notify("OBJECTIVE CHANGED: RETURN WITH EVIDENCE", "good", 4.0)
+	Events.notice.emit("OBJECTIVE CHANGED: RETURN WITH EVIDENCE", "good")
+
+
+# ---------------------------------------------------------------- base return
+
+func _enter_base_return(play_dialogue: bool) -> void:
+	campaign.advance_to(SFCampaign.STAGE_BASE_RETURN)
+	campaign.set_checkpoint(SFCampaign.STAGE_BASE_RETURN, SFCampaign.CHAPTER_CRASH)
+	_save_quietly()
+	zone = "crash_site"
+	_go(Screen.PROGRESSION)
+	if play_dialogue and progression_screen != null:
+		_open_dialogue(campaign.content.dialogue_lines("base_return"), "CRASH-SITE BASE",
+			Callable(self, "_on_base_return_done"))
+
+
+func _on_base_return_done() -> void:
+	campaign.advance_to(SFCampaign.STAGE_PHASE_TWO_COMPLETE)
+	campaign.set_checkpoint(SFCampaign.STAGE_PHASE_TWO_COMPLETE, SFCampaign.CHAPTER_CRASH)
+	_save_quietly()
+
+
+func _enter_progression() -> void:
+	progression_screen = SFProgression.new()
+	progression_screen.name = "Progression"
+	progression_screen.setup(skin, ui, campaign, "base_return")
+	progression_screen.closed.connect(_on_progression_closed)
+	add_child(progression_screen)
+	audio.set_ambience("ruin")
+	queue_redraw()
+
+
+## Finishing the base-return readout is the end of Phase 2. From here the
+## campaign returns to the title; Dawn Tower is recorded as unlocked but is not
+## playable in this phase.
+func _on_progression_closed() -> void:
+	campaign.complete_silent_coast()
+	campaign.advance_to(SFCampaign.STAGE_PHASE_TWO_COMPLETE)
+	campaign.set_checkpoint(SFCampaign.STAGE_PHASE_TWO_COMPLETE, SFCampaign.CHAPTER_CRASH)
+	_save_quietly()
+	var lines: Array = campaign.content.dialogue_lines("phase_two_complete")
+	if lines.is_empty():
+		_go(Screen.CHECKPOINT)
+		return
+	_open_dialogue(lines, "PHASE 2 COMPLETE", Callable(self, "_on_phase_two_done"))
+
+
+func _on_phase_two_done() -> void:
+	_go(Screen.CHECKPOINT)
 
 
 # ---------------------------------------------------------------- save error
@@ -1329,33 +1852,23 @@ func _draw_memory() -> void:
 	var data: Dictionary = campaign.content.memory(memory_id)
 	var lines: Array = data.get("lines", []) as Array
 
-	# Hologram: a green city suspended in a cyan projection cone.
 	var cx := VW * 0.5
 	var cy := 190.0
 	var flicker := 0.82 + 0.18 * sin(time * 17.0) * sin(time * 3.0)
-	# Projection cone.
+	# Projection cone, shared by both holograms.
 	for i in 18:
 		var t := float(i) / 18.0
 		var w := 30.0 + t * 170.0
 		var a := 0.05 + 0.06 * (1.0 - t) * flicker
 		draw_rect(Rect2(cx - w * 0.5, cy - 96 + t * 122, w, 2), Color(0.35, 0.95, 0.85, a), true)
-	# City block silhouettes.
-	var base_y := cy + 34
-	for i in 9:
-		var bx := cx - 84.0 + float(i) * 19.0
-		var bh := 22.0 + float((i * 37) % 46)
-		var col := Color(0.18, 0.55, 0.45, 0.55 * flicker)
-		draw_rect(Rect2(bx, base_y - bh, 13, bh), col, true)
-		draw_rect(Rect2(bx, base_y - bh, 13, 1), Color(0.45, 0.85, 0.7, 0.6 * flicker), true)
-		# Lit windows.
-		for wy in range(2, int(bh) - 2, 5):
-			draw_rect(Rect2(bx + 3, base_y - bh + wy, 2, 2), Color(0.6, 1.0, 0.8, 0.5 * flicker), true)
-	# Trees.
-	for i in 5:
-		var tx := cx - 92.0 + float(i) * 46.0
-		draw_rect(Rect2(tx, base_y - 10, 2, 10), Color(0.4, 0.7, 0.35, 0.5 * flicker), true)
-		draw_rect(Rect2(tx - 4, base_y - 18, 10, 9), Color(0.35, 0.8, 0.45, 0.5 * flicker), true)
-	draw_rect(Rect2(cx - 90, base_y, 180, 2), Color(0.4, 0.95, 0.8, 0.35 * flicker), true)
+
+	# The hologram matches the memory's `scene` field in campaign.json: the
+	# Green City memories are projected city blocks, the coastal memory is a
+	# working harbour. Data decides, not this script.
+	if campaign.content.memory_scene(memory_id) == "coast":
+		_draw_coast_hologram(cx, cy, flicker)
+	else:
+		_draw_city_hologram(cx, cy, flicker)
 
 	# Frame and text.
 	skin.text_c(self, cx, 26, String(data.get("title", "MEMORY")).to_upper(), SFPalette.CYAN, 2)
@@ -1374,6 +1887,87 @@ func _draw_memory() -> void:
 		skin.text_r(self, box.end.x - 10, box.end.y - 12, "%d / %d" % [idx + 1, lines.size()], SFPalette.PAPER_DIM)
 	skin.text_c(self, cx, VH - 16, "ENTER CONTINUE     ESC SKIP", SFPalette.ASH_LIGHT)
 	skin.scanlines(self, 0.05)
+
+
+func _draw_city_hologram(cx: float, cy: float, flicker: float) -> void:
+	var base_y := cy + 34
+	for i in 9:
+		var bx := cx - 84.0 + float(i) * 19.0
+		var bh := 22.0 + float((i * 37) % 46)
+		var col := Color(0.18, 0.55, 0.45, 0.55 * flicker)
+		draw_rect(Rect2(bx, base_y - bh, 13, bh), col, true)
+		draw_rect(Rect2(bx, base_y - bh, 13, 1), Color(0.45, 0.85, 0.7, 0.6 * flicker), true)
+		# Lit windows.
+		for wy in range(2, int(bh) - 2, 5):
+			draw_rect(Rect2(bx + 3, base_y - bh + wy, 2, 2), Color(0.6, 1.0, 0.8, 0.5 * flicker), true)
+	# Trees.
+	for i in 5:
+		var tx := cx - 92.0 + float(i) * 46.0
+		draw_rect(Rect2(tx, base_y - 10, 2, 10), Color(0.4, 0.7, 0.35, 0.5 * flicker), true)
+		draw_rect(Rect2(tx - 4, base_y - 18, 10, 9), Color(0.35, 0.8, 0.45, 0.5 * flicker), true)
+	draw_rect(Rect2(cx - 90, base_y, 180, 2), Color(0.4, 0.95, 0.8, 0.35 * flicker), true)
+
+
+## A working harbour hologram: clear water, boats, gulls, and a shoreline.
+## Brighter and higher-contrast than the city hologram, because the whole point
+## of this memory is that the water used to be clear.
+func _draw_coast_hologram(cx: float, cy: float, flicker: float) -> void:
+	var horizon := cy - 12.0
+	var water := Color(0.22, 0.78, 0.70, 0.72 * flicker)
+	var deep := Color(0.10, 0.46, 0.48, 0.62 * flicker)
+	var foam := Color(0.66, 1.0, 0.92, 0.72 * flicker)
+	var land := Color(0.30, 0.60, 0.38, 0.66 * flicker)
+
+	# Water: a filled body first, then scan bands on top so it reads as a
+	# projected volume rather than a few thin lines.
+	draw_rect(Rect2(cx - 96.0, horizon + 4.0, 192.0, 58.0), deep, true)
+	for i in 16:
+		var t := float(i) / 15.0
+		var wy := horizon + 4.0 + t * 58.0
+		var alpha := (0.34 + 0.26 * (1.0 - t)) * flicker
+		draw_rect(Rect2(cx - 96.0, wy, 192.0, 1), Color(water.r, water.g, water.b, alpha), true)
+	# A band of light where the water meets the sky.
+	draw_rect(Rect2(cx - 96.0, horizon + 4.0, 192.0, 2), foam, true)
+
+	# Shoreline: a low, broken beach strip along the near edge, narrower than
+	# the water so it reads as sand rather than as a fence.
+	for i in 10:
+		var sx := cx - 96.0 + float(i) * 20.0
+		var sh := 3.0 + float((i * 13) % 4)
+		draw_rect(Rect2(sx, horizon + 62.0 - sh, 18.0, sh), land, true)
+		draw_rect(Rect2(sx, horizon + 62.0 - sh, 18.0, 1), Color(0.55, 0.85, 0.55, 0.6 * flicker), true)
+
+	# Two boats with masts, floating on the lit half of the water.
+	for i in 2:
+		var bx := cx - 40.0 + float(i) * 74.0
+		var by := horizon + 18.0 + float(i) * 10.0
+		# Hull, lit along the gunwale.
+		draw_rect(Rect2(bx - 16.0, by, 32.0, 6.0), Color(0.72, 1.0, 0.94, 0.78 * flicker), true)
+		draw_rect(Rect2(bx - 16.0, by + 5.0, 32.0, 1), deep, true)
+		# Cabin and mast.
+		draw_rect(Rect2(bx - 5.0, by - 5.0, 10.0, 5.0), Color(0.55, 0.95, 0.88, 0.7 * flicker), true)
+		draw_rect(Rect2(bx + 1.0, by - 22.0, 2.0, 17.0), foam, true)
+		draw_rect(Rect2(bx - 9.0, by - 20.0, 10.0, 2.0), Color(0.55, 0.95, 0.88, 0.7 * flicker), true)
+		# Reflection: broken, shorter than the hull.
+		for r in 4:
+			draw_rect(Rect2(bx - 12.0 + float(r % 2) * 3.0, by + 7.0 + float(r) * 2.0, 24.0 - float(r) * 3.0, 1), Color(water.r, water.g, water.b, 0.34 * flicker), true)
+
+	# Gulls: two short strokes each, clear against the dark sky.
+	for i in 3:
+		var gx := cx - 64.0 + float(i) * 56.0
+		var gy := horizon - 26.0 - float(i % 2) * 10.0
+		draw_rect(Rect2(gx, gy, 4, 1), foam, true)
+		draw_rect(Rect2(gx + 1, gy - 2, 2, 2), foam, true)
+		draw_rect(Rect2(gx + 4, gy - 1, 3, 1), foam, true)
+
+	# The net, held by someone just at the edge of the frame.
+	draw_rect(Rect2(cx + 56.0, horizon + 22.0, 2.0, 18.0), foam, true)
+	for n in 6:
+		var ang := -PI * 0.5 + (float(n) - 2.5) * 0.30
+		var nx := cx + 57.0 + cos(ang) * 11.0
+		var ny := horizon + 40.0 + sin(ang) * 11.0
+		draw_rect(Rect2(nx, ny, 1, 3), foam, true)
+	draw_rect(Rect2(cx - 96.0, horizon + 62.0, 192.0, 1), Color(0.5, 1.0, 0.88, 0.5 * flicker), true)
 
 
 # ---------------------------------------------------------------- checkpoint draw
@@ -1395,30 +1989,58 @@ func _draw_checkpoint() -> void:
 		draw_rect(Rect2(bx, 240 - bh, 22, 1), SFPalette.VIOLET, true)
 	draw_rect(Rect2(0, 240, VW, 2), SFPalette.VIOLET_LIGHT, true)
 
+	# The same screen closes both phases, so its copy follows the campaign.
+	# Phase 1's summary is a waypoint on the road to the Forgotten City; Phase
+	# 2's is the end of this build.
+	var phase_two: bool = campaign.has_flag(SFCampaign.FLAG_PHASE_TWO_COMPLETE)
 	var data: Dictionary = campaign.content.checkpoint
 	var panel := Rect2(88, 40, 464, 190)
 	draw_rect(panel, Color(0.05, 0.09, 0.10, 0.94), true)
 	draw_rect(panel, SFPalette.CYAN, false, 1.0)
 	draw_rect(Rect2(panel.position, Vector2(panel.size.x, 1)), SFPalette.CYAN, true)
-	skin.text_c(self, VW * 0.5, panel.position.y + 14, String(data.get("title", "PHASE 1 COMPLETE")).to_upper(), SFPalette.CYAN, 2)
-	var y := panel.position.y + 44.0
-	for line in data.get("body", []) as Array:
-		y = skin.wrap(self, Vector2(panel.position.x + 20, y), panel.size.x - 40, String(line), SFPalette.PAPER, 1, 3) + 4.0
-	var manifest: Dictionary = campaign.mission_manifest
-	if not manifest.is_empty():
-		var stats := "SHIP %s   SENSOR Q%d   DATA %.0f MB   SALVAGE %d" % [
-			String(manifest.get("ship", "VELA")),
-			int(manifest.get("sensor_quality", 0)),
-			float(manifest.get("surviving_data_mb", 0.0)),
-			campaign.inventory_used(),
+
+	var title := String(data.get("title", "PHASE 1 COMPLETE")) if not phase_two else "PHASE 2 COMPLETE"
+	skin.text_c(self, VW * 0.5, panel.position.y + 14, title.to_upper(), SFPalette.CYAN, 2)
+	var body: Array = data.get("body", []) as Array
+	if phase_two:
+		body = [
+			"Navigation chip and power core are fitted to the VELA's frame.",
+			"The control-center and environmental archives are restored.",
+			"Nick is carrying the record the machines were built to erase.",
+			"Dawn Tower is unlocked on the chart. It is not built yet.",
 		]
-		skin.text_c(self, VW * 0.5, panel.end.y - 34, stats, SFPalette.GOLD)
-	skin.text_c(self, VW * 0.5, panel.end.y - 18, "PHASE 1 COMPLETE - CHECKPOINT SAVED", SFPalette.GREEN_OK)
+	var y: float = panel.position.y + 44.0
+	for line in body:
+		y = skin.wrap(self, Vector2(panel.position.x + 20, y), panel.size.x - 40, String(line), SFPalette.PAPER, 1, 3) + 4.0
+
+	if phase_two:
+		var comps := "CHIP %s   CORE %s   EMITTER %s" % [
+			"FITTED" if campaign.has_component(SFCampaign.COMPONENT_NAVIGATION_CHIP) else "MISSING",
+			"FITTED" if campaign.has_component(SFCampaign.COMPONENT_POWER_CORE) else "MISSING",
+			"FITTED" if campaign.has_component(SFCampaign.COMPONENT_SHIELD_EMITTER) else "MISSING",
+		]
+		skin.text_c(self, VW * 0.5, panel.end.y - 34, comps, SFPalette.GOLD)
+		skin.text_c(self, VW * 0.5, panel.end.y - 18, "CHECKPOINT SAVED - PHASE 2 STOPS HERE", SFPalette.GREEN_OK)
+	else:
+		var manifest: Dictionary = campaign.mission_manifest
+		if not manifest.is_empty():
+			var stats := "SHIP %s   SENSOR Q%d   DATA %.0f MB   SALVAGE %d" % [
+				String(manifest.get("ship", "VELA")),
+				int(manifest.get("sensor_quality", 0)),
+				float(manifest.get("surviving_data_mb", 0.0)),
+				campaign.inventory_used(),
+			]
+			skin.text_c(self, VW * 0.5, panel.end.y - 34, stats, SFPalette.GOLD)
+		skin.text_c(self, VW * 0.5, panel.end.y - 18, "PHASE 1 COMPLETE - CHECKPOINT SAVED", SFPalette.GREEN_OK)
+
 	# Footer on its own strip, clear of the panel above it.
 	draw_rect(Rect2(0, VH - 30, VW, 30), Color(0.03, 0.05, 0.05, 0.9), true)
 	draw_rect(Rect2(0, VH - 30, VW, 1), SFPalette.CYAN_DARK, true)
 	skin.text_c(self, VW * 0.5, VH - 23, "ENTER RETURN TO MAIN MENU", SFPalette.PAPER)
-	skin.text_c(self, VW * 0.5, VH - 12, "FORGOTTEN CITY - PHASE 2", SFPalette.ASH_LIGHT)
+	if phase_two:
+		skin.text_c(self, VW * 0.5, VH - 12, "DAWN TOWER IS UNLOCKED - PHASE 3 IS NOT PART OF THIS BUILD", SFPalette.ASH_LIGHT)
+	else:
+		skin.text_c(self, VW * 0.5, VH - 12, "FORGOTTEN CITY - PHASE 2", SFPalette.ASH_LIGHT)
 
 
 # ---------------------------------------------------------------- save error draw

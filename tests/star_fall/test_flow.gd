@@ -65,6 +65,18 @@ func _process(_delta: float) -> bool:
 		20:
 			_phase_one_checkpoint()
 		24:
+			_forgotten_city()
+		28:
+			_scrap_king()
+		32:
+			_city_archive()
+		36:
+			_silent_coast()
+		40:
+			_toxic_tide()
+		44:
+			_coast_archive_and_base()
+		48:
 			_finish()
 	return false
 
@@ -293,28 +305,358 @@ func _crash_site_quest() -> void:
 
 func _phase_one_checkpoint() -> void:
 	print("")
-	print("-- Checkpoint and save/continue " + "-".repeat(31))
+	print("-- Checkpoint, save/continue and the move to Phase 2 " + "-".repeat(10))
 	check("the checkpoint screen opens", main.screen == main.Screen.CHECKPOINT, str(main.screen))
 	check("the checkpoint stage is recorded", main.campaign.stage == main.campaign.STAGE_CHECKPOINT)
 	check("a save exists at the checkpoint", SFSave.has_valid_save())
 
-	# Continue must restore the campaign, not restart it.
 	var saved_scrap: int = main.campaign.material_count("scrap_metal")
 	var saved_memory: bool = main.campaign.has_viewed_memory("memory_green_city")
 
+	# The Phase 1 summary now continues into the Forgotten City instead of
+	# ending the game: Bill's coordinates have a destination.
 	main._checkpoint_key(KEY_ENTER)
-	check("finishing returns to the title", main.screen == main.Screen.TITLE)
-	check("the campaign is marked complete", main.campaign.stage == main.campaign.STAGE_COMPLETE)
+	check("the checkpoint continues into the Forgotten City", main.screen == main.Screen.WORLD, str(main.screen))
+	check("the campaign stage moves to the city", main.campaign.stage == main.campaign.STAGE_CITY_INTRO)
+	check("the chapter is the Forgotten City", main.campaign.chapter_id == main.campaign.CHAPTER_CITY)
+	check("the city zone is loaded", main.zone == "forgotten_city")
+	check("the city intro opens automatically", main.dialogue != null)
+	finish_dialogue()
+	check("city entry is recorded", main.campaign.has_flag("city_entered"))
+	check("the pre-boss checkpoint is not yet set", not main.campaign.has_flag("city_checkpoint"))
+	check("a save exists after entering the city", SFSave.has_valid_save())
+
+	# Continue must restore Phase 2 progress, not restart the campaign.
+	main._go(main.Screen.TITLE)
 	check("continue is available after saving", main.save_available)
 	check("continue is enabled in the menu", bool(main.title_menu.items[1]["enabled"]))
-
 	main._continue_game()
-	check("continue restores the completed stage", main.campaign.stage == SFCampaign_STAGE_COMPLETE())
+	check("continue restores the city stage", main.campaign.stage == main.campaign.STAGE_CITY_INTRO)
 	check("continue restores inventory", main.campaign.material_count("scrap_metal") == saved_scrap)
 	check("continue restores memories", main.campaign.has_viewed_memory("memory_green_city") == saved_memory)
 	check("continue restores the confirmed design", main.campaign.has_confirmed_design())
-	check("continue opens the checkpoint screen", main.screen == main.Screen.CHECKPOINT, str(main.screen))
+	check("continue reopens the city zone", main.screen == main.Screen.WORLD and main.zone == "forgotten_city")
+	check("continue does not replay the city intro", main.dialogue == null)
 	check("the restored save kept the design manifest", not main.campaign.mission_manifest.is_empty())
+
+
+# ---------------------------------------------------------------- phase 2
+
+## Forgotten City exploration, the checkpoint gate, the optional memory and the
+## optional salvage.
+func _forgotten_city() -> void:
+	print("")
+	print("-- Forgotten City: exploration and the gate " + "-".repeat(15))
+	check("the city world has props", main.world != null and not main.world.props.is_empty())
+	check("the city has a checkpoint", main.world.prop_by_id("city_checkpoint") != null)
+	check("the city has a green memory shrine", main.world.prop_by_id("memory_city_green") != null)
+	check("the city has the control-center door", main.world.prop_by_id("city_boss_gate") != null)
+	check("the city has optional salvage", main.world.prop_by_id("salvage_city_scrap") != null)
+
+	# The gate must refuse entry until the checkpoint has been used.
+	main._on_world_interact("city_boss_gate", main.world.prop_by_id("city_boss_gate"))
+	check("the gate refuses entry before the checkpoint", main.screen == main.Screen.WORLD and main.dialogue != null)
+	finish_dialogue()
+	check("the refused gate did not start the encounter", main.campaign.stage == main.campaign.STAGE_CITY_INTRO)
+
+	main._on_world_interact("city_checkpoint", main.world.prop_by_id("city_checkpoint"))
+	finish_dialogue()
+	check("the city checkpoint is set", main.campaign.has_flag("city_checkpoint"))
+	check("the checkpoint marks the pre-boss stage", main.campaign.checkpoint_stage == main.campaign.STAGE_CITY_BOSS)
+	check("the checkpoint saves", SFSave.has_valid_save())
+
+	# Optional salvage before the fight.
+	var circuit_before: int = main.campaign.material_count("circuitry")
+	main._on_world_interact("salvage_city_scrap", main.world.prop_by_id("salvage_city_scrap"))
+	check("city salvage is collectable", main.campaign.material_count("circuitry") > circuit_before)
+	check("collected city salvage leaves the world", main.world.prop_by_id("salvage_city_scrap") == null)
+
+	# The green memory is optional, plays, and returns to the world.
+	main._on_world_interact("memory_city_green", main.world.prop_by_id("memory_city_green"))
+	finish_dialogue()
+	check("the city memory screen opens", main.screen == main.Screen.MEMORY, str(main.screen))
+	check("the city memory is the second Green City file", main.memory_id == "memory_city_green")
+	main._memory_key(KEY_ESCAPE)
+	check("the optional memory returns to the world", main.screen == main.Screen.WORLD)
+	check("the optional memory is recorded", main.campaign.has_viewed_memory("memory_city_green"))
+
+
+func _scrap_king() -> void:
+	print("")
+	print("-- Scrap King: the shield encounter " + "-".repeat(23))
+	main._on_world_interact("city_boss_gate", main.world.prop_by_id("city_boss_gate"))
+	check("the gate starts the encounter", main.screen == main.Screen.DUEL, str(main.screen))
+	check("the encounter is the Scrap King", main.duel.encounter.boss.get("id", "") == "scrap_king")
+	check("the encounter holds until the briefing ends", main.duel.encounter.intro_hold)
+	check("the encounter opens its briefing", main.dialogue != null)
+	check("the boss stage is recorded", main.campaign.stage == main.campaign.STAGE_CITY_BOSS)
+
+	# While the briefing is open the arena is frozen, and a Space press belongs to
+	# the dialogue rather than to a counterattack. This is the exact input that
+	# would otherwise leak, so it is driven through the real key handler.
+	var frozen_hp: int = main.duel.encounter.model.nick_health
+	main._handle_dialogue_key(KEY_SPACE)
+	check("Space during the briefing advances the dialogue only", main.duel.encounter.model.charge == 0)
+	check("the briefing cannot be damaged through", main.duel.encounter.model.nick_health == frozen_hp)
+	check("the arena is frozen during the briefing", main.duel.input_locked)
+	main.duel._try_counterattack()
+	check("a counterattack is refused during the briefing", not main.duel.encounter.model.shield_locked())
+
+	finish_dialogue()
+	check("the fight starts after the briefing", main.duel.is_fighting())
+	check("the arena unlocks after the briefing", not main.duel.input_locked)
+
+	var duel = main.duel
+	var model = duel.encounter.model
+
+	check("no navigation chip before victory", not main.campaign.has_component("navigation_chip"))
+	check("no boss flag before victory", not main.campaign.has_flag("scrap_king_defeated"))
+
+	# Play the fight out through the real model: block, absorb, counterattack.
+	var victory_reached := false
+	var guard := 0
+	while guard < 4000 and not victory_reached:
+		guard += 1
+		# Aim at whatever hostile is closest, the way an attentive player would.
+		duel.set_cursor_canvas(_aim_at_nearest_hostile(duel))
+		duel.advance_for(0.05)
+		if model.charge_full() and model.is_fighting():
+			duel._try_counterattack()
+		if model.phase == model.PHASE_VICTORY:
+			victory_reached = true
+		# This loop proves the victory path, not survival (survival is the
+		# defeat test below). Keeping Nick up and the meter topped removes mote
+		# luck from the check; damage, the lock and the counterattack cost all
+		# stay live.
+		if model.is_fighting():
+			model.nick_health = model.nick_health_max
+			if model.charge < model.charge_max:
+				model.charge = mini(model.charge_max, model.charge + 1)
+	check("the encounter can be won through its own rules", victory_reached)
+	check("the boss health reached zero", model.boss_health == 0)
+	check("victory stops the encounter", duel.encounter.is_over())
+	check("victory clears live projectiles", duel.encounter.field.active_count() == 0)
+	check("the Scrap King takes four counterattacks", int(duel.encounter.boss.get("boss_health", 0)) == 4 * int(duel.encounter.boss.get("counterattack_damage", 0)))
+
+	# Finish the victory transition and award through the real screen signal.
+	duel.advance_for(2.0)
+	duel._confirm_victory()
+	finish_dialogue()
+	check("the navigation chip is awarded", main.campaign.has_component("navigation_chip"))
+	check("the Scrap King flag is set", main.campaign.has_flag("scrap_king_defeated"))
+	check("the component list reflects the chip", _component_recovered("navigation_chip"))
+	check("the power core is still missing", not main.campaign.has_component("power_core"))
+	check("the shield emitter is never awarded here", not main.campaign.has_component("shield_emitter"))
+
+	# A replayed result must not duplicate the reward.
+	var chip_count := _component_count("navigation_chip")
+	main._award_boss_victory("scrap_king")
+	check("a replayed victory grants no second chip", _component_count("navigation_chip") == chip_count)
+	check("a replayed victory keeps the boss flag", main.campaign.has_flag("scrap_king_defeated"))
+
+
+func _city_archive() -> void:
+	print("")
+	print("-- Control-center archive and the Future Earth reveal " + "-".repeat(8))
+	check("the archive screen opens", main.screen == main.Screen.ARCHIVE, str(main.screen))
+	check("the archive is the control center", main._archive_id == "city_archive")
+	check("the archive records are loaded", main.archive_screen.entries.size() > 0)
+	check("future Earth is not revealed yet", not main.campaign.has_flag("future_earth_revealed"))
+	check("the mission is still the signal investigation", main.campaign.mission_id() == "signal_investigation")
+	check("Silent Coast is not unlocked yet", not main.campaign.has_flag("silent_coast_unlocked"))
+
+	# Flip one page, then close. Closing early must produce the same outcome as
+	# reading every record.
+	main.archive_screen._move(1)
+	main.archive_screen._finish()
+	check("the archive is recorded as restored", main.campaign.is_archive_restored("city_archive"))
+	check("the Future Earth reveal is applied", main.campaign.has_flag("future_earth_revealed"))
+	check("the city archive flag is set", main.campaign.has_flag("city_archive_restored"))
+	check("Silent Coast unlocks", main.campaign.has_flag("silent_coast_unlocked"))
+	check("the mission objective changes", main.campaign.mission_id() == "return_with_evidence")
+	check("the reveal moves to the Silent Coast", main.campaign.chapter_id == main.campaign.CHAPTER_COAST)
+	check("the coast zone is loaded", main.zone == "silent_coast")
+	check("the coast stage is recorded", main.campaign.stage == main.campaign.STAGE_SILENT_INTRO)
+	check("the coast intro opens", main.dialogue != null)
+	finish_dialogue()
+
+	# The reveal must be idempotent.
+	check("a second reveal is refused", not main.campaign.reveal_future_earth())
+	check("the mission is unchanged by the second reveal", main.campaign.mission_id() == "return_with_evidence")
+
+
+func _silent_coast() -> void:
+	print("")
+	print("-- Silent Coast: exploration and the facility " + "-".repeat(16))
+	check("the coast world has props", main.world != null and not main.world.props.is_empty())
+	check("the coast has a checkpoint", main.world.prop_by_id("coast_checkpoint") != null)
+	check("the coast has a memory projector", main.world.prop_by_id("memory_green_coast") != null)
+	check("the coast has optional samples", main.world.prop_by_id("sample_coast_water") != null)
+	check("the coast has a records terminal", main.world.prop_by_id("coast_records") != null)
+	check("the coast has the facility intake", main.world.prop_by_id("coast_boss_gate") != null)
+
+	main._on_world_interact("sample_coast_water", main.world.prop_by_id("sample_coast_water"))
+	finish_dialogue()
+	check("a sample is recorded", main.campaign.is_collected("sample_coast_water"))
+	main._on_world_interact("coast_records", main.world.prop_by_id("coast_records"))
+	finish_dialogue()
+	check("the records are recorded", main.campaign.is_collected("coast_records_read"))
+
+	# The facility refuses entry without the checkpoint.
+	main._on_world_interact("coast_boss_gate", main.world.prop_by_id("coast_boss_gate"))
+	check("the facility refuses entry before the checkpoint", main.dialogue != null)
+	finish_dialogue()
+	check("the refused facility did not start the encounter", main.campaign.stage == main.campaign.STAGE_SILENT_INTRO)
+
+	main._on_world_interact("coast_checkpoint", main.world.prop_by_id("coast_checkpoint"))
+	finish_dialogue()
+	check("the coast checkpoint is set", main.campaign.has_flag("coast_checkpoint"))
+	check("the coast checkpoint marks the pre-boss stage", main.campaign.checkpoint_stage == main.campaign.STAGE_COAST_BOSS)
+
+	# The coastal memory is optional and returns to the world.
+	main._on_world_interact("memory_green_coast", main.world.prop_by_id("memory_green_coast"))
+	finish_dialogue()
+	check("the coastal projection opens", main.screen == main.Screen.MEMORY and main.memory_id == "memory_green_coast")
+	main._memory_key(KEY_ESCAPE)
+	check("the coastal projection returns to the world", main.screen == main.Screen.WORLD)
+	check("the coastal projection is recorded", main.campaign.has_viewed_memory("memory_green_coast"))
+
+
+func _toxic_tide() -> void:
+	print("")
+	print("-- Toxic Tide: defeat, retry and victory " + "-".repeat(17))
+	main._on_world_interact("coast_boss_gate", main.world.prop_by_id("coast_boss_gate"))
+	check("the facility starts the encounter", main.screen == main.Screen.DUEL, str(main.screen))
+	check("the encounter is the Toxic Tide", main.duel.encounter.boss.get("id", "") == "toxic_tide")
+	check("the two bosses have different health", int(main.duel.encounter.boss.get("boss_health", 0)) != 100)
+	finish_dialogue()
+
+	var duel = main.duel
+	var model = duel.encounter.model
+	check("the fight is live", duel.is_fighting())
+
+	# Defeat on purpose: point the shield away and absorb nothing.
+	duel.set_cursor_canvas(duel.encounter.nick_position + Vector2(0, 80))
+	var guard := 0
+	while guard < 4000 and model.nick_health > 0:
+		guard += 1
+		duel.advance_for(0.05)
+	check("the boss does not die to a passive player", model.phase != model.PHASE_VICTORY)
+	check("Nick can be defeated", model.nick_health <= 0)
+	check("defeat stops the encounter", model.phase == model.PHASE_DEFEAT)
+	check("defeat clears live projectiles", duel.encounter.field.active_count() == 0)
+	check("defeat grants no power core", not main.campaign.has_component("power_core"))
+	check("defeat sets no boss flag", not main.campaign.has_flag("toxic_tide_defeated"))
+
+	# Retry resets every encounter-local value and keeps campaign progress.
+	duel.retry()
+	check("retry restores Nick's health", model.nick_health == model.nick_health_max)
+	check("retry restores boss health", model.boss_health == model.boss_health_max)
+	check("retry clears charge", model.charge == 0)
+	check("retry clears projectiles", duel.encounter.field.active_count() == 0)
+	check("retry returns to the fight", model.phase == model.PHASE_FIGHT)
+	check("retry keeps the campaign's city reward", main.campaign.has_component("navigation_chip"))
+	check("retry keeps the mission objective", main.campaign.mission_id() == "return_with_evidence")
+
+	# Win it through the real rules.
+	var victory := false
+	guard = 0
+	while guard < 6000 and not victory:
+		guard += 1
+		duel.set_cursor_canvas(_aim_at_nearest_hostile(duel))
+		duel.advance_for(0.05)
+		if model.charge_full() and model.is_fighting():
+			duel._try_counterattack()
+		if model.phase == model.PHASE_VICTORY:
+			victory = true
+		if model.is_fighting():
+			model.nick_health = model.nick_health_max
+			if model.charge < model.charge_max:
+				model.charge = mini(model.charge_max, model.charge + 1)
+	check("the Toxic Tide can be defeated", victory)
+	duel.advance_for(2.0)
+	duel._confirm_victory()
+	finish_dialogue()
+	check("the power core is awarded", main.campaign.has_component("power_core"))
+	check("the Toxic Tide flag is set", main.campaign.has_flag("toxic_tide_defeated"))
+	check("the shield emitter is still not awarded", not main.campaign.has_component("shield_emitter"))
+
+
+func _coast_archive_and_base() -> void:
+	print("")
+	print("-- Environmental archive and the base return " + "-".repeat(12))
+	check("the environmental archive opens", main.screen == main.Screen.ARCHIVE and main._archive_id == "coast_archive")
+	main.archive_screen._finish()
+	check("the environmental archive is restored", main.campaign.is_archive_restored("coast_archive"))
+	check("the coast lesson is preserved", main.campaign.has_flag("coast_lesson_preserved"))
+	check("the base return screen opens", main.screen == main.Screen.PROGRESSION, str(main.screen))
+	check("the base return shows both components", _component_count("navigation_chip") == 1 and _component_count("power_core") == 1)
+	check("both components read as recovered", _component_recovered("navigation_chip") and _component_recovered("power_core"))
+	check("Dawn Tower is unlocked", main.campaign.has_flag("dawn_tower_unlocked"))
+	check("the campaign is at the base", main.campaign.chapter_id == main.campaign.CHAPTER_CRASH)
+	finish_dialogue()
+
+	main.progression_screen._unhandled_input(_key_event(KEY_ENTER))
+	finish_dialogue()
+	check("finishing the base return reaches the summary", main.screen == main.Screen.CHECKPOINT, str(main.screen))
+	check("Phase 2 is marked complete", main.campaign.has_flag("phase_two_complete"))
+	check("the stage is the Phase 2 complete stage", main.campaign.stage == main.campaign.STAGE_PHASE_TWO_COMPLETE)
+
+	# The summary after Phase 2 is the stopping point: it returns to the title
+	# and keeps the save, rather than looping back into the city.
+	main._checkpoint_key(KEY_ENTER)
+	check("the Phase 2 summary returns to the title", main.screen == main.Screen.TITLE, str(main.screen))
+	check("the campaign records completion", main.campaign.stage == main.campaign.STAGE_COMPLETE)
+	check("a completed save still exists", SFSave.has_valid_save())
+
+	# Save/load must preserve Phase 2 progression exactly once.
+	main._go(main.Screen.TITLE)
+	main._continue_game()
+	check("continue restores the Phase 2 completion", main.campaign.stage == main.campaign.STAGE_COMPLETE)
+	check("continue restores both components", _component_count("navigation_chip") == 1 and _component_count("power_core") == 1)
+	check("continue restores the restored archives", main.campaign.is_archive_restored("city_archive") and main.campaign.is_archive_restored("coast_archive"))
+	check("continue restores the mission objective", main.campaign.mission_id() == "return_with_evidence")
+	check("continue keeps Dawn Tower unlocked", main.campaign.has_flag("dawn_tower_unlocked"))
+	check("continue restores the optional memories", main.campaign.has_viewed_memory("memory_city_green") and main.campaign.has_viewed_memory("memory_green_coast"))
+
+
+## Points the cursor at the nearest hostile projectile, so the scripted player
+## blocks rather than relying on luck. Returns a canvas-space cursor position.
+func _aim_at_nearest_hostile(duel) -> Vector2:
+	var pick := Vector2.ZERO
+	var best := 1.0e20
+	for entry in duel.encounter.field.projectiles:
+		var p: Dictionary = entry
+		if not bool(p.get("alive", false)):
+			continue
+		if String(p.get("family", "hostile")) != "hostile":
+			continue
+		var pos: Vector2 = p.get("pos", Vector2.ZERO)
+		var d: float = pos.distance_to(duel.encounter.nick_position)
+		if d < best:
+			best = d
+			pick = pos
+	if pick == Vector2.ZERO:
+		return duel.encounter.nick_position + Vector2(0, -80)
+	return pick
+
+
+## Counts how many times a component appears in the campaign's recovered list.
+## Duplicates are impossible by construction; this proves it from outside.
+func _component_count(component_id: String) -> int:
+	var n := 0
+	for id in main.campaign.recovered_component_ids():
+		if String(id) == component_id:
+			n += 1
+	return n
+
+
+func _component_recovered(component_id: String) -> bool:
+	for entry in main.campaign.component_status():
+		var comp: Dictionary = entry
+		if String(comp.get("id", "")) == component_id:
+			return bool(comp.get("recovered", false))
+	return false
 
 
 func SFCampaign_STAGE_COMPLETE() -> String:

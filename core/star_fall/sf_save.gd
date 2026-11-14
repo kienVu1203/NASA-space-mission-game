@@ -7,7 +7,10 @@ extends RefCounted
 ## error rather than being silently replaced with empty progress.
 
 const SAVE_PATH := "user://star_fall_save.json"
-const SCHEMA_VERSION := 1
+## Version 2 adds Phase 2 progression (recovered components, restored archives,
+## the active mission). Version 1 documents still load: missing fields fall back
+## to safe defaults in SFCampaign.apply_save_dict().
+const SCHEMA_VERSION := 2
 const MIN_COMPATIBLE_VERSION := 1
 
 ## Load result codes.

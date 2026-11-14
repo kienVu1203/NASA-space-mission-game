@@ -6,6 +6,8 @@ extends Node
 ##   "none"  - silence
 ##   "earth" - bright wind, bird calls, distant machinery
 ##   "ruin"  - low drone, thin wind, occasional metal ticks
+##   "city"  - the ruin bed plus denser, faster metal ticks (sorting machinery)
+##   "coast" - the ruin bed with a slow wash and a distant pump thud
 
 const MIX_RATE := 22050.0
 
@@ -129,6 +131,59 @@ func sfx_step() -> void:
 	_add(Wave.NOISE, 500.0, 240.0, 0.05, 0.002, 0.025, 0.05)
 
 
+# ---------------------------------------------------------------- encounter sfx
+# Phase 2 shield-defense feedback. Kept short so rapid blocks do not stack into
+# a drone: the synth caps its own voice list.
+
+## Hostile energy intercepted by the shield: bright, metallic, harmless.
+func sfx_shield_block() -> void:
+	_add(Wave.NOISE, 2600.0, 900.0, 0.12, 0.002, 0.05, 0.10)
+	_add(Wave.SQUARE, 720.0, 480.0, 0.05, 0.002, 0.04, 0.08)
+
+
+## Beneficial energy absorbed: rising, warm, distinct from a block.
+func sfx_shield_absorb() -> void:
+	_add(Wave.SINE, 620.0, 1240.0, 0.10, 0.01, 0.16, 0.22)
+	_add(Wave.TRI, 930.0, 1390.0, 0.05, 0.02, 0.14, 0.20)
+
+
+## Nick takes a hit: low and blunt, no high frequencies to grate over time.
+func sfx_player_hurt() -> void:
+	_add(Wave.SQUARE, 220.0, 90.0, 0.14, 0.003, 0.10, 0.18)
+	_add(Wave.NOISE, 700.0, 180.0, 0.10, 0.003, 0.08, 0.14)
+
+
+## Charge reaches full: a clean two-note ready chime.
+func sfx_charge_ready() -> void:
+	_add(Wave.SINE, 660.0, 660.0, 0.10, 0.01, 0.20, 0.26)
+	_add(Wave.SINE, 990.0, 990.0, 0.08, 0.05, 0.24, 0.30)
+
+
+## Counterattack launch and its travel toward the robot.
+func sfx_counterattack() -> void:
+	_add(Wave.SAW, 180.0, 900.0, 0.14, 0.01, 0.22, 0.32)
+	_add(Wave.NOISE, 400.0, 2400.0, 0.10, 0.01, 0.16, 0.26)
+
+
+## Counterattack impact on the boss chassis.
+func sfx_counter_hit() -> void:
+	_add(Wave.NOISE, 1800.0, 120.0, 0.26, 0.002, 0.20, 0.34)
+	_add(Wave.SINE, 150.0, 55.0, 0.20, 0.003, 0.18, 0.30)
+
+
+## Boss defeated: a long power-down, not an explosion.
+func sfx_boss_down() -> void:
+	_add(Wave.SAW, 300.0, 40.0, 0.16, 0.02, 0.90, 1.30)
+	_add(Wave.NOISE, 900.0, 100.0, 0.12, 0.02, 0.70, 1.10)
+	_add(Wave.SINE, 220.0, 110.0, 0.10, 0.10, 0.80, 1.20)
+
+
+## Encounter failure sting.
+func sfx_defeat() -> void:
+	_add(Wave.SQUARE, 240.0, 70.0, 0.16, 0.01, 0.35, 0.55)
+	_add(Wave.SAW, 130.0, 45.0, 0.12, 0.03, 0.40, 0.60)
+
+
 # ---------------------------------------------------------------- synthesis
 
 func _add(wave: int, f0: float, f1: float, amp: float, attack: float, decay: float, dur: float) -> void:
@@ -162,6 +217,20 @@ func _process(delta: float) -> void:
 			_tick_timer = _rng.randf_range(3.5, 9.0)
 			_add(Wave.NOISE, 2200.0, 1400.0, 0.025, 0.002, 0.05, 0.08)
 			_add(Wave.TRI, 260.0, 180.0, 0.018, 0.01, 0.18, 0.24)
+	elif ambience == "city" and _amb_level > 0.01:
+		# Sorting machinery that never got switched off.
+		_tick_timer -= delta
+		if _tick_timer <= 0.0:
+			_tick_timer = _rng.randf_range(1.1, 3.4)
+			_add(Wave.NOISE, 1900.0, 1100.0, 0.022, 0.002, 0.05, 0.09)
+			_add(Wave.TRI, 320.0, 240.0, 0.016, 0.01, 0.14, 0.18)
+	elif ambience == "coast" and _amb_level > 0.01:
+		# A slow wash over the ruin bed, and a pump thud deep under it.
+		_tick_timer -= delta
+		if _tick_timer <= 0.0:
+			_tick_timer = _rng.randf_range(2.8, 5.5)
+			_add(Wave.SINE, 78.0, 52.0, 0.06, 0.02, 0.35, 0.55)
+			_add(Wave.NOISE, 900.0, 300.0, 0.018, 0.01, 0.30, 0.50)
 
 	var frames := _playback.get_frames_available()
 	if frames <= 0:
@@ -182,13 +251,22 @@ func _process(delta: float) -> void:
 				s += _noise_lp * 0.020 * swell
 				_amb_phase2 = fmod(_amb_phase2 + inv * 58.0, 1.0)
 				s += (_amb_phase2 * 2.0 - 1.0) * 0.010
-			elif ambience == "ruin":
+			elif ambience == "ruin" or ambience == "city":
 				_noise_lp2 = lerpf(_noise_lp2, _rng.randf_range(-1.0, 1.0), 0.035)
 				s += _noise_lp2 * 0.030
 				_amb_phase2 = fmod(_amb_phase2 + inv * 41.0, 1.0)
 				s += sin(_amb_phase2 * TAU) * 0.022
 				_amb_phase = fmod(_amb_phase + inv * 27.5, 1.0)
 				s += sin(_amb_phase * TAU) * 0.014
+			elif ambience == "coast":
+				# Wider, slower noise so it reads as water rather than wind, plus a
+				# low swell that rises and falls.
+				_noise_lp2 = lerpf(_noise_lp2, _rng.randf_range(-1.0, 1.0), 0.020)
+				s += _noise_lp2 * 0.034
+				_amb_phase = fmod(_amb_phase + inv * 0.14, 1.0)
+				s += sin(_amb_phase * TAU) * 0.020
+				_amb_phase2 = fmod(_amb_phase2 + inv * 33.0, 1.0)
+				s += sin(_amb_phase2 * TAU) * 0.010
 			s *= _amb_level
 
 		var kill: Array = []

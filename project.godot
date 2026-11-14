@@ -10,21 +10,24 @@ config_version=5
 
 [application]
 
-config/name="Nasa Space Mission"
-config/features=PackedStringArray("4.7")
+config/name="Operation: Starfall"
+config/features=PackedStringArray("4.0")
+run/main_scene="res://scenes/starfall/main.tscn"
 
 [autoload]
 
-GameState="*uid://bp56rgjiccxs4"
-Events="*uid://bv7ohd41wbctd"
-DataLoader="*uid://dsndy8etxj2jw"
+GameState="*res://autoload/game_state.gd"
+Events="*res://autoload/events.gd"
+DataLoader="*res://autoload/data_loader.gd"
 
 [display]
 
-window/size/viewport_width=1280
-window/size/viewport_height=720
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
+window/size/viewport_width=960
+window/size/viewport_height=540
+window/size/window_width_override=1440
+window/size/window_height_override=810
+window/stretch/mode="disabled"
+window/stretch/aspect="keep"
 
 [physics]
 
@@ -32,6 +35,7 @@ window/stretch/aspect="expand"
 
 [rendering]
 
-rendering_device/driver.windows="d3d12"
+textures/canvas_textures/default_texture_filter=0
+
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

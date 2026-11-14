@@ -4,6 +4,8 @@ A 2D strategy game where players design, manage and simulate a complete space mi
 
 Built for the **NASA Space Apps Challenge** (48-hour hackathon, team of 6). The official brief and datasets are released on event day, so the game logic and data are placeholders until then.
 
+> **Currently playable: Operation: Starfall.** The repo also contains a complete 2D top-down orbital-salvage satire built from `operation_starfall_story_bible_en.md`. It is self-contained under `scenes/starfall/`, `core/starfall/` and `data/starfall/`, is the project's main scene, and is documented in [docs/starfall.md](docs/starfall.md).
+
 ## Quick facts (read this first, humans and Claude sessions)
 
 | Item | Value |
@@ -12,10 +14,10 @@ Built for the **NASA Space Apps Challenge** (48-hour hackathon, team of 6). The 
 | Language | GDScript (static typing) |
 | Renderer | Compatibility (`gl_compatibility`), required for web export |
 | Target | Web (HTML5), exported and hosted on itch.io or GitHub Pages |
-| Resolution | 1280x720, stretch mode `canvas_items` |
+| Resolution | 1280x720, stretch mode `canvas_items` (Operation: Starfall draws at 480x270 and upscales with nearest filtering) |
 | Game type | 2D, UI-driven strategy (Control nodes, no physics) |
 | Flow | Main -> Design -> Simulation -> Result |
-| Status | Skeleton only: folders, autoloads and starter scripts exist; no scenes yet |
+| Status | Operation: Starfall is complete and playable; the NASA mission-planner skeleton is still folders and starter scripts |
 
 ## Getting started
 
@@ -29,12 +31,15 @@ Built for the **NASA Space Apps Challenge** (48-hour hackathon, team of 6). The 
 
 ```
 autoload/    Global singletons: game_state.gd, events.gd (signal bus), data_loader.gd
-core/        Pure logic with no UI access: calculations.gd (delta-v), mission_rules.gd
+core/        Pure logic with no UI access: calculations.gd (delta-v), mission_rules.gd,
+             starfall/  (palette, font, sprites, synth, ship/debris simulation)
 scenes/      main/  design/  simulation/  result/   (one folder per screen)
+             starfall/  The playable Operation: Starfall game (main scene)
 data/        JSON game data + schema.md (replace with NASA data on event day)
+             starfall/  All Starfall tuning and prose: balance, debris, sectors, logs, endings
 tools/       Python scripts that fetch/convert NASA data into data/*.json
 assets/      ui/ (Theme, icons), sprites/, backgrounds/, fonts/, audio/, CREDITS.md
-tests/       Optional tests for core/
+tests/       Headless playtests (playtest, flow, botrun), synth check, screenshot tool
 docs/        roles.md, game_design.md, test_checklist.md, submission.md, pitch/
 .claude/     Claude Code subagents (agents/), rules (rules/), deny-list (settings.json)
 ```

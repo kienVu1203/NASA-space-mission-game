@@ -84,8 +84,10 @@ tests/star_fall/
   test_encounter.gd             Phase 2 combat rules, escalation, retry, rewards
   test_phase3.gd                Phase 3 vocabulary, typing, pacing, workshop, simulation, save
   test_phase4.gd                Phase 4 finale gate, cinematic, report, score, save, QA skip
+  test_flight.gd                Phase 4 flight segments, canonical VELA renderer, shield
+                                contacts, portal entry timing, presentation states, cleanup
   test_debug_jump.gd            Every debug phase jump and in-fight debug command
-  capture.gd                    Dev tool: renders 48 key screens to PNG
+  capture.gd                    Dev tool: renders 53 key screens to PNG
 ```
 
 ### Rules the architecture enforces
@@ -365,6 +367,7 @@ the construction console and menu screens, which are panel-driven.
 | *(cinematic)* Space | — | Pause / resume |
 | *(cinematic)* Esc | — | Skip the rest of the sequence (same outcome) |
 | *(cinematic)* Enter | — | Advance a beat, or skip the closing card |
+| *(cinematic, playable segments)* A / D, Left / Right, mouse | `move_left`, `move_right` | Steer across the debris corridor; line up under the portal |
 | *(report, credits)* Up/Down | — | Scroll |
 | *(report, credits)* Enter / Space / Esc | — | Continue |
 | *(QA, debug or `--qa`)* I + O + P | — | Advance one campaign milestone |
@@ -728,6 +731,7 @@ GODOT="/c/Users/<you>/Downloads/Godot_v4.0-stable_win64.exe/Godot_v4.0-stable_wi
 "$GODOT" --headless --path . --script res://tests/star_fall/test_encounter.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_phase3.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_phase4.gd
+"$GODOT" --headless --path . --script res://tests/star_fall/test_flight.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_debug_jump.gd
 ```
 
@@ -735,12 +739,16 @@ Each prints `PASS`/`FAIL` per check and a `RESULT:` line, and exits non-zero on
 failure. `test_encounter.gd` is the Phase 2 combat and persistence suite;
 `test_phase3.gd` is the Phase 3 vocabulary, typing, pacing, workshop,
 simulation and save suite; `test_phase4.gd` is the Phase 4 finale gate,
-cinematic, report, score, save-version and QA-skip suite; `test_flow.gd` drives
+cinematic, report, score, save-version and QA-skip suite; `test_flight.gd`
+covers the playable flight segments, the canonical VELA renderer (engine state
+per presentation state, upright orientation, uniform scale, module positions),
+shield contacts, the portal waiting for a visible entry, and per-scene cleanup;
+`test_flow.gd` drives
 the real main scene from the title to the credits, then walks the campaign again
 with the QA skip.
 
-**Warning:** `test_flow.gd`, `test_phase4.gd`, `test_debug_jump.gd` and
-`capture.gd` delete
+**Warning:** `test_flow.gd`, `test_phase4.gd`, `test_flight.gd`,
+`test_debug_jump.gd` and `capture.gd` delete
 `user://star_fall_save.json`. Back up a real save before running them.
 
 ### Screenshots (needs a display, not headless)
@@ -750,8 +758,12 @@ with the QA skip.
 "$GODOT" --path . --script res://tests/star_fall/capture.gd -- --shots=17,18
 ```
 
-Writes 48 PNGs to `user://captures/` (01-36 the campaign and workshop, 46-56
-the Phase 4 finale, plus 22b). `--shots=` renders only the named screens
+Writes 53 PNGs to `user://captures/` (01-36 the campaign and workshop, 46-56
+the Phase 4 finale, plus 22b). The finale shots cover the eight VELA reference
+frames: 36 workshop, 46/47 final assembly, 48/48b departure station and
+boarding, 49b ignition, 49c vertical liftoff, 49 a shield contact in the
+ascent, 50 the debris passage, 52/52b portal approach and entry, 53 home
+landing with Nick stepping out, 53b Nick celebrating. `--shots=` renders only the named screens
 (by their number prefix), which is the quickest way to re-check one pose. This
 is a presentation aid only; it is not evidence that the game plays correctly.
 
@@ -1075,6 +1087,58 @@ entry and again on confirmation:
 | `simulation` | recomputing the committed design still passes, and its signature matches the stored report |
 | `clear` | no dialogue, cutscene or transition is running |
 
+### The canonical VELA (`core/star_fall/sf_vela.gd`)
+
+One renderer draws VELA everywhere from the workshop on: the reconstruction
+workshop, the final-assembly preview and every cinematic shot. No other
+drawing of the ship exists (the old side-view `vela_ship` sprites and the
+nose-right flight art were removed). The design source is the workshop
+drawing: long gray segmented hull, stepped tapered nose, rear engine block
+with a wide nozzle bell, five panel seams, a dorsal emitter mast, cyan accents
+(cockpit glass, nozzle lips, module lights) and three module positions.
+
+- **Geometry** lives once, in ship units: `u` along the hull (0 = nozzle exit,
+  `LENGTH` 97 = nose tip), `v` across it (negative = dorsal/mast side),
+  `HALF_WIDTH` 9. Scale is a whole number (workshop 2, everything else 1), so
+  edges stay crisp and nothing is stretched.
+- **Orientation is a mapping, not a rotation.** `maintenance` maps `u` to +x
+  (nose right, workshop cradle). Every other state maps `u` to -y: nose up,
+  nozzles and legs at the bottom.
+- **Presentation states and engines.**
+
+  | State | Where | Engines | Legs |
+  |---|---|---|---|
+  | `maintenance` | workshop | off (ready glow only once assembled) | cradle |
+  | `parked` | final assembly, departure station, launch t < 1 s | off | down |
+  | `ignition` | launch, on the pad | on | down |
+  | `ascending` | climb, debris passage, sunlight, portal approach | on | stowed |
+  | `portal_entry` | portal, after capture | on | stowed |
+  | `descending` | home, powered descent | on | down |
+  | `landed` | home, after touchdown | off | down |
+
+  `SFVela.engines_on(state)` is the only switch: a parked or landed ship never
+  draws a flame, whatever thrust a caller passes. Flame, legs, boarding ramp and
+  shield are drawn in screen space from the mapping, never by rotating the
+  composition, so they cannot end up on the wrong side.
+- **Modules** (`navigation_chip`, `power_core`, `shield_emitter`) sit at fixed
+  ship-unit positions. The workshop places its install sockets from the same
+  table, so a fitted part is in the same place in every view. Callers pass the
+  fitted list from the campaign; the finale passes the frozen design's modules.
+- **Hatch and ramp.** One access hatch, low on the ventral side, with a 45-degree
+  boarding ramp. Nick boards through it at the departure station and leaves
+  through it at home.
+- **Shield.** `draw_shield()` wraps the whole silhouette (half-extents 21 x
+  59.5 px at scale 1) and draws a ripple and sparks at each contact point.
+- The renderer is pure presentation: it reads no campaign state and plays no
+  audio, so the final-assembly preview cannot trigger engine or impact sounds.
+- **Assets and sources.** No external asset was added. VELA, the departure
+  station and the home spaceport are drawn in code (original). The home scene
+  reuses the project's own generated `tree`, `bush`, `lamp` and `dish` sprites;
+  the departure scene reuses `terminal`, `rubble`, `bill_on` / `bill_off` and
+  Nick's walking sprites. Removed: the `vela_ship`, `vela_ship_gear`,
+  `nick_portrait` and `nick_standing` sprites. Contact sounds reuse the existing
+  `sfx_shield_block` (synth) and `sfx_impact` (project sample, synth fallback).
+
 ### Cinematic
 
 Six scenes, each with its own duration and ordered subtitles, plus the closing
@@ -1082,14 +1146,40 @@ card. All copy and timing is in `finale.json`; the screen has no prose.
 
 | Scene | What it shows | Recorded state it reads |
 |---|---|---|
-| A `leaving_crash_site` | Bill's core moves to VELA; the shell powers down | the junction lights only if `power_repaired` |
-| B `launch` | Ignition, dust, ascent, darkening sky | none |
-| C `debris_passage` | Shield absorbs impacts, chip steers wide | route, masses, delta-v, propellant, buffer, peak power and impact count from the certified simulation |
-| D `sunlight` | Warm light, Bill's last question | none |
-| E `portal` | The recorded signal opens the seam, VELA crosses | none (fiction, labelled in-game) |
-| F `home` | Mission Control, the archive transfer, communities receiving it | the memory count drives the transfer and the lit windows |
+| A `leaving_crash_site` | Departure station: VELA parked upright on a pad with a service gantry, umbilical arm, floodlights and fuel tanks. Bill at the service terminal streams his memory core into the ship (progress readout, packets on the cable); a DONE cue; Bill's shell powers down. Nick walks to the ramp and boards; the hatch seals, the ramp and umbilical retract, the departure checks go green. Engines off throughout. | the cable is lit only if `power_repaired`; the ship carries the fitted modules |
+| B `launch` | Ignition on the same pad (smoke, dust, thrown scrap, a small rumble), vertical liftoff, the camera holding the ship as the station drops away, then the junk strata streaming past with twelve choreographed shield contacts | none |
+| C `debris_passage` | Playable. VELA climbs upright; bodies fall toward it. Grit and near misses meet the shield; a big body on the hull restarts the segment | the certified route, the strikes actually taken |
+| D `sunlight` | Warm light, the waste-wrapped planet, Bill's last question; VELA upright on a low burn | none |
+| E `portal` | Playable alignment, then an automatic capture: the ship is pulled onto the portal's axis, accelerates up into the rim, is masked at the portal plane, and only then does the flash and the transition come | none (fiction, labelled in-game) |
+| F `home` | A redrawn healthy spaceport in the game's angled 2.5D pixel style (pad, service road, receiving station, tracking dish, the Earth level's trees, bushes and lamps, Y-sorted with contact shadows). VELA descends, lands, engines off; hatch opens, ramp lowers; Nick walks out and celebrates (two hops, arm up, a wave). No close-up | the memory count drives the archive packets and the lit windows |
 
 The final card is the two-line message from the brief. No effects run over it.
+
+**Shield contacts.** Every ripple, impact sound and shake is tied to a visible
+contact. In the launch they are choreographed: `LAUNCH_CONTACTS` in
+`cinematic_screen.gd` times each one from the moment its stratum reaches the
+ship, and a body is drawn flying into the contact point and glancing off. In the
+debris passage `SFFlight` reports a `shield` event at the real boundary point
+when grit is absorbed or a large body grazes the bubble (the body is then pushed
+aside, never through the hull). Light contacts play `sfx_shield_block`, heavy
+ones `sfx_impact`, rate-limited (0.12 s / 0.22 s) so bursts never stack. Shake
+is small, decays to zero, is recomputed every frame (no drift), never moves the
+HUD and is off under reduced motion; the ripple still shows.
+
+**Flight axes.** `SFFlight` stays axis-neutral: `x` is along-track, `y` is the
+steered axis. The screen maps `x` up the screen (`screen_y = 360 - x`) and `y`
+to screen x, so the playable segments fly the same upright ship as the rest of
+the sequence. A / D, Left / Right or the mouse steer.
+
+**Portal timing.** `SFFlight` reports `captured` after `align_seconds` in the
+mouth (or when the navigation assist takes over) and `entered` only once
+`ship_x - ship_half_length >= portal_x`, i.e. when the whole hull is through.
+The screen holds the scene until `entered`, then plays a 1.2 s flash; no timer
+or "next beat" key can advance the portal scene early. Esc still skips the
+whole sequence safely.
+
+**Cleanup.** `_next_scene()` and `_finish()` clear contacts, shake, flight
+state and notices, so no effect leaks into the next beat.
 
 **Skip and resume.** Space pauses (focus loss also pauses). Esc skips; repeated
 skip input is idempotent. A save written during `escape` resumes at the start of
@@ -1618,8 +1708,11 @@ None of the earlier ids are renamed. `return_home` keeps its id and changes from
 ### Phase 4 known limitations
 
 - Visuals and audio of the cinematic have been checked only through the
-  screenshot tool (`tests/star_fall/capture.gd`, shots 46-56), not by playing it
-  on a real display with a person watching. Whether it *reads* well is untested.
+  screenshot tool (`tests/star_fall/capture.gd`, shots 33-56), not by playing it
+  on a real display with a person watching. Whether it *reads* well in motion,
+  and how the contact sounds feel, is untested.
+- The final-assembly preview shows VELA at scale 1 (about 105 px tall) so it fits
+  the panel without stretching; the workshop shows the same ship at scale 2.
 - The cinematic is drawn from primitives and generated sprites; it is deliberately
   stylised, not a rendered animation.
 - The credits roll has no music of its own; it reuses the title theme.

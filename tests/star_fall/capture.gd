@@ -57,15 +57,17 @@ var plan: Array = [
 	# Phase 4.
 	{"name": "46_final_assembly", "setup": "_setup_final_assembly", "wait": 10},
 	{"name": "47_assembly_install", "setup": "_setup_assembly_install", "wait": 30},
-	{"name": "48_escape_crash_site", "setup": "_setup_escape_crash_site", "wait": 40},
+	{"name": "48_escape_departure", "setup": "_setup_escape_departure", "wait": 40},
+	{"name": "48b_escape_boarding", "setup": "_setup_escape_boarding", "wait": 18},
 	{"name": "49_escape_launch", "setup": "_setup_escape_launch", "wait": 24},
 	{"name": "49b_escape_ignition", "setup": "_setup_escape_ignition", "wait": 18},
-	{"name": "49c_escape_shatter", "setup": "_setup_escape_shatter", "wait": 18},
+	{"name": "49c_escape_liftoff", "setup": "_setup_escape_liftoff", "wait": 18},
 	{"name": "50_escape_debris", "setup": "_setup_escape_debris", "wait": 24},
 	{"name": "51_escape_sunlight", "setup": "_setup_escape_sunlight", "wait": 24},
 	{"name": "52_escape_portal", "setup": "_setup_escape_portal", "wait": 24},
+	{"name": "52b_escape_portal_entry", "setup": "_setup_escape_portal_entry", "wait": 18},
 	{"name": "53_escape_home", "setup": "_setup_escape_home", "wait": 28},
-	{"name": "53b_escape_portrait", "setup": "_setup_escape_portrait", "wait": 24},
+	{"name": "53b_escape_celebration", "setup": "_setup_escape_celebration", "wait": 24},
 	{"name": "54_final_message", "setup": "_setup_final_message", "wait": 20},
 	{"name": "55_mission_report", "setup": "_setup_mission_report", "wait": 10},
 	{"name": "56_credits", "setup": "_setup_credits", "wait": 16},
@@ -598,27 +600,57 @@ func _start_escape() -> void:
 	_clear_dialogue()
 
 
-func _setup_escape_crash_site() -> void:
+func _setup_escape_departure() -> void:
 	_start_escape()
-	_escape_to(0, 12.4)
+	# The departure station: Bill's core streaming into the parked VELA.
+	_escape_to(0, 4.5)
+
+
+func _setup_escape_boarding() -> void:
+	_start_escape()
+	# Nick on the boarding ramp, hatch open, engines cold.
+	_escape_to(0, 12.9)
 
 
 func _setup_escape_launch() -> void:
 	_start_escape()
-	# Mid-climb: the blue shield up, the junk strata thickening around the hull.
-	_escape_to(1, 10.4)
+	# Mid-climb on a heavy shield contact: the ripple, the glancing body.
+	var cine = main.cinematic_screen
+	var at: float = cine.launch_contact_time(2) if cine != null else 10.4
+	_escape_to(1, at - 0.3)
+	_advance_escape(0.3 + 0.08)
 
 
 func _setup_escape_ignition() -> void:
 	_start_escape()
-	# On the pad: thick smoke, full ignition, the shield not yet lit.
-	_escape_to(1, 3.4)
+	# On the pad: ignition building, smoke and dust, legs still down.
+	_escape_to(1, 2.6)
 
 
-func _setup_escape_shatter() -> void:
+func _setup_escape_liftoff() -> void:
 	_start_escape()
-	# The final shell overloading: fragments, shockwave, and the bubble gone.
-	_escape_to(1, 13.1)
+	# Clear of the pad, climbing straight up out of the station.
+	_escape_to(1, 4.9)
+
+
+## Runs the cinematic clock forward from a posed frame so the timed contacts
+## fire as they do in play. Earlier contacts are marked done first, so only
+## the ones inside this window appear.
+func _advance_escape(seconds: float) -> void:
+	var cine = main.cinematic_screen
+	if cine == null:
+		return
+	if cine.scene_id() == "launch":
+		for i in cine.LAUNCH_CONTACTS.size():
+			if cine.launch_contact_time(i) < cine.scene_time:
+				cine._fired_cues["launch:contact%d" % i] = true
+		for key in ["countdown", "ignition", "shield"]:
+			cine._fired_cues["launch:" + key] = true
+	var t := 0.0
+	while t < seconds:
+		cine.advance_for(1.0 / 30.0)
+		t += 1.0 / 30.0
+	cine.queue_redraw()
 
 
 func _setup_escape_debris() -> void:
@@ -641,14 +673,33 @@ func _setup_escape_portal() -> void:
 		cine.flight.ship_y = cine.flight.portal_y
 
 
+func _setup_escape_portal_entry() -> void:
+	_start_escape()
+	_escape_to(4, 6.0)
+	_populate_flight()
+	var cine = main.cinematic_screen
+	if cine == null or cine.flight == null:
+		return
+	# Captured and half way through the rim: the hull masked at the portal plane.
+	var guard := 0
+	while guard < 600 and (not cine.flight.captured or cine.flight.entry_fraction() < 0.72):
+		guard += 1
+		if not cine.flight.captured:
+			cine.flight.ship_y = cine.flight.portal_y
+		cine.flight.tick(1.0 / 30.0, 0.0)
+	cine.queue_redraw()
+
+
 func _setup_escape_home() -> void:
 	_start_escape()
-	_escape_to(5, 12.0)
+	# Landed, engines off, the ramp down and Nick stepping out.
+	_escape_to(5, 9.6)
 
 
-func _setup_escape_portrait() -> void:
+func _setup_escape_celebration() -> void:
 	_start_escape()
-	_escape_to(5, 21.0)
+	# Nick on the landing area, mid-hop with an arm up. No close-up.
+	_escape_to(5, 12.0)
 
 
 ## Steps the playable segment for a few seconds of flight with no steering, so
@@ -661,9 +712,19 @@ func _populate_flight() -> void:
 	if cine.flight == null:
 		return
 	# Long enough for the field to fill: a capture should show mid-passage, not
-	# the first two seconds.
-	for i in 150:
+	# the first two seconds. The navigation chip flies so no strike freezes the
+	# frame; the last half second runs through the screen so shield contacts
+	# show exactly as in play.
+	cine.flight.assist = cine.flight.kind == "debris"
+	for i in 135:
+		if cine.flight.kind == "portal":
+			# Held off the axis, so the pre-roll does not fly it in already.
+			cine.flight.ship_y = cine.flight.lane_top + 12.0
 		cine.flight.tick(1.0 / 30.0, 0.0)
+	if cine.flight.kind == "debris":
+		for i in 15:
+			cine.advance_for(1.0 / 30.0)
+	cine.flight.assist = false
 	cine.queue_redraw()
 
 

@@ -24,6 +24,7 @@ const SFPalette := preload("res://core/star_fall/sf_palette.gd")
 const SFMenu := preload("res://core/star_fall/sf_menu.gd")
 const SFFinale := preload("res://core/star_fall/sf_finale.gd")
 const SFContent := preload("res://core/star_fall/sf_content.gd")
+const SFVela := preload("res://core/star_fall/sf_vela.gd")
 
 const VW := 640
 const VH := 360
@@ -282,23 +283,26 @@ func _draw_frame_panel(rect: Rect2) -> void:
 			y += 11.0
 
 
+## The frozen design: the canonical VELA (core/star_fall/sf_vela.gd), upright and
+## parked on a service stand with its engines cold, carrying exactly the modules
+## the campaign has fitted. The preview draws only; it never plays engine,
+## shield or flight audio.
 func _draw_frame(ground: Vector2) -> void:
-	# A repaired three-quarter frame, kept in the same visual language as the
-	# construction screen and the launch silhouette.
-	draw_rect(Rect2(ground.x - 26, ground.y - 96, 52, 76), SFPalette.STEEL, true)
-	draw_rect(Rect2(ground.x - 26, ground.y - 96, 10, 76), SFPalette.STEEL_MID, true)
-	draw_rect(Rect2(ground.x + 17, ground.y - 96, 9, 76), SFPalette.STEEL_DARK, true)
-	draw_rect(Rect2(ground.x - 14, ground.y - 114, 28, 20), SFPalette.STEEL_MID, true)
-	draw_rect(Rect2(ground.x - 8, ground.y - 128, 16, 16), SFPalette.STEEL, true)
-	draw_rect(Rect2(ground.x - 4, ground.y - 136, 8, 10), SFPalette.STEEL_MID, true)
-	draw_rect(Rect2(ground.x - 24, ground.y - 22, 14, 18), SFPalette.STEEL_DARK, true)
-	draw_rect(Rect2(ground.x + 10, ground.y - 22, 14, 18), SFPalette.STEEL_DARK, true)
-	# Three component lights, lit only when installed.
-	var order := SFFinale.COMPONENTS
-	for i in order.size():
-		var on: bool = campaign.has_component(String(order[i]))
-		var c: Color = SFPalette.CYAN if on else SFPalette.RUIN_DARK
-		draw_rect(Rect2(ground.x - 16 + float(i) * 11, ground.y - 78, 7, 5), c, true)
+	draw_rect(Rect2(ground.x - 44, ground.y, 88, 4), SFPalette.STEEL_DARK, true)
+	draw_rect(Rect2(ground.x - 44, ground.y, 88, 1), SFPalette.STEEL_MID, true)
+	draw_rect(Rect2(ground.x - 40, ground.y + 4, 4, 6), SFPalette.RUST.darkened(0.2), true)
+	draw_rect(Rect2(ground.x + 36, ground.y + 4, 4, 6), SFPalette.RUST.darkened(0.2), true)
+	draw_rect(Rect2(ground.x - 42, ground.y + 10, 84, 2), Color(0, 0, 0, 0.25), true)
+	var fitted: Array = []
+	for id in SFFinale.COMPONENTS:
+		if campaign.has_component(String(id)):
+			fitted.append(String(id))
+	SFVela.draw(self, SFVela.ground_origin(ground), 1, SFVela.PARKED, {"modules": fitted, "time": time})
+	# A thin scan line climbs the hull while the parts are being seated.
+	if phase == Phase.INSTALLING:
+		var k: float = clampf(install_timer / maxf(0.01, install_seconds), 0.0, 1.0)
+		var y: float = round(ground.y - float(SFVela.LEG_DEPTH) - k * float(SFVela.LENGTH))
+		draw_rect(Rect2(ground.x - 14, y, 28, 1), Color(SFPalette.CYAN.r, SFPalette.CYAN.g, SFPalette.CYAN.b, 0.8), true)
 
 
 func _draw_check_panel(rect: Rect2) -> void:

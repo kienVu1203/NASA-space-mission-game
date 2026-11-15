@@ -52,9 +52,9 @@ const GOLD := Color("e5c04a")
 const RED := Color("d9534f")
 const GREEN_OK := Color("66c96a")
 
-# The blue escape shield, and the one human face the game ever shows close up.
-# Nick remains placeholder art in the world; the finale portrait is the one
-# deliberately detailed human drawing, because the ending rests on his face.
+# The blue escape shield (drawn by core/star_fall/sf_vela.gd), and the skin and
+# hair tones kept for character art. The finale shows Nick only at character
+# scale: there is no face close-up.
 const SHIELD_BLUE := Color("57c8f5")
 const SHIELD_BLUE_LIGHT := Color("b6ecff")
 const SHIELD_BLUE_DEEP := Color("1f6c9c")

@@ -21,6 +21,7 @@ const SFPalette := preload("res://core/star_fall/sf_palette.gd")
 const SFWorld := preload("res://scenes/star_fall/world.gd")
 const SFConstruction := preload("res://scenes/star_fall/construction_screen.gd")
 const SFDuel := preload("res://scenes/star_fall/shield_duel.gd")
+const SFEcoArenaScreen := preload("res://scenes/star_fall/eco_arena_screen.gd")
 const SFArchive := preload("res://scenes/star_fall/archive_screen.gd")
 const SFProgression := preload("res://scenes/star_fall/progression_screen.gd")
 const SFTypingDuel := preload("res://scenes/star_fall/typing_duel.gd")
@@ -54,6 +55,7 @@ enum Screen {
 	CINEMATIC,
 	REPORT,
 	CREDITS,
+	ECO_ARENA,
 }
 
 enum LaunchPhase {COUNTDOWN, ASCENT, SIGNAL, RIFT, CRASH, DONE}
@@ -95,6 +97,13 @@ var archive_screen = null
 var progression_screen = null
 var _archive_id: String = ""
 var _pending_boss_id: String = ""
+
+# Eco Arena: the Scrap King encounter (campaign) and the main-menu practice
+# mode share one screen. Practice never reads or writes the campaign.
+var eco_screen = null
+var eco_data: Dictionary = {}
+var eco_mode: String = "practice"
+var _eco_resume: bool = false
 
 # Phase 3 screens and content.
 var typing_duel = null
@@ -176,6 +185,9 @@ func _ready() -> void:
 	if finale_data.is_empty():
 		push_error("STAR FALL: finale.json failed to load")
 	reconstruction_data = SFContent.read_json("res://data/star_fall/reconstruction.json") as Dictionary
+	eco_data = SFContent.read_json("res://data/star_fall/eco_arena.json") as Dictionary
+	if eco_data.is_empty():
+		push_error("STAR FALL: eco_arena.json failed to load")
 	qa = SFQA.new()
 	qa_enabled = SFQA.is_enabled()
 	if qa_enabled and not finale_data.is_empty():
@@ -244,6 +256,7 @@ func _rebuild_title_menu() -> void:
 	var items: Array = [
 		{"id": "new", "label": "NEW GAME", "enabled": true},
 		{"id": "continue", "label": "CONTINUE", "enabled": save_available},
+		{"id": "eco_arena", "label": "ECO ARENA — 5-7 MIN", "enabled": true},
 		{"id": "settings", "label": "SETTINGS", "enabled": true},
 		{"id": "quit", "label": "QUIT", "enabled": true},
 	]
@@ -302,6 +315,9 @@ func _go(next: int) -> void:
 	if duel != null:
 		duel.queue_free()
 		duel = null
+	if eco_screen != null:
+		eco_screen.queue_free()
+		eco_screen = null
 	if archive_screen != null:
 		archive_screen.queue_free()
 		archive_screen = null
@@ -369,6 +385,8 @@ func _go(next: int) -> void:
 				audio.play_music("checkpoint")
 		Screen.DUEL:
 			_enter_duel()
+		Screen.ECO_ARENA:
+			_enter_eco_arena()
 		Screen.ARCHIVE:
 			_enter_archive()
 		Screen.PROGRESSION:
@@ -402,6 +420,8 @@ func apply_reduced_motion() -> void:
 		duel.reduced_motion = setting_reduced_motion
 	if typing_duel != null:
 		typing_duel.reduced_motion = setting_reduced_motion
+	if eco_screen != null:
+		eco_screen.reduced_motion = setting_reduced_motion
 	if cinematic_screen != null:
 		cinematic_screen.reduced_motion = setting_reduced_motion
 
@@ -457,6 +477,10 @@ func _sync_world_actors() -> void:
 	# Remnant's defeat and the pickup, across revisits and save/load.
 	if _shield_state() != SFCampaign.REWARD_AVAILABLE:
 		world.remove_prop("dawn_shield_drop")
+	# The power core drop likewise exists only between Toxic Tide's defeat and
+	# the pickup.
+	if _coast_reward_state() != SFCampaign.REWARD_AVAILABLE:
+		world.remove_prop("coast_power_core_drop")
 	if campaign.has_flag(SFCampaign.FLAG_POWER_REPAIRED):
 		world.set_prop_sprite("power_connection", "junction")
 	world.sync_companion(campaign.has_flag(SFCampaign.FLAG_BILL_ACTIVE))
@@ -465,7 +489,10 @@ func _sync_world_actors() -> void:
 	var city_cleared: bool = campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED)
 	var city_status := "LOCKED - USE CHECKPOINT"
 	var city_label := "Enter the control center"
-	if city_cleared:
+	if city_cleared and _city_reward_state() == SFCampaign.REWARD_AVAILABLE:
+		city_status = "CHIP WAITING - ENTER [E]"
+		city_label = "Return to the sorting yard"
+	elif city_cleared:
 		city_status = "ROUTE OPEN - SILENT COAST ->"
 		city_label = "Proceed to Silent Coast"
 	elif city_unlocked:
@@ -486,7 +513,10 @@ func _sync_world_actors() -> void:
 	var coast_cleared: bool = campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED)
 	var coast_status := "LOCKED - USE CHECKPOINT"
 	var coast_label := "Enter the cleanup facility"
-	if coast_cleared:
+	if coast_cleared and _coast_reward_state() == SFCampaign.REWARD_AVAILABLE:
+		coast_status = "PICK UP THE POWER CORE FIRST"
+		coast_label = "The power core is on the quay"
+	elif coast_cleared:
 		coast_status = "ROUTE OPEN - CRASH-SITE BASE ->"
 		coast_label = "Return to crash-site base"
 	elif coast_unlocked:
@@ -591,6 +621,8 @@ func apply_focus_state() -> void:
 		duel.input_locked = encounter_input_locked
 	if typing_duel != null:
 		typing_duel.input_locked = encounter_input_locked
+	if eco_screen != null:
+		eco_screen.input_locked = encounter_input_locked
 	if workshop_screen != null:
 		workshop_screen.input_locked = encounter_input_locked
 	if assembly_screen != null:
@@ -806,6 +838,8 @@ func _title_activate() -> void:
 			_start_briefing()
 		"continue":
 			_continue_game()
+		"eco_arena":
+			_start_eco_practice()
 		"settings":
 			audio.sfx_blip()
 			_go(Screen.SETTINGS)
@@ -868,21 +902,36 @@ func _resume_from_campaign() -> void:
 			_go(Screen.WORLD)
 			if not campaign.has_flag(SFCampaign.FLAG_CITY_ENTERED):
 				_show_city_intro()
-		SFCampaign.STAGE_CITY_BOSS:
+		SFCampaign.STAGE_CITY_BOSS, SFCampaign.STAGE_CITY_ARCHIVE:
 			# A partially completed fight is never serialised: the checkpoint
-			# before the encounter is the resume point.
-			_begin_city_boss()
-		SFCampaign.STAGE_CITY_ARCHIVE:
-			campaign.advance_to(SFCampaign.STAGE_CITY_ARCHIVE)
-			_enter_archive_scene(SFCampaign.ARCHIVE_CITY)
+			# before the encounter is the resume point. A defeated boss whose
+			# chip was never picked up reopens the arena with the chip and the
+			# Super Core waiting (older saves too); a collected chip goes on to
+			# the archive.
+			var city_state: String = _city_reward_state()
+			if city_state == SFCampaign.REWARD_UNDEFEATED or city_state == SFCampaign.REWARD_AVAILABLE:
+				_begin_city_boss()
+			else:
+				campaign.advance_to(SFCampaign.STAGE_CITY_ARCHIVE)
+				_enter_archive_scene(SFCampaign.ARCHIVE_CITY)
 		SFCampaign.STAGE_SILENT_INTRO:
 			_go(Screen.WORLD)
 			if not campaign.has_flag(SFCampaign.FLAG_COAST_ENTERED):
 				_show_coast_intro()
-		SFCampaign.STAGE_COAST_BOSS:
-			_begin_coast_boss()
-		SFCampaign.STAGE_COAST_ARCHIVE:
-			_enter_archive_scene(SFCampaign.ARCHIVE_COAST)
+		SFCampaign.STAGE_COAST_BOSS, SFCampaign.STAGE_COAST_ARCHIVE:
+			# A defeated Toxic Tide is never fought again: an uncollected power
+			# core waits on the quay (older saves too); a collected one goes on
+			# to the archive.
+			match _coast_reward_state():
+				SFCampaign.REWARD_UNDEFEATED:
+					_begin_coast_boss()
+				SFCampaign.REWARD_AVAILABLE:
+					campaign.advance_to(SFCampaign.STAGE_SILENT_INTRO)
+					zone = "silent_coast"
+					_go(Screen.WORLD)
+				_:
+					campaign.advance_to(SFCampaign.STAGE_COAST_ARCHIVE)
+					_enter_archive_scene(SFCampaign.ARCHIVE_COAST)
 		SFCampaign.STAGE_BASE_RETURN:
 			_go(Screen.PROGRESSION)
 		SFCampaign.STAGE_PHASE_TWO_COMPLETE:
@@ -1049,6 +1098,8 @@ func _on_world_interact(object_id: String, prop) -> void:
 			_take_sample(object_id)
 		"coast_boss_gate":
 			_approach_coast_gate()
+		"coast_power_core_drop":
+			_collect_power_core_drop()
 		# Phase 3: Dawn Tower.
 		"dawn_memory":
 			_open_dialogue(campaign.content.dialogue_lines("dawn_memory"), "SURVEY PROJECTOR",
@@ -1089,7 +1140,11 @@ func _approach_city_gate() -> void:
 		return
 	if campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED):
 		_transition_busy = true
+		if _city_reward_state() == SFCampaign.REWARD_AVAILABLE:
+			_begin_city_boss()
+			return
 		if not campaign.has_flag(SFCampaign.FLAG_CITY_ARCHIVE_RESTORED):
+			campaign.advance_to(SFCampaign.STAGE_CITY_ARCHIVE)
 			_enter_archive_scene(SFCampaign.ARCHIVE_CITY)
 			return
 		_open_dialogue(["The archive inside is already restored.", "The route south to the Silent Coast is open."], "CONTROL CENTER", Callable(self, "_travel_city_to_coast"))
@@ -1110,8 +1165,12 @@ func _approach_coast_gate() -> void:
 	if _transition_busy or screen != Screen.WORLD or dialogue != null:
 		return
 	if campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED):
+		if _coast_reward_state() == SFCampaign.REWARD_AVAILABLE:
+			_open_dialogue(["Bill: \"The power core fell out of the intake onto the quay. It is still warm. Pick it up first.\""], "CLEANUP FACILITY")
+			return
 		_transition_busy = true
 		if not campaign.has_flag(SFCampaign.FLAG_COAST_ARCHIVE_RESTORED):
+			campaign.advance_to(SFCampaign.STAGE_COAST_ARCHIVE)
 			_enter_archive_scene(SFCampaign.ARCHIVE_COAST)
 			return
 		_open_dialogue(["The facility is quiet. The archive inside is already restored.", "The route back to the crash-site base is clear."], "CLEANUP FACILITY", Callable(self, "_travel_coast_to_base"))
@@ -1704,8 +1763,18 @@ func _take_sample(object_id: String) -> void:
 
 # ---------------------------------------------------------------- phase 2 bosses
 
+## The Scrap King encounter is the Eco Arena in campaign mode. The control
+## center checkpoint is the resume point; a boss already defeated reopens the
+## arena with its Super Core and chip still waiting.
 func _begin_city_boss() -> void:
-	_start_encounter("scrap_king", "city_boss_intro")
+	var resume: bool = _city_reward_state() == SFCampaign.REWARD_AVAILABLE
+	campaign.advance_to(SFCampaign.STAGE_CITY_BOSS)
+	campaign.set_checkpoint(SFCampaign.STAGE_CITY_BOSS, SFCampaign.CHAPTER_CITY)
+	_save_quietly()
+	zone = "forgotten_city"
+	_open_eco_arena("campaign", resume)
+	var key: String = "city_reward_waiting" if resume else "city_boss_intro"
+	_open_dialogue(campaign.content.dialogue_lines(key), "SCRAP KING'S SORTING YARD")
 
 
 func _begin_coast_boss() -> void:
@@ -1744,7 +1813,8 @@ func _on_encounter_intro_done() -> void:
 
 
 func _enter_duel() -> void:
-	var boss_id := "scrap_king" if campaign.stage == SFCampaign.STAGE_CITY_BOSS else "toxic_tide"
+	# Only Toxic Tide still uses the shield duel; the Scrap King is the Eco Arena.
+	var boss_id := "toxic_tide"
 	var boss_data: Dictionary = campaign.encounters().boss(boss_id)
 	if boss_data.is_empty():
 		push_error("Duel screen requested with no boss data")
@@ -1761,36 +1831,66 @@ func _enter_duel() -> void:
 	queue_redraw()
 
 
-## A duel ended. The screen reports only the outcome; every campaign change
-## happens here, exactly once, and is saved before the next screen opens.
+## The Toxic Tide duel ended. Only the defeat is recorded here: the shield
+## duel already stopped spawning and cleared every projectile, the screen (and
+## Nick's fixed-position lock) is freed when the world returns, and the power
+## core drops onto the quay to be picked up. Nothing is awarded on victory.
 func _on_duel_finished(outcome: String) -> void:
-	var is_city: bool = campaign.stage == SFCampaign.STAGE_CITY_BOSS
 	if outcome != "victory":
 		return
-	if is_city:
-		if _award_boss_victory("scrap_king"):
-			_show_city_victory()
-	else:
-		if _award_boss_victory("toxic_tide"):
-			_show_coast_victory()
+	if not campaign.defeat_boss(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED):
+		return
+	# Back to exploration: resuming this save lands on the quay with the drop.
+	campaign.advance_to(SFCampaign.STAGE_SILENT_INTRO)
+	campaign.set_checkpoint(SFCampaign.STAGE_SILENT_INTRO, SFCampaign.CHAPTER_COAST)
+	_save_quietly()
+	audio.set_ambience("coast")
+	_open_dialogue(campaign.content.dialogue_lines("coast_victory_drop"), "TOXIC TIDE DOWN",
+		Callable(self, "_on_coast_drop_ready"))
 
 
-## Applies a boss victory exactly once. Returns false when this boss was already
-## defeated, so a replayed or double-emitted result can never duplicate rewards.
+func _on_coast_drop_ready() -> void:
+	zone = "silent_coast"
+	_go(Screen.WORLD)
+	if _coast_reward_state() == SFCampaign.REWARD_AVAILABLE:
+		ui.notify("The power core fell onto the quay. E to collect it.", "info", 4.0)
+
+
+## Picks up Toxic Tide's power core. The campaign refuses a second pickup, so
+## the reward is granted exactly once; the world prop is removed either way.
+func _collect_power_core_drop() -> void:
+	var got: bool = campaign.collect_boss_reward(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED, SFCampaign.COMPONENT_POWER_CORE)
+	if world != null:
+		world.remove_prop("coast_power_core_drop")
+	if not got:
+		return
+	audio.sfx_pickup()
+	ui.notify("POWER CORE RECOVERED", "good", 4.0)
+	_save_quietly()
+	_show_coast_victory()
+
+
+func _city_reward_state() -> String:
+	return campaign.reward_state(SFCampaign.FLAG_SCRAP_KING_DEFEATED, SFCampaign.COMPONENT_NAVIGATION_CHIP)
+
+
+func _coast_reward_state() -> String:
+	return campaign.reward_state(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED, SFCampaign.COMPONENT_POWER_CORE)
+
+
+## QA stage skip only: records the boss and collects its dropped reward in one
+## step, through the same idempotent campaign methods real play uses. Returns
+## false when the boss was already defeated; a missing reward is still picked
+## up, and nothing can duplicate.
 func _award_boss_victory(boss_id: String) -> bool:
 	var boss_data: Dictionary = campaign.encounters().boss(boss_id)
 	if boss_data.is_empty():
 		return false
 	var flag := String(boss_data.get("reward_flag", ""))
-	if flag != "" and campaign.has_flag(flag):
-		return false
-	if flag != "":
-		campaign.set_flag(flag)
-	var component := String(boss_data.get("reward_component", ""))
-	if component != "":
-		campaign.award_component(component)
+	var first: bool = campaign.defeat_boss(flag)
+	campaign.collect_boss_reward(flag, String(boss_data.get("reward_component", "")))
 	_save_quietly()
-	return true
+	return first
 
 
 func _show_city_victory() -> void:
@@ -1800,6 +1900,7 @@ func _show_city_victory() -> void:
 
 
 func _on_city_victory_done() -> void:
+	campaign.advance_to(SFCampaign.STAGE_CITY_ARCHIVE)
 	campaign.set_checkpoint(SFCampaign.STAGE_CITY_ARCHIVE, SFCampaign.CHAPTER_CITY)
 	_save_quietly()
 	_enter_archive_scene(SFCampaign.ARCHIVE_CITY)
@@ -1808,13 +1909,79 @@ func _on_city_victory_done() -> void:
 func _show_coast_victory() -> void:
 	audio.set_ambience("coast")
 	var lines: Array = campaign.content.dialogue_lines("coast_victory")
-	_open_dialogue(lines, "TOXIC TIDE DOWN", Callable(self, "_on_coast_victory_done"))
+	_open_dialogue(lines, "POWER CORE RECOVERED", Callable(self, "_on_coast_victory_done"))
 
 
 func _on_coast_victory_done() -> void:
+	campaign.advance_to(SFCampaign.STAGE_COAST_ARCHIVE)
 	campaign.set_checkpoint(SFCampaign.STAGE_COAST_ARCHIVE, SFCampaign.CHAPTER_COAST)
 	_save_quietly()
 	_enter_archive_scene(SFCampaign.ARCHIVE_COAST)
+
+
+# ---------------------------------------------------------------- eco arena
+
+## Main-menu practice. The campaign object and the save file are never read
+## or written on this path: the arena keeps all its state in its own model.
+func _start_eco_practice() -> void:
+	audio.sfx_confirm()
+	_open_eco_arena("practice", false)
+
+
+func _open_eco_arena(mode_id: String, resume: bool) -> void:
+	eco_mode = mode_id
+	_eco_resume = resume
+	if screen == Screen.ECO_ARENA:
+		screen = Screen.TITLE  # a re-entry always builds a fresh screen
+	_go(Screen.ECO_ARENA)
+
+
+func _enter_eco_arena() -> void:
+	eco_screen = SFEcoArenaScreen.new()
+	eco_screen.name = "EcoArena"
+	eco_screen.setup(skin, ui, eco_data, eco_mode, _eco_resume)
+	eco_screen.reduced_motion = setting_reduced_motion
+	eco_screen.arena_finished.connect(_on_eco_finished)
+	eco_screen.arena_aborted.connect(_on_eco_aborted)
+	if eco_mode == "campaign":
+		eco_screen.boss_defeated.connect(_on_eco_boss_defeated)
+		eco_screen.reward_collected.connect(_on_eco_reward_collected)
+	add_child(eco_screen)
+	audio.set_ambience("none")
+	if audio.has_method("play_music"):
+		audio.play_music("ruin")
+	apply_focus_state()
+	queue_redraw()
+
+
+## Campaign: the Junkyard Colossus is down. Only the defeat is recorded; the
+## navigation chip is awarded when Nick picks it up in the arena.
+func _on_eco_boss_defeated() -> void:
+	if campaign.defeat_boss(SFCampaign.FLAG_SCRAP_KING_DEFEATED):
+		_save_quietly()
+
+
+func _on_eco_reward_collected() -> void:
+	if campaign.collect_boss_reward(SFCampaign.FLAG_SCRAP_KING_DEFEATED, SFCampaign.COMPONENT_NAVIGATION_CHIP):
+		_save_quietly()
+
+
+func _on_eco_finished(choice: String) -> void:
+	if eco_mode != "campaign":
+		_go(Screen.TITLE)
+		return
+	if choice == "continue" and campaign.has_component(SFCampaign.COMPONENT_NAVIGATION_CHIP):
+		_show_city_victory()
+
+
+func _on_eco_aborted() -> void:
+	if eco_mode != "campaign":
+		_go(Screen.TITLE)
+		return
+	campaign.set_checkpoint(SFCampaign.STAGE_CITY_BOSS, SFCampaign.CHAPTER_CITY)
+	_save_quietly()
+	zone = "forgotten_city"
+	_go(Screen.WORLD)
 
 
 ## Leaving the fight from its pause menu returns to exploration. The fight is
@@ -2308,6 +2475,9 @@ func _on_credits_closed() -> void:
 ## unaffected. The controller applies exactly one milestone per press.
 func _poll_qa_skip(delta: float) -> void:
 	if not qa_enabled or qa == null:
+		return
+	# Practice never touches the campaign, not even through the QA skip.
+	if screen == Screen.ECO_ARENA and eco_mode != "campaign":
 		return
 	var fired: bool = qa.poll(Input.is_key_pressed(KEY_I), Input.is_key_pressed(KEY_O), Input.is_key_pressed(KEY_P), delta)
 	if not fired:

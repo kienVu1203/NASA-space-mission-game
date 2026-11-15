@@ -155,7 +155,7 @@ func _boot_and_briefing() -> void:
 	print("")
 	print("-- Boot, menu and briefing " + "-".repeat(36))
 	check("boots to the title screen", main.screen == main.Screen.TITLE, str(main.screen))
-	check("title shows four options", main.title_menu.size() == 4)
+	check("title shows five options, including the Eco Arena practice", main.title_menu.size() == 5 and main.title_menu.index_of("eco_arena") == 2)
 	check("continue is disabled with no save", not bool(main.title_menu.items[1]["enabled"]))
 	check("no save is written just by opening the menu", not SFSave.has_valid_save())
 
@@ -424,76 +424,95 @@ func _forgotten_city() -> void:
 
 func _scrap_king() -> void:
 	print("")
-	print("-- Scrap King: the shield encounter " + "-".repeat(23))
+	print("-- Scrap King: the Eco Arena in campaign mode " + "-".repeat(13))
 	main._on_world_interact("city_boss_gate", main.world.prop_by_id("city_boss_gate"))
-	check("the gate starts the encounter", main.screen == main.Screen.DUEL, str(main.screen))
-	check("the encounter is the Scrap King", main.duel.encounter.boss.get("id", "") == "scrap_king")
-	check("the encounter holds until the briefing ends", main.duel.encounter.intro_hold)
-	check("the encounter opens its briefing", main.dialogue != null)
+	check("the gate opens the Eco Arena", main.screen == main.Screen.ECO_ARENA, str(main.screen))
+	var es = main.eco_screen
+	check("the arena runs in campaign mode", es != null and es.is_campaign())
 	check("the boss stage is recorded", main.campaign.stage == main.campaign.STAGE_CITY_BOSS)
-
-	# While the briefing is open the arena is frozen, and a Space press belongs to
-	# the dialogue rather than to a counterattack. This is the exact input that
-	# would otherwise leak, so it is driven through the real key handler.
-	var frozen_hp: int = main.duel.encounter.model.nick_health
-	main._handle_dialogue_key(KEY_SPACE)
-	check("Space during the briefing advances the dialogue only", main.duel.encounter.model.charge == 0)
-	check("the briefing cannot be damaged through", main.duel.encounter.model.nick_health == frozen_hp)
-	check("the arena is frozen during the briefing", main.duel.input_locked)
-	main.duel._try_counterattack()
-	check("a counterattack is refused during the briefing", not main.duel.encounter.model.shield_locked())
-
+	check("the checkpoint is the pre-arena stage", main.campaign.checkpoint_stage == main.campaign.STAGE_CITY_BOSS)
+	check("a short briefing opens over the arena", main.dialogue != null)
+	check("the arena is frozen during the briefing", es.input_locked)
 	finish_dialogue()
-	check("the fight starts after the briefing", main.duel.is_fighting())
-	check("the arena unlocks after the briefing", not main.duel.input_locked)
+	check("the sorting guide is shown before the match", es.state == es.State.GUIDE)
+	es.handle_key(KEY_ENTER)
+	check("Start leaves the guide for the match", es.state == es.State.FIGHT and es.is_fighting())
+	var m = es.model
+	check("no navigation chip before the boss", not main.campaign.has_component("navigation_chip"))
+	check("no boss flag before the boss", not main.campaign.has_flag("scrap_king_defeated"))
+	check("Phase 2 boss 2 systems are not active in the arena", main.duel == null)
 
-	var duel = main.duel
-	var model = duel.encounter.model
+	# The Colossus falls through the model's normal defeat path (the full run is
+	# driven by test_eco_arena.gd's bot). The defeat is saved; the chip is not.
+	check("the Colossus can be defeated", m.debug_defeat_boss())
+	es._consume(m.take_events())
+	check("the defeat is recorded once", main.campaign.has_flag("scrap_king_defeated"))
+	check("no chip is granted by the defeat", not main.campaign.has_component("navigation_chip"))
+	check("the reward is available in the world", main._city_reward_state() == main.campaign.REWARD_AVAILABLE)
+	check("the Super Core and the chip are visible drops", not m.chip.is_empty() and m.cores.size() == 1)
 
-	check("no navigation chip before victory", not main.campaign.has_component("navigation_chip"))
-	check("no boss flag before victory", not main.campaign.has_flag("scrap_king_defeated"))
-
-	# Play the fight out through the real model: block, absorb, counterattack.
-	var victory_reached := false
-	var guard := 0
-	while guard < 4000 and not victory_reached:
-		guard += 1
-		# Aim at whatever hostile is closest, the way an attentive player would.
-		duel.set_cursor_canvas(_aim_at_nearest_hostile(duel))
-		duel.advance_for(0.05)
-		if model.charge_full() and model.is_fighting():
-			duel._try_counterattack()
-		if model.phase == model.PHASE_VICTORY:
-			victory_reached = true
-		# This loop proves the victory path, not survival (survival is the
-		# defeat test below). Keeping Nick up and the meter topped removes mote
-		# luck from the check; damage, the lock and the counterattack cost all
-		# stay live.
-		if model.is_fighting():
-			model.nick_health = model.nick_health_max
-			if model.charge < model.charge_max:
-				model.charge = mini(model.charge_max, model.charge + 1)
-	check("the encounter can be won through its own rules", victory_reached)
-	check("the boss health reached zero", model.boss_health == 0)
-	check("victory stops the encounter", duel.encounter.is_over())
-	check("victory clears live projectiles", duel.encounter.field.active_count() == 0)
-	check("the Scrap King takes four counterattacks", int(duel.encounter.boss.get("boss_health", 0)) == 4 * int(duel.encounter.boss.get("counterattack_damage", 0)))
-
-	# Finish the victory transition and award through the real screen signal.
-	duel.advance_for(2.0)
-	duel._confirm_victory()
+	# Leave before collecting, save and continue: both drops come back.
+	main._save_quietly()
+	main._go(main.Screen.TITLE)
+	main._continue_game()
+	check("an uncollected chip survives save/load", main.screen == main.Screen.ECO_ARENA and main.eco_screen.model.phase == "reward",
+		str(main.screen))
+	check("the boss is not fought again", main.eco_screen.model.boss_defeated)
 	finish_dialogue()
-	check("the navigation chip is awarded", main.campaign.has_component("navigation_chip"))
-	check("the Scrap King flag is set", main.campaign.has_flag("scrap_king_defeated"))
+	es = main.eco_screen
+	m = es.model
+	es.handle_key(KEY_ENTER)
+	check("the resumed station holds at 80%", m.charge == 80)
+
+	# Unlock the Super Core 1 -> 2 -> 3 by hand, then take the chip.
+	var super_core: Dictionary = m.cores[0]
+	es.handle_key(KEY_2)
+	_walk_to(es, super_core["pos"], 6.0)
+	es.advance_for(0.3)
+	check("a wrong color cannot open the first lock", int(super_core["shell"]) == 0)
+	es.advance_for(1.0)
+	es.handle_key(KEY_1)
+	_walk_to(es, super_core["pos"], 6.0)
+	es.advance_for(0.4)
+	es.handle_key(KEY_2)
+	es.advance_for(0.4)
+	check("the summary waits while the Super Core is locked", es.state == es.State.FIGHT)
+	es.handle_key(KEY_3)
+	es.advance_for(1.0)
+	check("the Super Core completes the station", m.charge == 100 and m.super_collected)
+	check("the summary still waits for the chip", es.state == es.State.FIGHT)
+	check("the chip is still not awarded", not main.campaign.has_component("navigation_chip"))
+	_walk_to(es, m.chip["pos"], 6.0)
+	es.handle_key(KEY_E)
+	check("picking up the chip awards navigation_chip", main.campaign.has_component("navigation_chip"))
+	check("the summary opens after both objectives", es.state == es.State.SUMMARY)
+	check("the reward state is collected", main._city_reward_state() == main.campaign.REWARD_COLLECTED)
+	es.handle_key(KEY_ENTER)
+	check("Continue plays the victory scene", main.dialogue != null)
+	finish_dialogue()
 	check("the component list reflects the chip", _component_recovered("navigation_chip"))
 	check("the power core is still missing", not main.campaign.has_component("power_core"))
 	check("the shield emitter is never awarded here", not main.campaign.has_component("shield_emitter"))
 
 	# A replayed result must not duplicate the reward.
 	var chip_count := _component_count("navigation_chip")
+	main._on_eco_reward_collected()
 	main._award_boss_victory("scrap_king")
-	check("a replayed victory grants no second chip", _component_count("navigation_chip") == chip_count)
+	check("a replayed pickup grants no second chip", _component_count("navigation_chip") == chip_count)
 	check("a replayed victory keeps the boss flag", main.campaign.has_flag("scrap_king_defeated"))
+
+
+## Walks Nick toward a world point through the arena's real movement.
+func _walk_to(es, target: Vector2, seconds: float) -> void:
+	var t := 0.0
+	while t < seconds:
+		var off: Vector2 = target - es.model.nick_pos
+		if off.length() < 3.0:
+			break
+		es.scripted_input = {"move": off.normalized(), "aim": target, "fire": false, "beam": false}
+		es.advance_for(0.05)
+		t += 0.05
+	es.scripted_input = {"move": Vector2.ZERO, "aim": target, "fire": false, "beam": false}
 
 
 func _city_archive() -> void:
@@ -621,9 +640,31 @@ func _toxic_tide() -> void:
 	check("the Toxic Tide can be defeated", victory)
 	duel.advance_for(2.0)
 	duel._confirm_victory()
-	finish_dialogue()
-	check("the power core is awarded", main.campaign.has_component("power_core"))
+	check("victory grants no power core by itself", not main.campaign.has_component("power_core"))
 	check("the Toxic Tide flag is set", main.campaign.has_flag("toxic_tide_defeated"))
+	check("the defeat returns the stage to exploration", main.campaign.stage == main.campaign.STAGE_SILENT_INTRO)
+	finish_dialogue()
+	check("Nick is back on the quay with movement restored", main.screen == main.Screen.WORLD and main.world.player.input_enabled
+		and main.duel == null, str(main.screen))
+	check("the power core drop is in the world", main.world.prop_by_id("coast_power_core_drop") != null)
+	check("the reward state is available", main._coast_reward_state() == main.campaign.REWARD_AVAILABLE)
+	main._on_world_interact("coast_boss_gate", main.world.prop_by_id("coast_boss_gate"))
+	check("the facility points back at the uncollected core", main.dialogue != null and main.screen == main.Screen.WORLD)
+	finish_dialogue()
+
+	# Save and continue before collecting: the drop is still there, no rematch.
+	main._save_quietly()
+	main._go(main.Screen.TITLE)
+	main._continue_game()
+	check("an uncollected power core survives save/load", main.screen == main.Screen.WORLD
+		and main.world.prop_by_id("coast_power_core_drop") != null, str(main.screen))
+	check("still no power core before the pickup", not main.campaign.has_component("power_core"))
+	main._on_world_interact("coast_power_core_drop", main.world.prop_by_id("coast_power_core_drop"))
+	check("picking it up awards power_core", main.campaign.has_component("power_core"))
+	check("the pickup leaves the world", main.world.prop_by_id("coast_power_core_drop") == null)
+	main._collect_power_core_drop()
+	check("a second pickup grants nothing", _component_count("power_core") == 1)
+	finish_dialogue()
 	check("the shield emitter is still not awarded", not main.campaign.has_component("shield_emitter"))
 
 

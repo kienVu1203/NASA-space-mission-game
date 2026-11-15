@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "_note": "Eco Arena: the waste-sorting arena survival that replaces the Scrap King shield duel in the campaign, and the standalone practice mode on the main menu. One implementation (core/star_fall/sf_eco_arena.gd) reads this file for both. The three colors are STAR FALL's own simplified sorting convention for this game, not a universal standard. Units: world pixels, seconds, percentage points of station charge.",
+
+  "world": {
+    "width": 1280,
+    "height": 960,
+    "walkable": {"x": 40, "y": 92, "w": 1200, "h": 828},
+    "nick_start": {"x": 640, "y": 640},
+    "boss_spawn": {"x": 640, "y": 320},
+    "reward_spawn": {"super_core": {"x": 600, "y": 300}, "navigation_chip": {"x": 690, "y": 300}}
+  },
+
+  "station": {"x": 640, "y": 470, "solid_radius": 34, "ring_radius": 62},
+
+  "crushers": [
+    {"id": "crusher_green", "category": "green", "x": 300, "y": 300, "solid_radius": 20, "mouth_radius": 40, "cooldown": 1.2},
+    {"id": "crusher_blue", "category": "blue", "x": 980, "y": 300, "solid_radius": 20, "mouth_radius": 40, "cooldown": 1.2},
+    {"id": "crusher_yellow", "category": "yellow", "x": 640, "y": 790, "solid_radius": 20, "mouth_radius": 40, "cooldown": 1.2}
+  ],
+
+  "spawn_points": [
+    {"x": 110, "y": 150}, {"x": 640, "y": 120}, {"x": 1170, "y": 150},
+    {"x": 1190, "y": 520}, {"x": 1170, "y": 880}, {"x": 920, "y": 890},
+    {"x": 360, "y": 890}, {"x": 110, "y": 880}, {"x": 90, "y": 520}
+  ],
+
+  "categories": {
+    "green": {
+      "name": "ORGANIC", "card_title": "GREEN / ORGANIC", "key": "1", "color": "5cc25a", "dark": "2d6a2c",
+      "shape": "round", "icon": "leaves", "slot_lines": ["ORGANIC"],
+      "explanation": "Food and things that rot, including food-soiled paper.",
+      "examples": ["banana_peel", "leaves", "pizza_box"]
+    },
+    "blue": {
+      "name": "CLEAN PAPER", "card_title": "BLUE / CLEAN PAPER", "key": "2", "color": "4f9cf0", "dark": "234d7d",
+      "shape": "square", "icon": "cardboard_box", "slot_lines": ["CLEAN", "PAPER"],
+      "explanation": "Clean, dry paper and cardboard.",
+      "examples": ["cardboard_box", "newspaper", "office_paper"]
+    },
+    "yellow": {
+      "name": "PLASTIC & METAL", "card_title": "YELLOW / PLASTIC & METAL", "key": "3", "color": "f0c93c", "dark": "7d6416",
+      "shape": "tall", "icon": "plastic_bottle", "slot_lines": ["PLASTIC", "& METAL"],
+      "explanation": "Empty plastic bottles and metal cans.",
+      "examples": ["plastic_bottle", "aluminum_can", "tin_can"]
+    }
+  },
+  "category_order": ["green", "blue", "yellow"],
+
+  "guide": {
+    "title": "STAR FALL SORTING GUIDE",
+    "subtitle": "This game uses three colors. It is STAR FALL's own simple convention.",
+    "rules": [
+      "MATCH THE MATERIAL TO BREAK ARMOR.",
+      "MATCH AGAIN TO CLEAN A DROPPED CORE.",
+      "EMPTY FOOD OUT FIRST (GREEN), THEN RECYCLE THE BOTTLE (YELLOW)."
+    ]
+  },
+
+  "items": {
+    "banana_peel": {"name": "BANANA PEEL", "category": "green",
+      "callout": "Banana peels are organic. Press one!",
+      "reminder": "Banana peels are food waste: Green in STAR FALL."},
+    "food_scraps": {"name": "FOOD SCRAPS", "category": "green",
+      "callout": "Food scraps are organic. Press one!",
+      "reminder": "Leftover food goes in Green: it is organic."},
+    "leaves": {"name": "LEAVES", "category": "green",
+      "callout": "Leaves are organic. Press one!",
+      "reminder": "Leaves and plant clippings are organic: Green."},
+    "pizza_box": {"name": "FOOD-SOILED PIZZA BOX", "category": "green", "trick": true,
+      "callout": "Food-soiled paper uses Green. Press one!",
+      "reminder": "In STAR FALL, uncoated paper soaked with food goes in Green, not Blue."},
+    "cardboard_box": {"name": "CLEAN CARDBOARD", "category": "blue",
+      "callout": "Clean cardboard uses Blue. Press two!",
+      "reminder": "Clean, dry cardboard goes in Blue."},
+    "newspaper": {"name": "DRY NEWSPAPER", "category": "blue",
+      "callout": "Clean paper uses Blue. Press two!",
+      "reminder": "Dry newspaper is clean paper: Blue."},
+    "office_paper": {"name": "OFFICE PAPER", "category": "blue", "trick": true,
+      "callout": "Clean office paper uses Blue. Press two!",
+      "reminder": "Clean office paper looks plain, but it is paper: Blue."},
+    "plastic_bottle": {"name": "EMPTY PLASTIC BOTTLE", "category": "yellow",
+      "callout": "Empty bottles use Yellow. Press three!",
+      "reminder": "An empty plastic bottle goes in Yellow."},
+    "aluminum_can": {"name": "DRINK CAN", "category": "yellow",
+      "callout": "Empty metal cans use Yellow. Press three!",
+      "reminder": "Empty drink cans are metal containers: Yellow."},
+    "tin_can": {"name": "EMPTY TIN CAN", "category": "yellow",
+      "callout": "Empty tin cans use Yellow. Press three!",
+      "reminder": "An empty tin can is a metal container: Yellow."},
+    "crushed_can": {"name": "CRUSHED EMPTY CAN", "category": "yellow", "trick": true,
+      "callout": "Crushed cans are still metal. Press three!",
+      "reminder": "A crushed empty can is still a metal container: Yellow."},
+    "residue_bottle": {"name": "BOTTLE WITH LEFTOVER JUICE", "category": "yellow", "layers": ["green", "yellow"],
+      "layer_badges": {"green": "residue_bottle", "yellow": "plastic_bottle"},
+      "layer_callouts": {
+        "green": "Juice first: organic. Press one!",
+        "yellow": "Now the empty bottle. Press three!"
+      },
+      "reminder": "Empty the leftover drink first (Green), then recycle the bottle (Yellow)."},
+    "leaf_box": {"name": "BOX FULL OF LEAVES", "category": "blue", "layers": ["green", "blue"],
+      "layer_badges": {"green": "leaf_box", "blue": "cardboard_box"},
+      "layer_callouts": {
+        "green": "Leaves out first: organic. Press one!",
+        "blue": "Now the clean box. Press two!"
+      },
+      "reminder": "Take the leaves out first (Green), then the clean box is Blue."}
+  },
+
+  "nick": {
+    "health": 100, "shield": 50,
+    "shield_regen_per_second": 10.0, "shield_regen_delay": 2.5,
+    "speed": 92.0, "radius": 7.0,
+    "hurt_invulnerable_seconds": 0.6
+  },
+
+  "dash": {"cooldown": 1.5, "duration": 0.16, "speed": 360.0, "invulnerable_seconds": 0.24},
+
+  "blaster": {
+    "fire_interval": 0.18, "projectile_speed": 340.0, "projectile_radius": 3.0, "projectile_life": 1.1,
+    "reference_damage": 4.0, "match_multiplier": 2.5, "knockback": 70.0, "muzzle_offset": 10.0
+  },
+
+  "cores": {
+    "standard_value": 4, "dual_value": 8, "super_value": 20,
+    "radius": 8.0, "contact_radius": 15.0,
+    "beam_range": 130.0, "beam_clean_seconds": 0.3,
+    "spark_cooldown": 0.7, "nudge": 22.0,
+    "magnet_speed": 240.0, "collect_radius": 9.0,
+    "chip_pickup_radius": 22.0
+  },
+
+  "overdrive": {"duration": 8.0, "speed_multiplier": 1.3, "regen_multiplier": 1.25, "retrigger": "refresh"},
+
+  "bill": {"follow_distance": 20.0, "side_offset": 10.0, "lerp_rate": 6.0, "min_gap": 13.0, "recover_distance": 150.0},
+
+  "callouts": {"cooldown": 2.6, "show_seconds": 2.2},
+
+  "pacing": {
+    "spawn_telegraph": 0.9, "min_spawn_distance": 240.0, "first_spawn_delay": 1.5, "seed": 52031,
+    "charge_cooldown_min": 3.5, "charge_cooldown_max": 6.0,
+    "charge_telegraph": 0.7, "charge_speed": 190.0, "charge_duration": 0.8, "charge_trigger_range": 210.0,
+    "contact_cooldown": 0.8
+  },
+
+  "stages": [
+    {"id": 1, "name": "WARM-UP", "until": 25, "bordered_badges": true,
+     "spawn_interval": 12.0, "group_min": 1, "group_max": 2, "max_alive": 4,
+     "pool": {"green_peel": 2, "green_scraps": 1, "blue_box": 2, "blue_news": 1, "yellow_bottle": 2, "yellow_can": 1}},
+    {"id": 2, "name": "LOOK-ALIKE TRAPS", "until": 55, "bordered_badges": false,
+     "spawn_interval": 16.0, "group_min": 1, "group_max": 2, "max_alive": 5,
+     "pool": {"green_peel": 1, "green_leaves": 1, "blue_box": 1, "blue_news": 1, "yellow_bottle": 1, "yellow_tin": 1,
+              "trick_pizza": 2, "trick_paper": 2, "trick_crushed": 2}},
+    {"id": 3, "name": "MULTI-LAYER ELITES", "until": 80, "bordered_badges": false,
+     "spawn_interval": 16.0, "group_min": 1, "group_max": 2, "max_alive": 5,
+     "pool": {"green_scraps": 1, "blue_box": 1, "yellow_can": 1, "trick_pizza": 1, "trick_paper": 1, "trick_crushed": 1,
+              "elite_residue": 3, "elite_leafbox": 3}}
+  ],
+  "boss_at": 80,
+
+  "enemies": {
+    "green_peel":   {"item": "banana_peel",    "layers": ["green"],  "armor": 40, "speed": 36.0, "radius": 11.0, "contact_damage": 8,  "silhouette": "blob",   "core": "standard", "charges": true},
+    "green_scraps": {"item": "food_scraps",    "layers": ["green"],  "armor": 40, "speed": 34.0, "radius": 11.0, "contact_damage": 8,  "silhouette": "blob",   "core": "standard", "charges": true},
+    "green_leaves": {"item": "leaves",         "layers": ["green"],  "armor": 40, "speed": 38.0, "radius": 11.0, "contact_damage": 8,  "silhouette": "blob",   "core": "standard", "charges": true},
+    "blue_box":     {"item": "cardboard_box",  "layers": ["blue"],   "armor": 40, "speed": 32.0, "radius": 11.0, "contact_damage": 9,  "silhouette": "box",    "core": "standard", "charges": true},
+    "blue_news":    {"item": "newspaper",      "layers": ["blue"],   "armor": 40, "speed": 36.0, "radius": 10.0, "contact_damage": 8,  "silhouette": "sheet",  "core": "standard", "charges": true},
+    "yellow_bottle":{"item": "plastic_bottle", "layers": ["yellow"], "armor": 40, "speed": 38.0, "radius": 9.0,  "contact_damage": 8,  "silhouette": "bottle", "core": "standard", "charges": true},
+    "yellow_can":   {"item": "aluminum_can",   "layers": ["yellow"], "armor": 40, "speed": 36.0, "radius": 9.0,  "contact_damage": 8,  "silhouette": "can",    "core": "standard", "charges": true},
+    "yellow_tin":   {"item": "tin_can",        "layers": ["yellow"], "armor": 40, "speed": 34.0, "radius": 9.0,  "contact_damage": 8,  "silhouette": "can",    "core": "standard", "charges": true},
+    "trick_pizza":  {"item": "pizza_box",      "layers": ["green"],  "armor": 40, "speed": 32.0, "radius": 11.0, "contact_damage": 9,  "silhouette": "box",    "core": "standard", "charges": true, "stained": true},
+    "trick_paper":  {"item": "office_paper",   "layers": ["blue"],   "armor": 40, "speed": 36.0, "radius": 10.0, "contact_damage": 8,  "silhouette": "sheet",  "core": "standard", "charges": true},
+    "trick_crushed":{"item": "crushed_can",    "layers": ["yellow"], "armor": 40, "speed": 38.0, "radius": 9.0,  "contact_damage": 8,  "silhouette": "crushed","core": "standard", "charges": true},
+    "elite_residue":{"item": "residue_bottle", "layers": ["green", "yellow"], "armor": 50, "speed": 30.0, "radius": 13.0, "contact_damage": 12, "silhouette": "bottle", "core": "dual", "charges": true, "elite": true},
+    "elite_leafbox":{"item": "leaf_box",       "layers": ["green", "blue"],   "armor": 50, "speed": 28.0, "radius": 13.0, "contact_damage": 12, "silhouette": "box",    "core": "dual", "charges": true, "elite": true}
+  },
+
+  "boss": {
+    "id": "junkyard_colossus", "name": "JUNKYARD COLOSSUS",
+    "layers": ["green", "blue", "yellow"], "layer_items": ["food_scraps", "cardboard_box", "aluminum_can"],
+    "armor": 330, "speed": 20.0, "radius": 30.0, "contact_damage": 14,
+    "transition_seconds": 1.4, "entry_seconds": 2.0,
+    "toss": {"interval": 2.8, "telegraph": 1.15, "radius": 26.0, "damage": 18, "targets": 3, "spread": 70.0},
+    "ring": {"interval": 5.2, "count": 14, "gap": 3, "speed": 90.0, "radius": 5.0, "damage": 10, "life": 7.0, "telegraph": 0.8}
+  },
+
+  "ranks": [
+    {"rank": "S", "min_accuracy": 0.9, "max_seconds": 420},
+    {"rank": "A", "min_accuracy": 0.75, "max_seconds": 600},
+    {"rank": "B", "min_accuracy": 0.0, "max_seconds": 999999}
+  ],
+  "rank_note": "Rank uses manual first-try sorting accuracy and active-match time only. Pause, the guide and reduced motion never count.",
+
+  "practice_reward": {"name": "TRAINING CHIP", "label": "PICK UP THE TRAINING CHIP"},
+  "campaign_reward": {"name": "NAVIGATION CHIP", "label": "PICK UP THE NAVIGATION CHIP"}
+}

@@ -329,14 +329,16 @@
       "Bill: \"I will remember as well. Redundancy is a maintenance virtue.\""
     ],
     "city_boss_intro": [
-      "The control center doors are welded shut from the inside. Something moves behind them.",
-      "A heavy chassis unfolds out of the dark, trailing magnets and stripped cable.",
-      "Bill: \"Scrap King. It sorted waste for a living. Its control system no longer distinguishes waste from visitors.\"",
-      "Bill: \"It throws what it cannot sort. Point the shield at the throw. Let the green motes through untouched.\"",
-      "Bill: \"Absorbed motes charge your shield projector. When the meter above your head is full, press SPACE to send it back.\""
+      "Behind the welded door is the Scrap King's sorting yard. Its line still runs, but it builds armor out of waste now.",
+      "Bill: \"The yard's energy station is empty. Sort the waste, clean the cores, and we can power the archive.\"",
+      "Bill: \"I will show you the yard's three colors first. Then I follow you and pull cores in with my beam.\""
+    ],
+    "city_reward_waiting": [
+      "The sorting yard is quiet. The Colossus is still a heap where it fell.",
+      "Bill: \"The Super Core and the chip are where we left them. Unlock the core, then take the chip.\""
     ],
     "city_victory": [
-      "The Scrap King folds down into its own sorting pile. The magnets cut out one by one.",
+      "The station hums at full charge. The Junkyard Colossus slumps into the Scrap King's own sorting pile.",
       "Bill: \"It is not dead. It is idle. There is a difference I would like to keep.\"",
       "The control-center archive is drawing power again."
     ],
@@ -366,10 +368,15 @@
       "Pumps engage along the outfall. The water is gone, but the machine is still treating it.",
       "Toxic Tide unfolds from the pump housing: tanks, hoses, articulated arms, all of it corroded.",
       "Bill: \"It classifies everything as contamination. Including us.\"",
-      "Bill: \"Different rhythm than the Scrap King. Shorter warning, wider spread. Keep rotating.\""
+      "Bill: \"You cannot move in here, but you have a shield. Point it at the hostile energy with the mouse. Let the green motes through untouched.\"",
+      "Bill: \"Absorbed motes charge your shield projector. When the meter above your head is full, press SPACE to send it back.\""
+    ],
+    "coast_victory_drop": [
+      "The pumps slow, then stop. Toxic Tide settles into the mud with a sound like a long exhale.",
+      "Bill: \"Its power core shook loose and rolled out onto the quay. You can walk again. Go and get it.\""
     ],
     "coast_victory": [
-      "The pumps slow, then stop. Toxic Tide settles into the mud with a sound like a long exhale.",
+      "The power core is heavy and still warm. Nick slides it into his pack.",
       "Bill: \"The environmental archive is intact. The unit was treating the records as contamination too.\"",
       "Nick: \"Then let's take them somewhere they will be read.\""
     ],
@@ -383,7 +390,7 @@
     "bill_phase_two": [
       "Bill: \"I am carrying the archive. It is heavier than I expected.\"",
       "Bill: \"We are two components from a plan. That is more than we had at the crash site.\"",
-      "Bill: \"Point the shield with the mouse. The machine does not need you to be brave, only accurate.\""
+      "Bill: \"Match the color to the material. The yard does not need you to be fast, only right.\""
     ],
     "bill_phase_two_after_reveal": [
       "Bill: \"You said the maps match. I have checked them eleven times. They match.\"",

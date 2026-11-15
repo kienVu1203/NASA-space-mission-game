@@ -22,15 +22,22 @@ Phase 2 (shipped):
 
 - **Forgotten City**: a walkable ruined street with waste, a green memory, a
   route checkpoint and the control center.
-- **Scrap King**: a fixed-position, mouse-directed shield-defense fight. Block
-  hostile energy, admit beneficial energy, build charge, press Space to
-  counterattack. Five health bands raise speed and firing rate.
+- **Scrap King (Eco Arena)**: an educational arena survival about waste
+  sorting in the Scrap King's yard. Match the Tri-Spectrum Blaster (Green
+  organic, Blue clean paper, Yellow plastic & metal, STAR FALL's own simple
+  convention) to each enemy's waste armor, clean the dropped energy cores with
+  the same colors (by touch or Bill's beam), bait chargers into crushers, and
+  charge the station to 80%. The Junkyard Colossus then drops a three-lock
+  Super Core and the navigation chip, which Nick picks up. The same arena is
+  on the main menu as a practice mode that never touches the campaign.
 - **Control-center archive**: five records, then the Future Earth reveal. The
   mission changes from investigating a signal to returning with evidence.
 - **Silent Coast**: a harbor with a polluted tide, samples, records and a coastal
   memory.
-- **Toxic Tide**: the same rules with a different rhythm, silhouette, damage
-  mix and projectile shapes.
+- **Toxic Tide**: a fixed-position, mouse-directed shield-defense fight. Block
+  hostile energy, admit beneficial energy, build charge, press Space to
+  counterattack. Health bands raise speed and firing rate. The power core
+  drops onto the quay and is picked up after the fight.
 - **Environmental archive**, the crash-site base return, both components shown
   fitted, and the Dawn Tower unlocked.
 
@@ -113,7 +120,9 @@ gradual and visible on the boss health bar as band ticks. Defeat offers a retry
 that resets only encounter-local state. Losing to a boss never costs campaign
 progress.
 
-**The two bosses are different fights, not reskins.**
+**The two bosses are different fights, not reskins.** (Since the Phase 2
+revision the Scrap King is fought in the Eco Arena; the Scrap King column
+below now describes only the shield-duel engine's regression fixture.)
 
 | | Scrap King | Toxic Tide |
 |---|---|---|

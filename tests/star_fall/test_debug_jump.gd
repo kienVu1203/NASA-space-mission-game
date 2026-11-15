@@ -89,7 +89,7 @@ func _run() -> void:
 		"construction": [main.Screen.CONSTRUCTION, ""],
 		"crash_site": [main.Screen.WORLD, "crash_site"],
 		"forgotten_city": [main.Screen.WORLD, "forgotten_city"],
-		"scrap_king": [main.Screen.DUEL, ""],
+		"scrap_king": [main.Screen.ECO_ARENA, ""],
 		"silent_coast": [main.Screen.WORLD, "silent_coast"],
 		"toxic_tide": [main.Screen.DUEL, ""],
 		"dawn_tower": [main.Screen.WORLD, "dawn_tower"],
@@ -134,15 +134,26 @@ func _run() -> void:
 	dj.jump("shield_drop")
 	check("Shield drop: the pickup is waiting", _drop_present() and not main.campaign.has_component("shield_emitter"))
 
-	# V wins a shield duel and the Phase 2 reward is awarded once.
+	# V drops the Colossus in the Eco Arena; the chip still needs a pickup.
 	dj.jump("scrap_king")
 	finish_dialogue()
 	check("Scrap King: the navigation chip is not yet recovered", not main.campaign.has_component("navigation_chip"))
+	main.eco_screen.model.health = 5.0
+	check("K heals Nick in the Eco Arena", dj.handle_key(KEY_K) and main.eco_screen.model.health == main.eco_screen.model.health_max)
+	check("V defeats the Colossus", dj.handle_key(KEY_V) and main.eco_screen.model.boss_defeated)
+	check("the debug win records the boss but awards no chip", main.campaign.has_flag("scrap_king_defeated")
+		and not main.campaign.has_component("navigation_chip"))
+
+	# V wins the Toxic Tide shield duel; the power core drops on the quay.
+	dj.jump("toxic_tide")
+	finish_dialogue()
 	main.duel.encounter.model.nick_health = 5
 	check("K heals Nick in the shield duel", dj.handle_key(KEY_K) and main.duel.encounter.model.nick_health == main.duel.encounter.model.nick_health_max)
 	check("V wins the shield duel", dj.handle_key(KEY_V) and main.duel.state == main.duel.State.VICTORY)
 	main.duel._confirm_victory()
-	check("the duel win awards the navigation chip once", main.campaign.recovered_component_ids().count("navigation_chip") == 1)
+	finish_dialogue()
+	check("the duel win drops the power core instead of awarding it", not main.campaign.has_component("power_core")
+		and main.world != null and main.world.prop_by_id("coast_power_core_drop") != null)
 
 	# The workshop preset: shield collected but not fitted; M adds salvage.
 	dj.jump("workshop")

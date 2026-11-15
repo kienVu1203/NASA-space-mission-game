@@ -801,7 +801,8 @@
         ],
         "interact": "coast_boss_gate",
         "label": "Enter the cleanup facility"
-      }
+      },
+      {"sprite": "power_core", "x": 556, "y": 228, "interact": "coast_power_core_drop", "label": "Collect the power core"}
     ]
   },
   "dawn_tower": {

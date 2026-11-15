@@ -7,8 +7,9 @@ ruined, polluted world. There he meets **Bill**, an abandoned maintenance robot,
 who holds one memory of a green city.
 
 The campaign is complete and playable from the main menu to the credits:
-present-day Earth, the crash site, the Forgotten City and the Silent Coast (two
-shield-defense boss fights), the Dawn Tower with the Sky Remnant typing battle,
+present-day Earth, the crash site, the Forgotten City (the Eco Arena, a
+waste-sorting arena survival against the Scrap King's yard) and the Silent Coast
+(the Toxic Tide shield-defense fight), the Dawn Tower with the Sky Remnant typing battle,
 the VELA reconstruction workshop and the return-mission simulation, then final
 assembly, an in-engine escape cinematic, the mission report and the credits.
 Time travel, the portal and the VELA's drive are fictional story devices, not
@@ -31,8 +32,9 @@ architecture, data schemas, stable IDs, save format, units and test commands.
 | Target | Desktop, offline, no asset downloads |
 | Resolution | 640x360 base, window opens at 1280x720, `canvas_items`, nearest filtering |
 | Game type | 2D angled top-down exploration, Y-sorted, generated art and audio |
-| Flow | Menu -> Earth -> Briefing -> Construction -> Preflight -> Launch -> Rift -> Crash Site -> Bill -> Memory -> Forgotten City -> Scrap King -> Archive -> Silent Coast -> Toxic Tide -> Archive -> Base -> Dawn Tower -> Sky Remnant -> Dawn Archive -> Reconstruction Workshop -> Final Assembly -> Escape -> Return Home -> Mission Report -> Credits |
+| Flow | Menu -> Earth -> Briefing -> Construction -> Preflight -> Launch -> Rift -> Crash Site -> Bill -> Memory -> Forgotten City -> Scrap King (Eco Arena) -> Archive -> Silent Coast -> Toxic Tide -> Archive -> Base -> Dawn Tower -> Sky Remnant -> Dawn Archive -> Reconstruction Workshop -> Final Assembly -> Escape -> Return Home -> Mission Report -> Credits |
 | Status | **STAR FALL is complete**: Phases 1-4, main menu to credits, playable end to end |
+| Practice | **ECO ARENA — 5-7 MIN** on the main menu: the same arena as the Scrap King encounter, with no effect on the campaign or its save |
 | Also in repo | **Operation: Starfall**, a complete orbital-salvage satire in `scenes/starfall/` (see [docs/starfall.md](docs/starfall.md)) |
 
 ## Getting started
@@ -62,12 +64,14 @@ godot --headless --path . --script res://tests/star_fall/test_phase3.gd
 godot --headless --path . --script res://tests/star_fall/test_phase4.gd
 godot --headless --path . --script res://tests/star_fall/test_flight.gd
 godot --headless --path . --script res://tests/star_fall/test_debug_jump.gd
+godot --headless --path . --script res://tests/star_fall/test_eco_arena.gd
 ```
 
 `test_flow.gd`, `test_phase4.gd`, `test_flight.gd`, `test_debug_jump.gd` and `capture.gd` delete
-`user://star_fall_save.json`; back up a real save first.
-`tests/star_fall/capture.gd` renders 53 key screens (including the
-Phase 4 finale and the debug help) to `user://captures/` and needs a real display
+`user://star_fall_save.json`; back up a real save first (`test_eco_arena.gd`
+backs it up and restores it itself).
+`tests/star_fall/capture.gd` renders 56 key screens (including the
+Eco Arena, the Phase 4 finale and the debug help) to `user://captures/` and needs a real display
 (`-- --shots=17,18` re-renders just those screens). Full commands and
 acceptance steps are in
 [docs/star_fall_contract.md](docs/star_fall_contract.md).
@@ -93,14 +97,14 @@ Hold **Ctrl + Shift + Alt** and press a key. They exist only in debug builds
 | 1 | Phase 1: construction console (briefing read, a valid design pre-filled) |
 | 2 | Phase 1: crash site, just after the launch |
 | 3 | Phase 2: Forgotten City (Phase 1 complete, Bill awake) |
-| 4 | Phase 2: Scrap King fight |
+| 4 | Phase 2: Scrap King Eco Arena (campaign mode) |
 | 5 | Phase 2: Silent Coast (navigation chip recovered, reveal done) |
 | 6 | Phase 2: Toxic Tide fight |
 | 7 | Phase 3: Dawn Tower gate (memory and checkpoint done; E starts the fight) |
 | 8 | Phase 3: Sky Remnant typing fight |
 | 9 | Phase 3: shield emitter drop waiting on the slope |
 | 0 | Phase 3: reconstruction workshop (all three parts collected, none fitted) |
-| V | Win the current boss fight (shield duel or typing); Enter continues as usual |
+| V | Win the current boss fight (shield duel or typing; in the Eco Arena the Colossus falls and its Super Core and chip drop); Enter continues as usual |
 | K | Heal Nick to full in the current fight |
 | M | +10 scrap metal, circuitry and polymer |
 | H | Show / hide this list on screen |
@@ -110,7 +114,30 @@ resumes like **Continue**, so intros, rewards and autosaves behave normally.
 Autosaves will overwrite your save, so the first jump of a session copies it to
 `user://star_fall_save.before_debug.json`.
 
-**In a Phase 2 boss fight** (Nick is fixed in place):
+**In the Eco Arena** (the Scrap King encounter, and ECO ARENA on the main menu):
+
+| Input | Action |
+|---|---|
+| WASD / arrows | Move (diagonals normalised) |
+| Shift | Dash (short invulnerability, 1.5 s cooldown; the DASH meter shows readiness) |
+| Mouse | Aim |
+| Left click (hold) | Fire the Tri-Spectrum Blaster |
+| 1 / 2 / 3, mouse wheel | Green (organic) / Blue (clean paper) / Yellow (plastic & metal) |
+| Right click or E (hold) | Bill's sorting beam: cleans the nearest dirty core in range |
+| E | Pick up the chip when standing at it |
+| Esc | Pause: resume, sorting guide, restart, leave |
+
+Match the spectrum to the enemy's waste armor to break it (the wrong color
+deflects and Bill says which key to press). Defeated enemies drop dirty energy
+cores: clean them with the matching color by touch or with Bill's beam, and
+they fly into Nick's pack and charge the central station. Bait charging
+enemies into the matching crusher. Green, Blue and Yellow cores in a row start
+Eco Overdrive (8 s). At 80% the Junkyard Colossus arrives (Green, then Blue,
+then Yellow armor). It drops a Super Core (unlock it by hand: 1, then 2, then
+3) and the navigation chip; both are needed to finish. The three colors are
+STAR FALL's own simplified convention for this game.
+
+**In the Toxic Tide fight** (Nick is fixed in place):
 
 | Input | Action |
 |---|---|
@@ -171,13 +198,28 @@ and in any build launched with `--qa`; it is inert in a release build.
    control-center door will not open until you do.
 4. (Optional) Visit the maintenance shrine with the green picture and the city
    salvage piles.
-5. At the welded door press **E**: **Scrap King** begins after Bill's briefing.
-   Win, then read the control-center archive.
+5. At the welded door press **E**: a short briefing, then the **sorting guide**
+   (Enter starts). This is the **Eco Arena**, the Scrap King encounter: charge
+   the station to 80%, defeat the Junkyard Colossus, unlock its Super Core
+   (1 > 2 > 3), then press **E** at the navigation chip. The summary follows;
+   **Continue** plays the victory scene and the control-center archive.
+   The chip is awarded only when Nick picks it up. Leaving before that keeps
+   the boss defeated and both drops waiting (the door shows CHIP WAITING).
 6. The archive closes into the **Silent Coast**. Use the harbor checkpoint, then
    press **E** at the facility intake: **Toxic Tide** begins.
-7. Win, read the environmental archive, and the campaign returns to the
-   crash-site base, where both recovered components are shown fitted.
+7. Win: Nick walks again on the quay and the **power core** lies glowing below
+   the facility gate. Press **E** at it to collect it (it stays there across
+   save/continue until you do). The environmental archive follows, and the
+   campaign returns to the crash-site base, where both recovered components
+   are shown fitted.
 8. **Enter** on the base shows the Phase 2 summary.
+
+### Eco Arena practice (main menu)
+
+On the title screen choose **ECO ARENA — 5-7 MIN**. It is the same arena and
+rules as the campaign encounter, with a TRAINING CHIP instead of the
+navigation chip. Practice never reads or writes the campaign or its save; the
+summary offers **Play Again** and **Main Menu**.
 
 ### Reaching the Phase 3 encounter and workshop
 
@@ -234,21 +276,24 @@ core/star_fall/   Pure logic + presentation kit, no nodes: design and preflight
                   bitmap font, generated sprites, the canonical VELA renderer
                   (sf_vela.gd), synth audio, shared UI drawing,
                   and the Phase 2 encounter parts (shield, projectiles, pattern
-                  scheduler, encounter model, encounter controller) and the
+                  scheduler, encounter model, encounter controller), the Eco
+                  Arena rules (sf_eco_arena.gd) and item badges
+                  (sf_eco_sprites.gd), and the
                   Phase 3 parts (vocabulary, typing, typing encounter,
                   reconstruction rules, return simulation)
 scenes/star_fall/ main.tscn + main.gd (flow controller), world.gd, player.gd,
                   prop.gd, hud_overlay.gd, construction_screen.gd,
-                  shield_duel.gd, archive_screen.gd, progression_screen.gd,
+                  shield_duel.gd, eco_arena_screen.gd, archive_screen.gd,
+                  progression_screen.gd,
                   typing_duel.gd, reconstruction_screen.gd,
                   final_assembly_screen.gd, cinematic_screen.gd,
                   mission_report_screen.gd, credits_screen.gd
-data/star_fall/   ship_parts.json, campaign.json, encounters.json, sites.json,
+data/star_fall/   ship_parts.json, campaign.json, encounters.json, eco_arena.json, sites.json,
                   vocabulary.json, typing.json, reconstruction.json,
                   finale.json: all tuning and prose
 tests/star_fall/  test_parse.gd, test_logic.gd, test_flow.gd, test_encounter.gd,
                   test_phase3.gd, test_phase4.gd, test_flight.gd,
-                  test_debug_jump.gd, capture.gd
+                  test_debug_jump.gd, test_eco_arena.gd, capture.gd
 docs/             star_fall_contract.md (source of truth), vocabulary.md, game_design.md,
                   starfall.md, test_checklist.md, roles.md
 core/starfall/    Operation: Starfall: palette, font, sprites, synth, ship and debris models
@@ -330,7 +375,7 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
   the editor or `godot --path .`. See `docs/submission.md` for the exact
   blocker and what would be needed.
 - **Combined test runner:** there is no single script that runs both games'
-  suites. Run STAR FALL's eight from the "Run it" section and Operation:
+  suites. Run STAR FALL's nine from the "Run it" section and Operation:
   Starfall's from [docs/starfall.md](docs/starfall.md).
 
 ## Event-day timeline (48h)

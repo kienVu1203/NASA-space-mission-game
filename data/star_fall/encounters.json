@@ -121,6 +121,7 @@
   "bosses": [
     {
       "id": "scrap_king",
+      "_note": "The campaign no longer plays this as a shield duel: the Scrap King encounter is the Eco Arena (eco_arena.json, eco_arena_screen.gd). id, chapter_id, reward_flag, reward_component and archive_id remain its campaign identity; the duel tuning below is kept only as a regression fixture for the shared shield-duel engine (test_encounter.gd). Toxic Tide is the only boss that uses it in play.",
       "chapter_id": "forgotten_city",
       "name": "SCRAP KING",
       "subtitle": "CORRUPTED SALVAGE UNIT",

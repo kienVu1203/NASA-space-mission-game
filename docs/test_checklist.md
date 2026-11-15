@@ -106,12 +106,14 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [x] The checkpoint marks the pre-boss stage and saves
 - [x] City salvage is collectable and leaves the world
 - [x] The city memory plays and returns to exploration
-- [x] The Scrap King encounter opens, holds during its briefing, then fights
-- [x] Space during the briefing advances the dialogue and never fires a counterattack
-- [x] No reward exists before the boss is defeated
-- [x] The encounter is winnable through its own rules
-- [x] Victory stops the encounter and grants the navigation chip once
-- [x] A replayed victory awards no second chip
+- [x] The control-center door opens the Eco Arena in campaign mode, with a short briefing over a frozen arena
+- [x] The sorting guide appears before the match; Start begins it
+- [x] No reward exists before the Colossus is defeated
+- [x] The Colossus defeat records `scrap_king_defeated` once and grants no chip
+- [x] Save/continue before the pickup reopens the arena with the boss down, the station at 80% and both drops waiting
+- [x] A wrong color cannot open the Super Core; 1 -> 2 -> 3 completes the station
+- [x] The summary waits for the chip; picking up the chip awards `navigation_chip` once
+- [x] Continue plays the victory scene and the archive; a replayed pickup awards no second chip
 - [x] The control-center archive opens with its records
 - [x] No future-Earth spoiler appears before the archive
 - [x] Closing the archive applies the reveal, unlocks the coast and changes the mission
@@ -122,11 +124,74 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [x] The coastal memory plays and returns to exploration
 - [x] The Toxic Tide can defeat Nick, and defeat leaves the campaign untouched
 - [x] Retry fully resets the fight while keeping campaign progress
-- [x] The Toxic Tide can be defeated and grants the power core once
+- [x] The Toxic Tide can be defeated; victory grants no power core by itself
+- [x] Nick walks again on the quay; the power core drop is in the world and the facility points back at it
+- [x] Save/continue keeps the uncollected drop and never replays the fight
+- [x] E at the drop awards `power_core` once and removes the prop
 - [x] The environmental archive applies the lesson and unlocks Dawn Tower
 - [x] The base return shows both recovered components
 - [x] The Phase 2 summary continues into the Dawn Tower and keeps the save
 - [x] Continue restores the Phase 2 stage, components, archives and mission
+
+## Eco Arena automated checks — `test_eco_arena.gd`
+
+### Data and sorting
+
+- [x] Three categories only; every item has a category and a 16x16 badge
+- [x] Pizza box Green, office paper Blue, crushed can Yellow, residue bottle Green then Yellow
+- [x] No hazardous, battery or glass category; no "check your local sorting rules" line; presented as STAR FALL's convention
+- [x] Bill's callouts are 4-8 words; each guide card has 2-3 examples
+- [x] Matching spectrum: 2.5x reference damage and knockback; wrong spectrum: zero damage, deflection, one callout
+- [x] Two-stage bottle needs Green then Yellow; overflow never reaches the hidden layer
+- [x] The shot hitbox covers the drawn body: a bolt through the top of a bottle hits, one just above misses
+
+### Cores and crushers
+
+- [x] One enemy, one drop (a repeated death callback adds none); cores are never auto-collected
+- [x] Wrong-color contact sparks and nudges, costs no health, never collects; lingering does not spam
+- [x] Correct cleaning collects once (+4); a repeated collect callback adds nothing
+- [x] The beam picks the nearest dirty core in range, collects without duplicates, ignores cores out of range, stops on release
+- [x] Dual cores open one step at a time and add 8 as one pickup
+- [x] A matching crusher recycles a charging enemy into one pre-cleaned core that waits for Nick
+- [x] A mismatched crusher only bounces; an elite loses only its exposed layer
+
+### Progression, boss, Super Core
+
+- [x] 24 -> 28 crosses into stage 2; stage 2 removes badge borders; ordinary recovery caps at 80
+- [x] The boss spawns once; waves stop; no damage during its entrance; Green -> Blue -> Yellow cannot be skipped
+- [x] Boss defeat clears every threat and drops the Super Core and the chip
+- [x] The Super Core needs a manual 1 -> 2 -> 3 even in Overdrive and adds the last 20
+- [x] Victory needs both objectives in either order and resolves once; the reward resume state is correct
+
+### Health and bonuses
+
+- [x] Shield first, then health; zero shield survivable; zero health is defeat and stops the clock
+- [x] Dash invulnerability, 1.5 s cooldown, no passing the boundary or the station
+- [x] Overdrive: +30% speed, +25% regen, refresh without stacking, exact restore, exposed-layer-only rainbow, excluded from accuracy
+- [x] Retry clears every encounter-local value
+
+### Accuracy, Bill, screen, practice
+
+- [x] Zero decisions is safe; a held burst counts once; later hits never overwrite the first try; shells count separately
+- [x] The reminder targets the most-mismatched item; rank thresholds come from data
+- [x] Bill trails without overlapping, recovers when separated, never absorbs a shot
+- [x] The main menu entry opens practice; the guide stops the clock and can be reopened from pause; pause stops the arena
+- [x] Defeat offers a fast retry without the guide
+- [x] Practice reaches the same summary, writes nothing to the campaign and leaves the save file byte-for-byte unchanged
+- [x] A practice restart after the boss replays the whole arena
+- [x] Four scripted bot runs finish the arena (measured 3:33-3:34 of match time; a bot, not players)
+
+## Eco Arena manual checks (need a display and a person)
+
+- [ ] Pixel readability of every enemy silhouette and badge at 1280x720 and at other window sizes
+- [ ] Contamination (pizza box grease, juice in the bottle, leaves in the box) is obvious at a glance
+- [ ] Bill's following looks natural through movement and dashes; the beam line hits the selected core
+- [ ] Aiming, firing rate and dash feel; the DASH meter reads clearly
+- [ ] Drops are visible and reachable everywhere, including near crushers and walls
+- [ ] HUD and guide layout do not overlap at supported window sizes
+- [ ] The three material hit sounds are distinct and not annoying when repeated
+- [ ] A real run lands near 5-7 minutes and feels fair (not yet timed with players)
+- [ ] The power core on the Silent Coast quay is easy to see and pick up
 
 ## Phase 4 automated checks — `test_phase4.gd` (and `test_flow.gd`)
 

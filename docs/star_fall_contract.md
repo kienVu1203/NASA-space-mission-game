@@ -33,6 +33,8 @@ core/star_fall/                 Pure logic and presentation kit. No UI nodes.
   sf_pattern_scheduler.gd       Spawn timing, telegraphs, health-band escalation
   sf_encounter_model.gd         Health, charge, phases, counterattack arbitration
   sf_encounter.gd               Encounter controller: glues the four above
+  sf_eco_arena.gd               Eco Arena rules (Scrap King encounter and practice)
+  sf_eco_sprites.gd             Eco Arena 16x16 item badges
   sf_vocabulary.gd              Phase 3: vocabulary library, validation, deck selection
   sf_typing.gd                  Phase 3: typing target selection and progress
   sf_typing_encounter.gd        Phase 3: queue, spawning, movement, health, attacks, pacing
@@ -55,7 +57,8 @@ scenes/star_fall/
   prop.gd                       One authored world prop with a ground footprint
   hud_overlay.gd                In-world HUD, drawn on a CanvasLayer above the world
   construction_screen.gd        Spacecraft construction + preflight
-  shield_duel.gd                The Phase 2 shield-defense encounter screen
+  shield_duel.gd                The Toxic Tide shield-defense encounter screen
+  eco_arena_screen.gd           The Eco Arena screen (campaign Scrap King and practice)
   archive_screen.gd             Archive restoration (city and coast)
   progression_screen.gd         Base return and the Phase 2 summary
   typing_duel.gd                Phase 3: the Sky Remnant typing encounter screen
@@ -69,7 +72,8 @@ scenes/star_fall/
 data/star_fall/
   ship_parts.json               Hull, mission requirements, components, salvage
   campaign.json                 Chapters, missions, memories, archives, dialogue
-  encounters.json               Phase 2 boss tuning, patterns, projectile types
+  encounters.json               Phase 2 boss identities; Toxic Tide duel tuning
+  eco_arena.json                Eco Arena sorting content and tuning
   sites.json                    Authored world layouts (five sites)
   vocabulary.json               Phase 3: 203-entry environmental vocabulary library
   typing.json                   Phase 3: typing encounter tuning
@@ -87,7 +91,8 @@ tests/star_fall/
   test_flight.gd                Phase 4 flight segments, canonical VELA renderer, shield
                                 contacts, portal entry timing, presentation states, cleanup
   test_debug_jump.gd            Every debug phase jump and in-fight debug command
-  capture.gd                    Dev tool: renders 53 key screens to PNG
+  test_eco_arena.gd             Eco Arena rules, screen, practice separation, pacing bot
+  capture.gd                    Dev tool: renders 56 key screens to PNG
 ```
 
 ### Rules the architecture enforces
@@ -149,10 +154,10 @@ menu -> briefing -> construction -> launch -> flight -> crash_intro
 | `memory` | Memory | Green City hologram, coordinates received |
 | `checkpoint` | Checkpoint | Phase 1 summary; continues into the city |
 | `city_intro` | World (Forgotten City) | City dialogue, then exploration |
-| `city_boss` | Duel | Scrap King. Never checkpointed mid-fight |
+| `city_boss` | Eco Arena | Scrap King encounter. Never checkpointed mid-fight; a defeated boss with an uncollected chip reopens the arena in its reward state |
 | `city_archive` | Archive | Control-center archive, Future Earth reveal |
 | `silent_intro` | World (Silent Coast) | Coast dialogue, then exploration |
-| `coast_boss` | Duel | Toxic Tide. Never checkpointed mid-fight |
+| `coast_boss` | Duel | Toxic Tide. Never checkpointed mid-fight; victory returns the stage to `silent_intro` with the power core on the quay |
 | `coast_archive` | Archive | Environmental archive, Dawn Tower unlock |
 | `base_return` | Progression | Crash-site base, both components shown |
 | `phase_two_complete` | Checkpoint | Phase 2 summary; continues into the Dawn Tower |
@@ -228,7 +233,8 @@ Forgotten City — `memory_city_green`, `city_checkpoint`, `city_boss_gate`,
 `salvage_city_scrap`, `salvage_city_boards`, `salvage_city_frame`.
 Silent Coast — `coast_checkpoint`, `coast_boss_gate`, `memory_green_coast`,
 `coast_records`, `sample_coast_water`, `sample_coast_sediment`,
-`salvage_coast_plate`, `salvage_coast_cable`.
+`salvage_coast_plate`, `salvage_coast_cable`, `coast_power_core_drop` (only
+between Toxic Tide's defeat and the pickup).
 
 **Quest flags, Phase 1:** `briefing_read`, `design_confirmed`,
 `preflight_passed`, `launched`, `rift_seen`, `crashed`, `vela_inspected`,
@@ -354,8 +360,15 @@ the construction console and menu screens, which are panel-driven.
 | `pause` | Esc | Pause, back, skip cutscene |
 | *(UI)* Enter / Space | — | Confirm, advance dialogue |
 | *(construction)* Left/Right, Q/E, V | — | Cycle part, fuel, preflight |
-| *(encounter)* Mouse | — | Rotate the shield; no button held, always active |
-| *(encounter)* Space | — | Counterattack, only when the charge meter is full |
+| *(Toxic Tide)* Mouse | — | Rotate the shield; no button held, always active |
+| *(Toxic Tide)* Space | — | Counterattack, only when the charge meter is full |
+| *(Eco Arena)* WASD / arrows | `move_*` | Move, diagonals normalised |
+| *(Eco Arena)* Shift | — | Dash (short invulnerability, 1.5 s cooldown) |
+| *(Eco Arena)* Mouse / left click | — | Aim / fire the Tri-Spectrum Blaster |
+| *(Eco Arena)* 1 / 2 / 3, wheel | — | Green / Blue / Yellow spectrum |
+| *(Eco Arena)* Right click / E (held) | `interact` | Bill's sorting beam |
+| *(Eco Arena)* E | `interact` | Pick up the chip at Nick's feet |
+| *(Eco Arena)* Esc | — | Pause: resume, sorting guide, restart, leave |
 | *(archive)* Left/Right or A/D | — | Previous / next record |
 | *(archive, progression)* Enter / E / Esc | — | Close the screen |
 | *(typing)* A–Z | — | Type falling words; first letter selects, finishing fires |
@@ -733,6 +746,7 @@ GODOT="/c/Users/<you>/Downloads/Godot_v4.0-stable_win64.exe/Godot_v4.0-stable_wi
 "$GODOT" --headless --path . --script res://tests/star_fall/test_phase4.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_flight.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_debug_jump.gd
+"$GODOT" --headless --path . --script res://tests/star_fall/test_eco_arena.gd
 ```
 
 Each prints `PASS`/`FAIL` per check and a `RESULT:` line, and exits non-zero on
@@ -743,7 +757,8 @@ cinematic, report, score, save-version and QA-skip suite; `test_flight.gd`
 covers the playable flight segments, the canonical VELA renderer (engine state
 per presentation state, upright orientation, uniform scale, module positions),
 shield contacts, the portal waiting for a visible entry, and per-scene cleanup;
-`test_flow.gd` drives
+`test_eco_arena.gd` is the Eco Arena rules, screen, practice-separation and
+pacing-bot suite (it backs up and restores the save itself); `test_flow.gd` drives
 the real main scene from the title to the credits, then walks the campaign again
 with the QA skip.
 
@@ -758,8 +773,10 @@ with the QA skip.
 "$GODOT" --path . --script res://tests/star_fall/capture.gd -- --shots=17,18
 ```
 
-Writes 53 PNGs to `user://captures/` (01-36 the campaign and workshop, 46-56
-the Phase 4 finale, plus 22b). The finale shots cover the eight VELA reference
+Writes 56 PNGs to `user://captures/` (01-36 the campaign and workshop, with
+17-20c the Eco Arena guide, stages, boss, reward and summary and 23b the
+power-core drop; 46-56 the Phase 4 finale, plus 22b). The arena shots depend
+on each other: render them as `--shots=17,18,19,20,20b,20c`. The finale shots cover the eight VELA reference
 frames: 36 workshop, 46/47 final assembly, 48/48b departure station and
 boarding, 49b ignition, 49c vertical liftoff, 49 a shield contact in the
 ascent, 50 the debris passage, 52/52b portal approach and entry, 53 home
@@ -840,9 +857,9 @@ from scripted typing bots, not from people (section 17).
 - **Forgotten City.** A walkable ruined street with electronic waste, broken
   lamp posts, a maintenance shrine, a route checkpoint, optional salvage and the
   welded control-center door.
-- **Scrap King** (`scrap_king`): a fixed-position, mouse-directed shield-defense
-  encounter. Heavy industrial chassis, magnetic emitters, five health bands that
-  raise firing frequency and projectile speed. Reward: `navigation_chip`.
+- **Scrap King** (`scrap_king`): since the Phase 2 revision, the **Eco Arena**
+  waste-sorting arena survival (section 11a), ending with the Junkyard
+  Colossus. Reward: `navigation_chip`, a physical pickup in the arena.
 - **Control-center archive.** Five restored records covering the waste history,
   the ignored warnings, a surface image and the matching place names. Closing
   it applies the Future Earth reveal, changes the objective to
@@ -850,9 +867,10 @@ from scripted typing bots, not from people (section 17).
 - **Silent Coast.** A walkable harbor with a polluted tide line, a cleanup
   facility silhouette, bollards, drums, crates, optional samples and research
   records, a coastal memory projector and a route checkpoint.
-- **Toxic Tide** (`toxic_tide`): the same shield/absorption/counterattack rules
-  with a distinct marine silhouette, a longer deliberate rhythm, wider spray
-  patterns and heavier projectiles. Reward: `power_core`.
+- **Toxic Tide** (`toxic_tide`): the fixed-position, mouse-directed
+  shield/absorption/counterattack duel with a marine silhouette, a deliberate
+  rhythm, wide sprays, heavy projectiles and health-band escalation. Reward:
+  `power_core`, dropped on the quay and collected with E (section 11a).
 - **Environmental archive.** Five restored records, including the cleanup unit's
   own log. Unlocks the Dawn Tower and returns the campaign to the crash-site
   base.
@@ -867,6 +885,9 @@ from scripted typing bots, not from people (section 17).
 ---
 
 ## 11. Phase 2 architecture
+
+Since the Phase 2 revision only **Toxic Tide** uses this shield-duel engine in
+play; the Scrap King encounter is the Eco Arena (section 11a).
 
 The encounter is split into six parts, each pure and separately testable:
 
@@ -890,7 +911,8 @@ Rules this split enforces:
   is solved before body impact, so a fast projectile is never tunnelled and a
   shield hit is never also a body hit.
 - The screen never mutates campaign state. It reports one result through
-  `duel_finished`; `main.gd` awards the component, sets the flag and saves.
+  `duel_finished`; `main.gd` records the defeat and saves, and the component
+  drops into the world to be picked up (section 11a).
 - Rewards are idempotent in the campaign (`award_component` refuses a duplicate,
   `reveal_future_earth` and `complete_silent_coast` each apply once), so a
   replayed, skipped or restored scene produces the same state.
@@ -925,6 +947,233 @@ checkpoint -> city_intro -> [city_boss] -> city_archive
 
 `city_boss` and `coast_boss` are never checkpointed mid-fight; the checkpoint
 before them is the resume point.
+
+---
+
+## 11a. Phase 2 revision: the Eco Arena (Scrap King) and physical boss rewards
+
+The first Phase 2 encounter is no longer a shield duel. The **Scrap King**
+encounter (boss id, flag, reward and archive unchanged) is played as the
+**Eco Arena**, an educational arena survival about waste sorting. Toxic Tide
+keeps the shield duel exactly as before: mouse shield, hostile and beneficial
+energy, charge, Space counterattack, health-band escalation and the swept
+blocking fixes are untouched.
+
+### One implementation, two entry points
+
+| Entry | Where | Mode | Reports to the campaign |
+|---|---|---|---|
+| Campaign | Forgotten City, control-center door (after the checkpoint) | `campaign` | `boss_defeated` and `reward_collected` |
+| Practice | Main menu, **ECO ARENA — 5-7 MIN** | `practice` | nothing |
+
+`core/star_fall/sf_eco_arena.gd` (pure rules, no nodes) and
+`scenes/star_fall/eco_arena_screen.gd` (guide, camera, drawing, HUD, pause,
+defeat, summary) are shared; `main.gd` only chooses the mode and connects the
+two campaign signals in campaign mode. Session state lives entirely in the
+model, so practice never touches `GameState.campaign` or the save file. The
+QA stage skip is also disabled while practice is open. The Junkyard Colossus
+is the arena's final enemy inside the Scrap King encounter, not a fourth
+campaign boss.
+
+### STAR FALL's three colors
+
+This is a simplified convention for this game, presented as STAR FALL's own,
+not a universal standard. There are no hazardous, battery or glass categories.
+
+| Key | Color / name | Shape | Items |
+|---|---|---|---|
+| 1 | Green / ORGANIC | round | banana peel, food scraps, leaves, food-soiled uncoated pizza box |
+| 2 | Blue / CLEAN PAPER | square | clean cardboard, dry newspaper, office paper |
+| 3 | Yellow / PLASTIC & METAL | tall | empty plastic bottle, drink can, tin can, crushed empty can |
+| 1 then 3 | residue bottle | — | the leftover drink (Green) before the empty bottle (Yellow) |
+| 1 then 2 | box full of leaves | — | the leaves (Green) before the clean box (Blue) |
+
+Every item has a 16x16 badge (`sf_eco_sprites.gd`), shown over the targeted
+enemy and beside a dirty core in beam range. Stage 1 badges carry a glowing
+border in the answer color; from stage 2 the border is neutral. Category
+names, icons and shapes appear on the guide, the HUD slots, the crushers and
+the combo pips, so color is never the only cue.
+
+### Rules
+
+- **Combat.** A bolt in the matching spectrum deals `reference_damage x
+  match_multiplier` (4 x 2.5) to the exposed armor layer and knocks the enemy
+  back. The wrong spectrum deals zero, shows a deflection and triggers one
+  rate-limited Bill callout (a trick or layered item may replace a basic one).
+  Overflow damage is discarded, so one hit never reaches a hidden layer.
+  Bolts use a swept segment test and resolve once. A bolt hits anywhere on
+  the enemy's drawn body (`body_rect`, also used for the Colossus); touch
+  damage, crushers and walls use the foot circle.
+- **Cores.** Every death goes through one path (`_kill_enemy`): one core per
+  enemy, never collected automatically. Standard cores are worth 4 points,
+  dual cores 8 (one pickup, its shells in the enemy's layer order). Touching a
+  dirty core with the wrong color gives a harmless spark and a nudge, with a
+  cooldown; the matching color (touch, or Bill's beam held on Right Click / E)
+  removes one shell at a time. A clean core within beam range flies into
+  Nick's pack and is collected exactly once.
+- **Beam target rule.** Keep the current core while it stays a dirty core in
+  range; otherwise take the nearest dirty core within `beam_range` (lowest id
+  breaks a tie). Releasing, pausing or being defeated stops it.
+- **Crushers.** Only a *charging* enemy that reaches a crusher mouth triggers
+  it. A matching crusher strips the exposed layer: a single-layer enemy (or an
+  elite's last layer) is recycled through the normal death path and drops one
+  pre-cleaned physical core; an elite with layers left keeps them and is
+  stunned. A mismatched crusher only bounces the enemy (no damage, no drop, no
+  accuracy decision).
+- **Eco Overdrive.** Collecting Green, Blue and Yellow *standard* cores in a
+  row (any order, no mismatch between) starts 8 s of +30% speed, +25% shield
+  regeneration and a rainbow spectrum that matches the exposed combat layer.
+  Values are computed from the base stats while the timer runs, so they return
+  exactly afterwards; a retrigger refreshes the timer to 8 s and never stacks.
+  A wrong-color hit or cleaning attempt breaks the combo; dual and super cores
+  never count. Overdrive never cleans cores.
+- **Health and shield.** Damage hits the shield first, then health. Zero
+  shield is survivable; zero health is defeat. The shield regenerates after a
+  delay. A short hurt window, the dash window and every non-fight phase block
+  damage. Defeat stops everything, and Retry (after 0.5 s) resets only the
+  arena and skips the guide.
+- **Dash.** Shift: 0.16 s at 360 px/s, 0.24 s invulnerable, 1.5 s cooldown.
+  Movement is resolved in sub-steps against the walkable rectangle, the
+  station, the crushers and the boss, so a dash cannot pass a boundary.
+- **Bill** hovers behind and beside Nick, keeps a minimum gap, snaps back when
+  separated, is never targeted and never absorbs a shot.
+
+### Energy-driven progression
+
+Stages change when station charge *reaches or crosses* a threshold (24 -> 28
+enters stage 2). Ordinary cores cannot raise the station above 80%.
+
+| Stage | Charge | Content |
+|---|---|---|
+| 1 Warm-up | 0 -> 25 | single-material basics, bordered badges |
+| 2 Look-alike traps | 25 -> 55 | pizza box (Green), office paper (Blue), crushed can (Yellow); no borders |
+| 3 Multi-layer elites | 55 -> 80 | residue bottle and leaf box (dual cores) |
+| Boss | 80 | the Junkyard Colossus spawns once; waves stop |
+
+The Colossus wears Green, then Blue, then Yellow armor. It takes no damage
+during its entrance or between armors, and every pending toss zone and junk
+ring is cleared at each change. The Colossus' attacks are telegraphed: trash-toss
+landing zones around Nick (with gaps to dash into) and a junk ring with a gap.
+On defeat every enemy and projectile is cleared and two drops appear: the
+three-lock **Super Core** and the **navigation chip** (a TRAINING CHIP in
+practice). The Super Core always needs a manual 1 -> 2 -> 3, takes the station
+from 80 to 100, and victory needs both the full station and the chip, in
+either order. The summary never opens before both.
+
+### Accuracy and rank
+
+Eligible decisions: the first manual color decision for each enemy armor
+layer (`e<id>:<layer>`) and the first cleaning decision for each core shell
+(`c<id>:<shell>`). A held burst counts once; repeated pickups or callbacks
+add nothing; Overdrive hits are excluded. Accuracy = correct / eligible, and
+1.0 when there are no decisions. Ranks (`ranks` in data, first match wins):
+**S** accuracy >= 0.90 and time <= 7:00, **A** >= 0.75 and <= 10:00, else
+**B**. Time is the active match clock only: the guide, pause and reduced
+motion never count. The summary names the most-mismatched item's reminder.
+
+### Physical boss rewards and persistence
+
+Both Phase 2 bosses now drop their component into the world. Nothing is
+granted on boss death. The three facts are the existing ones from Phase 3:
+
+| State | Derived from |
+|---|---|
+| undefeated | the boss flag is unset |
+| available (drop in the world) | the flag is set and the component is not in `recovered_components` |
+| collected | the component is in `recovered_components` |
+| installed | the component is fitted in the workshop |
+
+- **Scrap King.** The Colossus' defeat calls `defeat_boss("scrap_king_defeated")`
+  and saves; picking up the chip calls `collect_boss_reward(..., "navigation_chip")`
+  and saves. Leaving or reloading in between reopens the arena in its reward
+  state (station at 80, boss down, Super Core and chip waiting), from the door
+  or from Continue.
+- **Toxic Tide.** Victory calls `defeat_boss("toxic_tide_defeated")`, returns
+  the stage to `silent_intro`, frees the duel screen (and with it the
+  fixed-position lock and every projectile), and the world shows the
+  `coast_power_core_drop` prop below the facility gate. E collects it once,
+  then the victory lines and the environmental archive follow. The facility
+  door, the objective line and the route cue point at the core until then.
+- **Older saves** need no migration: a save from the old build that has a boss
+  flag also lists its component, so it reads as collected and nothing is
+  replayed. A defeated boss whose component is missing reads as available and
+  its pickup is restored (arena reward state, or the quay drop). Save version
+  stays 5; no field was added.
+- The QA stage skip (`_award_boss_victory`) records the defeat and collects the
+  drop in one step through the same idempotent methods.
+
+### Data: `data/star_fall/eco_arena.json`
+
+```jsonc
+{
+  "world": {"width": 1280, "height": 960, "walkable": {...}, "nick_start": {...},
+            "boss_spawn": {...}, "reward_spawn": {"super_core": {...}, "navigation_chip": {...}}},
+  "station": {"x", "y", "solid_radius", "ring_radius"},
+  "crushers": [{"id", "category", "x", "y", "solid_radius", "mouth_radius", "cooldown"}],
+  "spawn_points": [{"x", "y"}],
+  "categories": {"<cat>": {"name", "card_title", "key", "color", "dark", "shape", "icon",
+                           "slot_lines", "explanation", "examples": ["<item>"]}},
+  "category_order": ["green", "blue", "yellow"],
+  "guide": {"title", "subtitle", "rules": []},
+  "items": {"<item>": {"name", "category", "trick"?, "layers"?, "layer_badges"?,
+                       "callout" | "layer_callouts", "reminder"}},
+  "nick": {"health", "shield", "shield_regen_per_second", "shield_regen_delay", "speed",
+           "radius", "hurt_invulnerable_seconds"},
+  "dash": {"cooldown", "duration", "speed", "invulnerable_seconds"},
+  "blaster": {"fire_interval", "projectile_speed", "projectile_radius", "projectile_life",
+              "reference_damage", "match_multiplier", "knockback", "muzzle_offset"},
+  "cores": {"standard_value", "dual_value", "super_value", "radius", "contact_radius",
+            "beam_range", "beam_clean_seconds", "spark_cooldown", "nudge", "magnet_speed",
+            "collect_radius", "chip_pickup_radius"},
+  "overdrive": {"duration", "speed_multiplier", "regen_multiplier", "retrigger"},
+  "bill": {"follow_distance", "side_offset", "lerp_rate", "min_gap", "recover_distance"},
+  "callouts": {"cooldown", "show_seconds"},
+  "pacing": {"spawn_telegraph", "min_spawn_distance", "first_spawn_delay", "seed",
+             "charge_cooldown_min", "charge_cooldown_max", "charge_telegraph",
+             "charge_speed", "charge_duration", "charge_trigger_range", "contact_cooldown"},
+  "stages": [{"id", "name", "until", "bordered_badges", "spawn_interval",
+              "group_min", "group_max", "max_alive", "pool": {"<enemy>": weight}}],
+  "boss_at": 80,
+  "enemies": {"<enemy>": {"item", "layers": [], "armor", "speed", "radius",
+                          "contact_damage", "silhouette", "core": "standard|dual",
+                          "charges", "stained"?, "elite"?}},
+  "boss": {"id", "name", "layers", "layer_items", "armor", "speed", "radius",
+           "contact_damage", "transition_seconds", "entry_seconds",
+           "toss": {"interval", "telegraph", "radius", "damage", "targets", "spread"},
+           "ring": {"interval", "count", "gap", "speed", "radius", "damage", "life", "telegraph"}},
+  "ranks": [{"rank", "min_accuracy", "max_seconds"}],
+  "practice_reward": {"name", "label"}, "campaign_reward": {"name", "label"}
+}
+```
+
+`scrap_king` stays in `encounters.json` as the encounter's identity (id,
+chapter, reward flag, component, archive). Its duel tuning is no longer
+played; it remains a regression fixture for the shared duel engine.
+
+### Pacing (measured on a bot, not on people)
+
+`test_eco_arena.gd` plays four complete runs with a scripted bot that aims
+perfectly, reacts instantly, uses the beam and dodges toss zones, at 0% and
+25% wrong first choices. Measured on this build: **3:33 to 3:34** of match
+time to victory, accuracy 89-93%, rank S or A, with body-sized shot hitboxes.
+Human players aim, read and
+walk more slowly, so a real run is expected to land in the 5-7 minute target,
+but no player (and no child) has timed it yet. The pacing levers are the
+stage `spawn_interval`, enemy `armor` and boss `armor` in data.
+
+### Known limitations
+
+- Visuals, audio, aiming feel and pacing for real players are unverified;
+  the bot times above are the only measurement.
+- Enemies chase in straight lines and slide around the station and crushers;
+  there is no path-finding.
+- A single seeded spawn sequence per attempt (`pacing.seed`); runs differ only
+  through the player's actions.
+- The new material and blaster sounds are short synth cues (no recorded
+  samples). The blaster zap is quiet, pitched per spectrum, and gated to at
+  most one per 0.12 s so held fire never stacks into a drone.
+- Play Again in the campaign replays the arena for practice; the chip and the
+  boss are already recorded, so it changes nothing in the campaign.
 
 ---
 
@@ -1035,7 +1284,8 @@ Rules:
 | Salvage | `salvage_city_scrap`, `salvage_city_boards`, `salvage_city_frame`, `salvage_coast_plate`, `salvage_coast_cable` |
 
 `shield_emitter` remains declared and deliberately unrecovered: it belongs to
-Phase 3.
+Phase 3. Eco Arena ids (item, enemy, crusher and boss ids such as
+`junkyard_colossus`) live only in `eco_arena.json` and are never saved.
 
 ---
 

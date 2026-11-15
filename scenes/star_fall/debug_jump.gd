@@ -4,7 +4,8 @@ extends CanvasLayer
 ## `godot --path .`); an exported release build never creates this node.
 ##
 ##   1..0  jump to a phase (see SFDebugPresets.PRESETS)
-##   V     win the current boss fight (shield duel or typing duel)
+##   V     win the current boss fight (shield duel, typing duel, or the
+##         Eco Arena: the Colossus falls and its two drops appear)
 ##   K     heal Nick to full in the current fight
 ##   M     add salvage (+10 scrap metal, circuitry, polymer)
 ##   H     show / hide this list on screen
@@ -110,6 +111,12 @@ func win_fight() -> bool:
 			duel.state = duel.State.VICTORY
 			main.ui.notify("DEBUG: SKY REMNANT DEFEATED - ENTER TO CONTINUE", "warn", 2.5)
 			return true
+	if main.eco_screen != null:
+		var es = main.eco_screen
+		if es.model.debug_defeat_boss():
+			es._consume(es.model.take_events())
+			main.ui.notify("DEBUG: COLOSSUS DOWN - UNLOCK THE SUPER CORE, TAKE THE CHIP", "warn", 2.5)
+			return true
 	if main.duel != null:
 		var sd = main.duel
 		if not sd.encounter.model.is_over():
@@ -127,6 +134,9 @@ func heal() -> bool:
 		main.typing_duel.encounter.nick_health = main.typing_duel.encounter.nick_health_max
 	elif main.duel != null:
 		main.duel.encounter.model.nick_health = main.duel.encounter.model.nick_health_max
+	elif main.eco_screen != null:
+		main.eco_screen.model.health = main.eco_screen.model.health_max
+		main.eco_screen.model.shield = main.eco_screen.model.shield_max
 	else:
 		main.ui.notify("DEBUG: no fight to heal in", "info", 1.5)
 		return false

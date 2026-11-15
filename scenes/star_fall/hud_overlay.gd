@@ -112,6 +112,8 @@ func _objective_text() -> String:
 			if not campaign.has_flag(SFCampaign.FLAG_CITY_CHECKPOINT):
 				return "Find the checkpoint, then the control center"
 			return "UNLOCKED: Enter the control center [E]"
+		if not campaign.has_component(SFCampaign.COMPONENT_NAVIGATION_CHIP):
+			return "The chip waits in the sorting yard [E]"
 		if not campaign.has_flag(SFCampaign.FLAG_CITY_ARCHIVE_RESTORED):
 			return "Restore the control-center archive"
 		return "NEXT ROUTE: Proceed to Silent Coast [E]"
@@ -121,6 +123,8 @@ func _objective_text() -> String:
 			if not campaign.has_flag(SFCampaign.FLAG_COAST_CHECKPOINT):
 				return "Find the harbor checkpoint"
 			return "UNLOCKED: Enter the cleanup facility [E]"
+		if not campaign.has_component(SFCampaign.COMPONENT_POWER_CORE):
+			return "Collect the power core on the quay [E]"
 		if not campaign.has_flag(SFCampaign.FLAG_COAST_ARCHIVE_RESTORED):
 			return "Restore the environmental archive"
 		return "NEXT ROUTE: Return to crash-site base [E]"
@@ -169,6 +173,8 @@ func _draw_route_cue(skin, campaign) -> void:
 		else:
 			target_prop_id = "city_boss_gate"
 			cue_label = "EXIT: SILENT COAST" if campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED) else "EXIT UNLOCKED: CONTROL CENTER"
+			if campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED) and not campaign.has_component(SFCampaign.COMPONENT_NAVIGATION_CHIP):
+				cue_label = "CHIP WAITING: CONTROL CENTER"
 			accent = SFPalette.GREEN_OK if campaign.has_flag(SFCampaign.FLAG_SCRAP_KING_DEFEATED) else SFPalette.CYAN
 	elif campaign.chapter_id == SFCampaign.CHAPTER_COAST:
 		if not campaign.has_flag(SFCampaign.FLAG_COAST_CHECKPOINT) and not campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED):
@@ -178,6 +184,8 @@ func _draw_route_cue(skin, campaign) -> void:
 		else:
 			target_prop_id = "coast_boss_gate"
 			cue_label = "EXIT: CRASH-SITE BASE" if campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED) else "EXIT UNLOCKED: CLEANUP FACILITY"
+			if campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED) and not campaign.has_component(SFCampaign.COMPONENT_POWER_CORE):
+				cue_label = "POWER CORE ON THE QUAY"
 			accent = SFPalette.GREEN_OK if campaign.has_flag(SFCampaign.FLAG_TOXIC_TIDE_DEFEATED) else SFPalette.CYAN
 	if target_prop_id == "":
 		return

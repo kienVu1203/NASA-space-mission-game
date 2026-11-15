@@ -98,7 +98,7 @@ func _data_and_prerequisites() -> void:
 	check("the final message exists", not ((finale_data.get("cinematic", {}) as Dictionary).get("final_message", {}) as Dictionary).is_empty())
 	check("the score weights are published", not ((finale_data.get("report", {}) as Dictionary).get("score", {}) as Dictionary).is_empty())
 	check("the credits sections exist", ((finale_data.get("credits", {}) as Dictionary).get("sections", []) as Array).size() >= 4)
-	check("the QA block exists", not (finale_data.get("qa", {}) as Dictionary).is_empty())
+	check("the removed I + O + P block is gone from the data", not finale_data.has("qa"))
 
 	var scenes: Array = (finale_data.get("cinematic", {}) as Dictionary).get("scenes", []) as Array
 	for entry in scenes:
@@ -168,19 +168,23 @@ func _cinematic_rules() -> void:
 	var emitted: Array = []
 	cine.cinematic_finished.connect(func(skipped): emitted.append(skipped))
 
-	# Pause freezes the scene clock and focus loss pauses.
+	# Pause (set by the controller's pause menu) freezes the scene clock. Space
+	# no longer pauses; Esc only asks the controller for its pause menu.
+	var asked: Array = []
+	cine.pause_requested.connect(func(): asked.append(true))
 	cine.handle_key(KEY_SPACE)
-	check("space pauses", cine.is_paused())
+	check("space does not pause", not cine.is_paused())
+	cine.handle_key(KEY_ESCAPE)
+	check("esc asks for the pause menu instead of skipping", asked.size() == 1 and not cine.is_finished())
+	cine.paused = true
 	cine.advance_for(30.0)
 	check("a paused scene does not advance", cine.scene_id() == "leaving_crash_site")
 	check("pause does not emit an outcome", emitted.is_empty())
-	cine.handle_key(KEY_SPACE)
-	check("space resumes", not cine.is_paused())
+	cine.paused = false
 
 	# Skipping is idempotent and reports once.
 	cine.skip()
 	cine.skip()
-	cine.handle_key(KEY_ESCAPE)
 	check("the outcome is emitted exactly once", emitted.size() == 1, str(emitted.size()))
 	check("skipping reports skipped = true", emitted.size() == 1 and bool(emitted[0]) == true)
 	check("the screen reports itself finished", cine.is_finished())
@@ -337,26 +341,11 @@ func _finale_save_rules() -> void:
 func _qa_hotkey() -> void:
 	print("")
 	print("-- QA hotkey chord and latch " + "-".repeat(34))
-	check("the hotkey is enabled in a debug build", SFQA.is_enabled())
+	# The player-facing chord is removed; only the milestone planner remains.
 	var qa = SFQA.new()
-	check("the latch starts armed", qa.armed())
-	check("a partial chord never fires", not qa.poll(true, false, true, 1.0))
-	check("the chord fires on a fresh press", qa.poll(true, true, true, 1.0))
-	check("the cooldown is set by the data file", is_equal_approx(qa.cooldown(), float((finale_data.get("qa", {}) as Dictionary).get("cooldown_seconds", 0.45))))
-	check("holding the chord does not repeat", not qa.poll(true, true, true, 0.1))
-	check("holding through many frames still does not repeat", not qa.poll(true, true, true, 0.1))
-	check("releasing re-arms", not qa.poll(false, true, true, 0.1) and qa.armed())
-	check("a release alone cannot fire", not qa.poll(false, true, true, 0.1))
-	check("a new press fires after the cooldown", qa.poll(true, true, true, 1.0))
-
-	# The same latch survives an irregular frame: a press, a release, a press.
-	var fast = SFQA.new()
-	fast.cooldown_seconds = 0.45
-	check("press 1 fires", fast.poll(true, true, true, 0.016))
-	fast.poll(false, false, false, 0.016)
-	check("press 2 inside the cooldown is refused", not fast.poll(true, true, true, 0.016))
-	fast.poll(false, false, false, 0.5)
-	check("press 3 after the cooldown fires", fast.poll(true, true, true, 0.016))
+	check("the planner has no key poll", not qa.has_method("poll"))
+	check("the planner has no build/launch-flag switch", not qa.has_method("is_enabled"))
+	check("the controller no longer polls I + O + P", not main.has_method("_poll_qa_skip"))
 
 	# Milestone planning is derived from campaign state.
 	var camp = SFCampaign.new()

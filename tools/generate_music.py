@@ -73,82 +73,6 @@ def synth_osc(phase, wave_type="sine"):
     return math.sin(norm_phase * TWO_PI)
 
 
-# ---------------------------------------------------------------- 1. TITLE THEME
-# Atmospheric, mysterious, slow space arpeggio in D minor (D3, F3, A3, C4, D4, E4)
-def generate_music_title():
-    duration = 16.0
-    num_samples = int(duration * SAMPLE_RATE)
-    left = [0.0] * num_samples
-    right = [0.0] * num_samples
-
-    # Chord progression: Dm -> Bb -> F -> C (4 seconds each)
-    chords = [
-        # Dm: D3, F3, A3, C4
-        [146.83, 174.61, 220.0, 261.63],
-        # Bb: Bb2, D3, F3, A3
-        [116.54, 146.83, 174.61, 220.0],
-        # F: F2, C3, F3, A3
-        [87.31, 130.81, 174.61, 220.0],
-        # C: C3, G3, C4, E4
-        [130.81, 196.0, 261.63, 329.63]
-    ]
-
-    arpeggio_pattern = [0, 1, 2, 3, 2, 1, 0, 2]  # 8 notes per 4s chord (0.5s per note)
-    note_dur = 0.5
-
-    for c_idx, chord in enumerate(chords):
-        chord_start = c_idx * 4.0
-        # Pad chord
-        for note in chord:
-            for i in range(int(4.0 * SAMPLE_RATE)):
-                idx = int((chord_start * SAMPLE_RATE) + i)
-                if idx >= num_samples:
-                    break
-                t_chord = i / SAMPLE_RATE
-                env = math.sin(t_chord / 4.0 * math.pi) ** 1.5
-                sig_l = synth_osc(t_chord * note, "warm") * 0.08 * env
-                sig_r = synth_osc(t_chord * (note * 1.003) + 0.1, "warm") * 0.08 * env
-                left[idx] += sig_l
-                right[idx] += sig_r
-
-        # Arpeggiator line
-        for a_step, p_idx in enumerate(arpeggio_pattern):
-            note_freq_val = chord[p_idx] * 2.0  # One octave up
-            step_start = chord_start + (a_step * note_dur)
-            step_samples = int(note_dur * 1.6 * SAMPLE_RATE)  # slight overlap/reverb tail
-
-            pan = 0.3 + 0.4 * (a_step % 2)  # subtle stereo ping-pong
-            for s in range(step_samples):
-                idx = int((step_start * SAMPLE_RATE) + s)
-                if idx >= num_samples:
-                    break
-                t_note = s / SAMPLE_RATE
-                env = math.exp(-t_note * 3.5)
-                osc = (synth_osc(t_note * note_freq_val, "sine") * 0.6 +
-                       synth_osc(t_note * note_freq_val * 2.0, "tri") * 0.25)
-                val = osc * env * 0.14
-                left[idx] += val * (1.0 - pan)
-                right[idx] += val * pan
-
-    # Low space rumble sub-bass
-    for i in range(num_samples):
-        t = i / SAMPLE_RATE
-        sub = math.sin(t * 43.65 * TWO_PI) * 0.06  # Low F1
-        left[i] += sub
-        right[i] += sub
-
-    # Seamless boundary envelope
-    for i in range(int(0.2 * SAMPLE_RATE)):
-        fade = i / (0.2 * SAMPLE_RATE)
-        left[i] *= fade
-        right[i] *= fade
-        left[num_samples - 1 - i] *= fade
-        right[num_samples - 1 - i] *= fade
-
-    filepath = os.path.join(MUSIC_DIR, "music_title.wav")
-    write_wav(filepath, left, right)
-
-
 # ---------------------------------------------------------------- 2. EARTH / SPACEPORT THEME
 # Warm, optimistic, peaceful retro sci-fi synth with bright major arpeggios
 def generate_music_earth():
@@ -486,7 +410,6 @@ def generate_sfx_transition():
 
 def main():
     print("=== Generating Background Music & Transition Assets for Phase 1 ===")
-    generate_music_title()
     generate_music_earth()
     generate_music_construction()
     generate_music_flight()

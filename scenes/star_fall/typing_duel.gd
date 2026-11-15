@@ -140,13 +140,28 @@ func is_fighting() -> bool:
 
 # ---------------------------------------------------------------- input
 
+const CONTINUE_BUTTON := Rect2(250, 190, 140, 18)
+const RETRY_BUTTON := Rect2(176, 212, 136, 18)
+const MENU_BUTTON := Rect2(328, 212, 136, 18)
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if input_locked:
+		return
+	if event is InputEventMouseMotion:
+		if state == State.PAUSED and pause_menu.hover(get_local_mouse_position()):
+			skin.audio.sfx_select()
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			handle_click(get_local_mouse_position())
+			get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventKey):
 		return
 	var key := event as InputEventKey
 	if not key.pressed or key.echo:
-		return
-	if input_locked:
 		return
 	get_viewport().set_input_as_handled()
 	handle_key(key.keycode, key.unicode, key.ctrl_pressed or key.alt_pressed or key.meta_pressed)
@@ -160,7 +175,10 @@ func handle_key(keycode: int, unicode: int = 0, chord: bool = false) -> void:
 		State.JOURNAL:
 			_journal_key(keycode)
 		State.VICTORY:
-			if keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E, KEY_ESCAPE]:
+			# Esc pauses; it never continues past the victory panel.
+			if keycode == KEY_ESCAPE:
+				_open_pause()
+			elif keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E]:
 				_confirm_victory()
 		State.DEFEAT:
 			if keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_R]:
@@ -177,6 +195,31 @@ func handle_key(keycode: int, unicode: int = 0, chord: bool = false) -> void:
 				var letter := SFTyping.letter_from_unicode(unicode)
 				if letter != "":
 					_consume(encounter.type_letter(letter))
+	queue_redraw()
+
+
+## Mouse clicks: pause rows, the journal's BACK button and word rows, and the
+## result panels' buttons. A click on the field never types or fires.
+func handle_click(pos: Vector2) -> void:
+	match state:
+		State.PAUSED:
+			if pause_menu.click(pos) != "":
+				_activate_pause_item()
+		State.JOURNAL:
+			if ui.journal_back_rect.has_point(pos):
+				_journal_key(KEY_ESCAPE)
+			else:
+				var row: int = ui.journal_row_at(pos)
+				if row >= 0:
+					journal_index = row
+		State.VICTORY:
+			if encounter.victory_timer >= _victory_hold() and CONTINUE_BUTTON.has_point(pos):
+				_confirm_victory()
+		State.DEFEAT:
+			if RETRY_BUTTON.has_point(pos):
+				retry()
+			elif MENU_BUTTON.has_point(pos):
+				_open_pause()
 	queue_redraw()
 
 
@@ -204,7 +247,13 @@ func _victory_hold() -> float:
 func _open_pause() -> void:
 	pause_origin = state
 	state = State.PAUSED
+	pause_menu.set_items(pause_menu.items.map(func(item):
+		var copy: Dictionary = (item as Dictionary).duplicate()
+		if String(copy.get("id", "")) == "retry":
+			copy["enabled"] = pause_origin != State.VICTORY
+		return copy), "resume")
 	pause_menu.index = 0
+	skin.audio.set_paused(true)
 
 
 func _pause_key(keycode: int) -> void:
@@ -219,6 +268,7 @@ func _pause_key(keycode: int) -> void:
 			_activate_pause_item()
 		KEY_ESCAPE:
 			skin.audio.sfx_back()
+			skin.audio.set_paused(false)
 			state = pause_origin
 
 
@@ -226,15 +276,20 @@ func _activate_pause_item() -> void:
 	match pause_menu.current_id():
 		"resume":
 			skin.audio.sfx_blip()
+			skin.audio.set_paused(false)
 			state = pause_origin
 		"journal":
 			skin.audio.sfx_blip()
 			journal_index = maxi(0, journal_entries().size() - 1)
 			state = State.JOURNAL
 		"retry":
+			if pause_origin == State.VICTORY:
+				return
+			skin.audio.set_paused(false)
 			retry()
 		"menu":
 			skin.audio.sfx_back()
+			skin.audio.set_paused(false)
 			duel_aborted.emit()
 
 
@@ -741,16 +796,17 @@ func _draw_overlay() -> void:
 				skin.wrap(self, Vector2(172, 146), 296,
 					"The Sky Remnant has dispersed. %d words typed, %d missed and retried." % [encounter.deck.size(), encounter.misses],
 					SFPalette.PAPER, 1, 3)
-				skin.text_c(self, 320, 196, "ENTER  CONTINUE", SFPalette.GOLD)
-				skin.text_c(self, 320, 214, "THE SHIELD EMITTER FALLS TO THE SLOPE", SFPalette.PAPER_DIM)
+				skin.button(self, CONTINUE_BUTTON, "CONTINUE", true, true, SFPalette.GOLD)
+				skin.text_c(self, 320, 216, "THE SHIELD EMITTER FALLS TO THE SLOPE", SFPalette.PAPER_DIM)
 		State.DEFEAT:
 			ui.modal(self, Rect2(150, 100, 340, 160), SFPalette.RED)
 			skin.text_c(self, 320, 114, "NICK IS DOWN", SFPalette.RED, 2)
 			skin.wrap(self, Vector2(172, 142), 296,
 				"The fight restarts from the easy words: the same words in a new order. Your journal, salvage and earlier components are kept.",
 				SFPalette.PAPER, 1, 4)
-			skin.text_c(self, 320, 204, "ENTER / R  RETRY", SFPalette.GOLD)
-			skin.text_c(self, 320, 224, "ESC  PAUSE MENU", SFPalette.PAPER_DIM)
+			skin.button(self, RETRY_BUTTON, "RETRY", true, true, SFPalette.GOLD)
+			skin.button(self, MENU_BUTTON, "PAUSE MENU", MENU_BUTTON.has_point(get_local_mouse_position()), true)
+			skin.text_c(self, 320, 238, "ENTER / R RETRY     ESC PAUSE", SFPalette.PAPER_DIM)
 		State.PAUSED:
 			ui.modal(self, Rect2(196, 92, 248, 172), SFPalette.CYAN)
 			skin.text_c(self, 320, 104, "PAUSED", SFPalette.CYAN)

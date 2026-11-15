@@ -31,6 +31,8 @@ const SFContent := preload("res://core/star_fall/sf_content.gd")
 # Phase 4.
 const SFFinale := preload("res://core/star_fall/sf_finale.gd")
 const SFQA := preload("res://core/star_fall/sf_qa.gd")
+const SFSettings := preload("res://core/star_fall/sf_settings.gd")
+const SFVela := preload("res://core/star_fall/sf_vela.gd")
 const SFFinalAssembly := preload("res://scenes/star_fall/final_assembly_screen.gd")
 const SFCinematic := preload("res://scenes/star_fall/cinematic_screen.gd")
 const SFReport := preload("res://scenes/star_fall/mission_report_screen.gd")
@@ -62,6 +64,37 @@ enum LaunchPhase {COUNTDOWN, ASCENT, SIGNAL, RIFT, CRASH, DONE}
 
 const VW := 640
 const VH := 360
+
+## Screens whose Esc / right-click opens the shared pause menu below. The
+## encounter screens (shield duel, typing duel, Eco Arena) keep their own pause
+## menus with retry options; the title, settings, journal and save-error screens
+## are menus themselves, where Esc means back.
+const MAIN_PAUSE_SCREENS := [
+	Screen.WORLD, Screen.LAUNCH, Screen.MEMORY, Screen.CHECKPOINT, Screen.ARCHIVE,
+	Screen.PROGRESSION, Screen.FINAL_ASSEMBLY, Screen.CINEMATIC, Screen.REPORT, Screen.CREDITS,
+]
+
+# Phase 1 launch timing (seconds). COUNTDOWN is the pad; ASCENT runs ignition,
+# liftoff, atmosphere and space in that order, then the signal investigation.
+const LAUNCH_PAD := Vector2(320, 286)
+const COUNTDOWN_SECONDS := 2.6
+const IGNITION_END := 1.4
+const LIFTOFF_END := 3.0
+const ATMOSPHERE_END := 5.6
+const ASCENT_SECONDS := 7.2
+## Pixels VELA climbs on screen before the camera starts following it.
+const LAUNCH_FOLLOW := 120.0
+
+# Settings panel layout, shared by the title settings screen and the pause menu.
+const SETTINGS_PANEL := Rect2(100, 44, 440, 272)
+const SETTINGS_ROW_H := 22.0
+const VOLUME_IDS := ["master_volume", "music_volume", "sfx_volume", "ui_volume"]
+
+const CHECKPOINT_CONTINUE := Rect2(500, 333, 128, 22)
+const CHECKPOINT_MENU := Rect2(12, 333, 72, 22)
+const MEMORY_NEXT := Rect2(394, 336, 70, 18)
+const MEMORY_SKIP := Rect2(470, 336, 70, 18)
+const SIGNAL_LOCK_BUTTON := Rect2(270, 240, 100, 18)
 
 var skin
 var ui
@@ -122,9 +155,6 @@ var finale_data: Dictionary = {}
 var reconstruction_data: Dictionary = {}
 var _finale_started: bool = false
 
-# QA stage-skip hotkey (I + O + P). Enabled in debug builds, or with --qa.
-var qa
-var qa_enabled: bool = false
 
 # Encounter dialogue is read over a frozen arena; the duel checks this.
 var encounter_input_locked: bool = false
@@ -137,6 +167,9 @@ var signal_marker: float = 0.0
 var signal_locks: int = 0
 var signal_attempts: int = 0
 var signal_timer: float = 0.0
+var signal_phase: float = 0.0
+## While the player steers the reticle the automatic sweep waits this long.
+var signal_manual: float = 0.0
 var crash_shake: float = 0.0
 
 # Memory playback.
@@ -145,8 +178,9 @@ var memory_index: int = 0
 var memory_chars: float = 0.0
 var memory_next: Callable = Callable()
 
-# Settings.
-var setting_ambience: bool = true
+# Settings (core/star_fall/sf_settings.gd). Local preferences only: they live in
+# their own file and never touch the campaign or its save.
+var settings: Dictionary = {}
 var setting_text_speed: float = 52.0
 ## Reduces screen shake and full-screen flashes without changing any rule. An
 ## accessibility preference: it never affects the score, the report or progress.
@@ -168,6 +202,13 @@ var _last_world_position: Vector2 = Vector2.ZERO
 var _has_last_world_position: bool = false
 var _last_zone: String = ""
 var pause_open: bool = false
+## The settings panel shown inside the pause menu (Esc returns to the menu).
+var pause_settings_open: bool = false
+var _pause_node: Node = null
+var _slider_drag: String = ""
+## Eco Arena practice is a reward for beating the Scrap King in the campaign.
+## Stored with the settings, so practice stays separate from campaign progress.
+var practice_unlocked: bool = false
 var debug_jump = null               # scenes/star_fall/debug_jump.gd, debug builds only
 var _transition_busy: bool = false
 
@@ -188,15 +229,10 @@ func _ready() -> void:
 	eco_data = SFContent.read_json("res://data/star_fall/eco_arena.json") as Dictionary
 	if eco_data.is_empty():
 		push_error("STAR FALL: eco_arena.json failed to load")
-	qa = SFQA.new()
-	qa_enabled = SFQA.is_enabled()
-	if qa_enabled and not finale_data.is_empty():
-		var qa_data: Dictionary = finale_data.get("qa", {}) as Dictionary
-		qa.cooldown_seconds = float(qa_data.get("cooldown_seconds", 0.45))
-
 	audio = SFAudio.new()
 	audio.name = "SFAudio"
 	add_child(audio)
+	_load_settings()
 	skin = SFSkin.new(audio)
 	ui = SFUI.new(skin)
 
@@ -247,16 +283,57 @@ func _build_menus() -> void:
 
 func _refresh_save_state() -> void:
 	# Continue is enabled only when the file parses and validates. Reading here
-	# never writes or deletes anything.
+	# never writes the campaign save or deletes anything.
 	save_available = SFSave.has_valid_save()
+	# A save from before practice unlocks existed keeps what it earned: a
+	# campaign that already beat the Scrap King unlocks practice here.
+	if not practice_unlocked and save_available:
+		var flags: Variant = (SFSave.read_save().get("data", {}) as Dictionary).get("flags", {})
+		if flags is Dictionary and bool((flags as Dictionary).get(SFCampaign.FLAG_SCRAP_KING_DEFEATED, false)):
+			_unlock_practice()
 	_rebuild_title_menu()
+
+
+# ---------------------------------------------------------------- settings store
+
+func _load_settings() -> void:
+	settings = SFSettings.load_settings()
+	setting_text_speed = float(settings["text_speed"])
+	setting_reduced_motion = bool(settings["reduced_motion"])
+	practice_unlocked = bool(settings["practice_unlocked"])
+	_apply_volumes()
+
+
+func _apply_volumes() -> void:
+	SFAudio.set_bus_volume("Master", float(settings.get("master_volume", 1.0)))
+	SFAudio.set_bus_volume(SFAudio.BUS_MUSIC, float(settings.get("music_volume", 0.8)))
+	SFAudio.set_bus_volume(SFAudio.BUS_SFX, float(settings.get("sfx_volume", 0.9)))
+	SFAudio.set_bus_volume(SFAudio.BUS_UI, float(settings.get("ui_volume", 0.8)))
+
+
+func _save_settings() -> void:
+	settings["text_speed"] = setting_text_speed
+	settings["reduced_motion"] = setting_reduced_motion
+	settings["practice_unlocked"] = practice_unlocked
+	# ponytail: headless test runs never write the player's real settings file;
+	# SFSettings is checked directly against a temporary path instead.
+	if DisplayServer.get_name() == "headless":
+		return
+	SFSettings.save_settings(settings)
+
+
+func _unlock_practice() -> void:
+	if practice_unlocked:
+		return
+	practice_unlocked = true
+	_save_settings()
 
 
 func _rebuild_title_menu() -> void:
 	var items: Array = [
 		{"id": "new", "label": "NEW GAME", "enabled": true},
 		{"id": "continue", "label": "CONTINUE", "enabled": save_available},
-		{"id": "eco_arena", "label": "ECO ARENA — 5-7 MIN", "enabled": true},
+		{"id": "eco_arena", "label": "ECO ARENA — 5-7 MIN" if practice_unlocked else "ECO ARENA — LOCKED", "enabled": practice_unlocked},
 		{"id": "settings", "label": "SETTINGS", "enabled": true},
 		{"id": "quit", "label": "QUIT", "enabled": true},
 	]
@@ -268,28 +345,44 @@ func _rebuild_title_menu() -> void:
 
 
 func _rebuild_settings_menu() -> void:
-	settings_menu.set_items([
-		{"id": "ambience", "label": "AMBIENT SOUND", "detail": "ON" if setting_ambience else "OFF", "enabled": true},
-		{"id": "text_speed", "label": "TEXT SPEED", "detail": "FAST" if setting_text_speed > 60.0 else ("SLOW" if setting_text_speed < 40.0 else "NORMAL"), "enabled": true},
-		{"id": "reduced_motion", "label": "REDUCED MOTION", "detail": "ON" if setting_reduced_motion else "OFF", "enabled": true},
-		{"id": "back", "label": "BACK", "enabled": true},
-	], String(settings_menu.current_id()))
+	var items: Array = []
+	for id in VOLUME_IDS:
+		items.append({"id": id, "label": {
+			"master_volume": "MASTER VOLUME", "music_volume": "MUSIC",
+			"sfx_volume": "EFFECTS", "ui_volume": "INTERFACE"}[id], "slider": true, "enabled": true})
+	items.append({"id": "text_speed", "label": "TEXT SPEED", "detail": "FAST" if setting_text_speed > 60.0 else ("SLOW" if setting_text_speed < 40.0 else "NORMAL"), "enabled": true})
+	items.append({"id": "reduced_motion", "label": "REDUCED MOTION", "detail": "ON" if setting_reduced_motion else "OFF", "enabled": true})
+	items.append({"id": "back", "label": "BACK", "enabled": true})
+	settings_menu.set_items(items, String(settings_menu.current_id()))
 
 
 func _rebuild_pause_menu() -> void:
-	var items: Array = []
+	var items: Array = [{"id": "resume", "label": "RESUME", "enabled": true}]
 	if screen == Screen.WORLD:
-		items.append({"id": "resume", "label": "RESUME", "enabled": true})
 		items.append({"id": "save", "label": "SAVE PROGRESS", "enabled": true})
-		if not campaign.vocabulary_journal.is_empty():
-			items.append({"id": "journal", "label": "VOCABULARY JOURNAL", "enabled": true})
-		items.append({"id": "settings", "label": "SETTINGS", "enabled": true})
-		items.append({"id": "title", "label": "RETURN TO MAIN MENU", "enabled": true})
-	else:
-		items.append({"id": "resume", "label": "RESUME", "enabled": true})
-		items.append({"id": "settings", "label": "SETTINGS", "enabled": true})
-		items.append({"id": "title", "label": "RETURN TO MAIN MENU", "enabled": true})
+	var skip_label := _pause_skip_label()
+	if skip_label != "":
+		items.append({"id": "skip", "label": skip_label, "enabled": true})
+	if screen == Screen.WORLD and not campaign.vocabulary_journal.is_empty():
+		items.append({"id": "journal", "label": "VOCABULARY JOURNAL", "enabled": true})
+	items.append({"id": "settings", "label": "SETTINGS", "enabled": true})
+	items.append({"id": "title", "label": "RETURN TO MAIN MENU", "enabled": true})
 	pause_menu.set_items(items, String(pause_menu.current_id()))
+
+
+## The one explicit skip a paused screen offers, or "" for none. Skipping is
+## always the screen's own safe path, so it leaves the same campaign state as
+## watching to the end.
+func _pause_skip_label() -> String:
+	match screen:
+		Screen.CINEMATIC:
+			return "SKIP SEQUENCE"
+		Screen.MEMORY:
+			return "SKIP MEMORY"
+		Screen.FINAL_ASSEMBLY:
+			if assembly_screen != null and assembly_screen.is_installing():
+				return "SKIP ANIMATION"
+	return ""
 
 
 # ---------------------------------------------------------------- screen flow
@@ -299,6 +392,16 @@ func _go(next: int) -> void:
 		queue_redraw()
 		return
 	previous_screen = screen
+	# A pause never survives a screen change, and no gameplay sound outlives the
+	# screen that started it.
+	if pause_open:
+		pause_open = false
+		_resume_paused_node()
+	# Also clears a pause left by an encounter screen's own menu.
+	audio.set_paused(false)
+	pause_settings_open = false
+	_slider_drag = ""
+	audio.stop_gameplay_voices()
 	trigger_transition(0, 0.28)
 
 	# Tear down the previous screen's nodes.
@@ -354,12 +457,17 @@ func _go(next: int) -> void:
 	# snapshot inside one run.
 	if next == Screen.TITLE:
 		_finale_started = false
+		# Nothing from a session survives the trip to the title: an open dialogue
+		# would otherwise sit over the menu and swallow its keys and clicks.
+		dialogue = null
+		dialogue_next = Callable()
+		encounter_input_locked = false
 
 	match next:
 		Screen.TITLE:
 			audio.set_ambience("none")
 			if audio.has_method("play_music"):
-				audio.play_music("title")
+				audio.play_music("title", 0.0)
 			_refresh_save_state()
 		Screen.SETTINGS:
 			_rebuild_settings_menu()
@@ -611,7 +719,7 @@ func _enter_construction() -> void:
 
 
 func apply_focus_state() -> void:
-	var locked := dialogue != null or screen != Screen.WORLD
+	var locked := dialogue != null or screen != Screen.WORLD or pause_open
 	if world != null:
 		world.set_input_enabled(not locked)
 	# While a dialogue is open over the duel, the arena is frozen: the player is
@@ -627,6 +735,10 @@ func apply_focus_state() -> void:
 		workshop_screen.input_locked = encounter_input_locked
 	if assembly_screen != null:
 		assembly_screen.input_locked = encounter_input_locked
+	if progression_screen != null:
+		progression_screen.input_locked = encounter_input_locked
+	if archive_screen != null:
+		archive_screen.input_locked = encounter_input_locked
 
 
 # ---------------------------------------------------------------- input
@@ -642,6 +754,23 @@ func _notification(what: int) -> void:
 		Input.action_release("move_left")
 		Input.action_release("move_right")
 		Input.action_release("run")
+		# A sequence must never play on unseen.
+		if (screen == Screen.LAUNCH or screen == Screen.CINEMATIC) and dialogue == null:
+			_open_pause()
+
+
+## True when Esc opens the shared pause menu on the current screen.
+func uses_main_pause() -> bool:
+	return screen in MAIN_PAUSE_SCREENS
+
+
+## Mouse position in screen space (640x360). Read from the overlay layer, which
+## no camera moves, so hit regions match what is drawn at any window size,
+## letterbox or world camera offset.
+func _ui_mouse() -> Vector2:
+	if _overlay != null:
+		return _overlay.get_local_mouse_position()
+	return get_local_mouse_position()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -669,6 +798,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if dialogue != null:
 		_handle_dialogue_key(key_event.keycode)
+		return
+
+	# Esc is the one pause key (normally taken in _input before reaching here).
+	if key_event.keycode == KEY_ESCAPE and uses_main_pause():
+		audio.sfx_back()
+		_open_pause()
 		return
 
 	# Screens that own their whole keyboard take it before the global match, so a
@@ -710,33 +845,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			_journal_key(key_event.keycode)
 
 
-func _menu_item_at(menu, origin: Vector2, width: float, row_h: float, pos: Vector2) -> int:
-	if menu == null:
-		return -1
-	for i in menu.items.size():
-		var r := Rect2(origin.x, origin.y + float(i) * row_h, width, row_h - 2.0)
-		if r.has_point(pos):
-			return i
-	return -1
-
-
 func _handle_mouse_motion(mm: InputEventMouseMotion) -> void:
-	var pos: Vector2 = get_local_mouse_position()
+	var pos: Vector2 = _ui_mouse()
 	if dialogue != null:
 		return
 	match screen:
 		Screen.TITLE:
-			var idx := _menu_item_at(title_menu, Vector2(421, 152), 174.0, 19.0, pos)
-			if idx >= 0 and idx != title_menu.index and bool((title_menu.items[idx] as Dictionary).get("enabled", true)):
-				title_menu.index = idx
+			if title_menu.hover(pos):
 				audio.sfx_select()
 				queue_redraw()
 		Screen.SETTINGS:
-			var idx2 := _menu_item_at(settings_menu, Vector2(124, 100), 392.0, 22.0, pos)
-			if idx2 >= 0 and idx2 != settings_menu.index:
-				settings_menu.index = idx2
+			_settings_mouse_motion(pos)
+		Screen.SAVE_ERROR:
+			if save_error_menu.hover(pos):
 				audio.sfx_select()
-				queue_redraw()
 		Screen.WORLD:
 			if world != null:
 				world.handle_mouse_motion()
@@ -745,9 +867,12 @@ func _handle_mouse_motion(mm: InputEventMouseMotion) -> void:
 
 
 func _handle_mouse_button(mb: InputEventMouseButton) -> void:
+	var pos: Vector2 = _ui_mouse()
+	if screen == Screen.SETTINGS and not mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+		_settings_release()
+		return
 	if not mb.pressed:
 		return
-	var pos: Vector2 = get_local_mouse_position()
 
 	if dialogue != null:
 		if mb.button_index == MOUSE_BUTTON_LEFT:
@@ -756,52 +881,63 @@ func _handle_mouse_button(mb: InputEventMouseButton) -> void:
 			_handle_dialogue_key(KEY_ESCAPE)
 		return
 
+	# Right-click is the mouse twin of Esc on every screen with the shared pause.
+	if mb.button_index == MOUSE_BUTTON_RIGHT and uses_main_pause():
+		audio.sfx_back()
+		_open_pause()
+		return
+
 	match screen:
 		Screen.TITLE:
 			if mb.button_index == MOUSE_BUTTON_LEFT:
-				var idx := _menu_item_at(title_menu, Vector2(421, 152), 174.0, 19.0, pos)
+				var idx: int = title_menu.item_at(pos)
 				if idx >= 0:
 					title_menu.index = idx
 					_title_activate()
 					queue_redraw()
 		Screen.SETTINGS:
-			if mb.button_index == MOUSE_BUTTON_RIGHT:
-				_settings_key(KEY_ESCAPE)
-			elif mb.button_index == MOUSE_BUTTON_LEFT:
-				var idx2 := _menu_item_at(settings_menu, Vector2(124, 100), 392.0, 22.0, pos)
-				if idx2 >= 0:
-					settings_menu.index = idx2
-					_settings_key(KEY_ENTER)
-				elif pos.y >= 336.0:
-					_settings_key(KEY_ESCAPE)
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				_settings_click(pos)
 		Screen.WORLD:
-			if mb.button_index == MOUSE_BUTTON_RIGHT:
-				audio.sfx_back()
-				_open_pause()
-			elif mb.button_index == MOUSE_BUTTON_LEFT and world != null:
-				# Check if player clicked the bottom-center interaction prompt or top-right zone/pause badge
+			if mb.button_index == MOUSE_BUTTON_LEFT and world != null:
+				# The interaction prompt and the zone badge (the pause button) are
+				# HUD buttons; any other click walks.
 				if world.focused_prop() != null and Rect2(220, 290, 200, 28).has_point(pos):
 					world.try_interact()
-				elif Rect2(520, 4, 116, 22).has_point(pos):
+				elif ui.hud_menu_rect.has_point(pos):
 					audio.sfx_back()
 					_open_pause()
 				else:
 					world.handle_mouse_click(mb.double_click)
 		Screen.LAUNCH:
-			if mb.button_index == MOUSE_BUTTON_RIGHT or (mb.button_index == MOUSE_BUTTON_LEFT and pos.y >= 330.0):
-				_launch_key(KEY_ESCAPE)
-			elif mb.button_index == MOUSE_BUTTON_LEFT:
-				_launch_key(KEY_ENTER)
+			if mb.button_index == MOUSE_BUTTON_LEFT and launch_phase == LaunchPhase.SIGNAL and SIGNAL_LOCK_BUTTON.has_point(pos):
+				_signal_lock()
 		Screen.MEMORY:
-			if mb.button_index == MOUSE_BUTTON_RIGHT or (mb.button_index == MOUSE_BUTTON_LEFT and pos.y >= 336.0 and pos.x > 330.0):
-				_memory_key(KEY_ESCAPE)
-			elif mb.button_index == MOUSE_BUTTON_LEFT:
-				_memory_key(KEY_ENTER)
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				if MEMORY_SKIP.has_point(pos):
+					_skip_memory()
+				else:
+					_memory_key(KEY_ENTER)
 		Screen.CHECKPOINT:
-			if mb.button_index == MOUSE_BUTTON_LEFT or mb.button_index == MOUSE_BUTTON_RIGHT:
-				_checkpoint_key(KEY_ENTER)
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				if CHECKPOINT_CONTINUE.has_point(pos):
+					_checkpoint_key(KEY_ENTER)
+				elif CHECKPOINT_MENU.has_point(pos):
+					audio.sfx_back()
+					_open_pause()
+		Screen.JOURNAL:
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				if ui.journal_back_rect.has_point(pos):
+					_journal_key(KEY_ESCAPE)
+				else:
+					var row: int = ui.journal_row_at(pos)
+					if row >= 0 and row != journal_index:
+						journal_index = row
+						audio.sfx_select()
+			elif mb.button_index == MOUSE_BUTTON_RIGHT:
+				_journal_key(KEY_ESCAPE)
 		Screen.SAVE_ERROR:
-			if mb.button_index == MOUSE_BUTTON_LEFT or mb.button_index == MOUSE_BUTTON_RIGHT:
+			if mb.button_index == MOUSE_BUTTON_LEFT and save_error_menu.click(pos) != "":
 				_save_error_key(KEY_ENTER)
 
 
@@ -825,7 +961,10 @@ func _title_key(key: int) -> void:
 func _title_activate() -> void:
 	if not title_menu.is_current_enabled():
 		audio.sfx_denied()
-		ui.notify("No valid save to continue.", "warn")
+		if title_menu.current_id() == "eco_arena":
+			ui.notify("Practice unlocks after the Scrap King falls in the campaign.", "warn", 3.0)
+		else:
+			ui.notify("No valid save to continue.", "warn")
 		return
 	match title_menu.current_id():
 		"new":
@@ -886,8 +1025,10 @@ func _resume_from_campaign() -> void:
 		SFCampaign.STAGE_CONSTRUCTION:
 			_go(Screen.CONSTRUCTION)
 		SFCampaign.STAGE_LAUNCH, SFCampaign.STAGE_FLIGHT:
-			campaign.advance_to(SFCampaign.STAGE_CRASH_INTRO)
-			_finish_launch_state()
+			# The first launch is never skipped: a save made mid-sequence (or a
+			# return to the menu from its pause) replays it from the pad.
+			campaign.advance_to(SFCampaign.STAGE_LAUNCH)
+			_go(Screen.LAUNCH)
 		SFCampaign.STAGE_CRASH_INTRO, SFCampaign.STAGE_CRASH_SITE:
 			_go(Screen.WORLD)
 		SFCampaign.STAGE_MEMORY:
@@ -978,44 +1119,158 @@ func _settings_key(key: int) -> void:
 		KEY_UP, KEY_W:
 			settings_menu.move_enabled(-1)
 			audio.sfx_select()
-			queue_redraw()
 		KEY_DOWN, KEY_S:
 			settings_menu.move_enabled(1)
 			audio.sfx_select()
-			queue_redraw()
 		KEY_LEFT, KEY_A:
 			_settings_adjust(-1)
 		KEY_RIGHT, KEY_D:
 			_settings_adjust(1)
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if settings_menu.current_id() == "back":
-				audio.sfx_back()
-				_go(previous_screen if previous_screen != Screen.SETTINGS else Screen.TITLE)
+				_settings_back()
 			else:
 				_settings_adjust(1)
 		KEY_ESCAPE:
-			audio.sfx_back()
-			_go(previous_screen if previous_screen != Screen.SETTINGS else Screen.TITLE)
+			_settings_back()
+	queue_redraw()
+	refresh_overlay()
+
+
+## Leaves the settings panel for its parent: the pause menu when it was opened
+## there, otherwise the title. Values are already applied and saved.
+func _settings_back() -> void:
+	audio.sfx_back()
+	_slider_drag = ""
+	_save_settings()
+	if pause_settings_open:
+		pause_settings_open = false
+		refresh_overlay()
+		return
+	_go(Screen.TITLE)
 
 
 func _settings_adjust(direction: int) -> void:
-	match settings_menu.current_id():
-		"ambience":
-			setting_ambience = not setting_ambience
-			audio.set_muted(not setting_ambience)
-			audio.sfx_select()
+	var id := String(settings_menu.current_id())
+	if id in VOLUME_IDS:
+		_set_volume(id, float(settings.get(id, 1.0)) + 0.1 * float(direction))
+		audio.sfx_select()
+		_save_settings()
+		return
+	match id:
 		"text_speed":
 			if direction > 0:
 				setting_text_speed = 90.0 if setting_text_speed >= 90.0 else (90.0 if setting_text_speed > 45.0 else 52.0)
 			else:
 				setting_text_speed = 30.0 if setting_text_speed <= 45.0 else 52.0
+			if dialogue != null:
+				dialogue.chars_per_second = setting_text_speed
 			audio.sfx_select()
 		"reduced_motion":
 			setting_reduced_motion = not setting_reduced_motion
 			apply_reduced_motion()
 			audio.sfx_select()
+		_:
+			return
 	_rebuild_settings_menu()
+	_save_settings()
 	queue_redraw()
+	refresh_overlay()
+
+
+func _set_volume(id: String, value: float) -> void:
+	settings[id] = snappedf(clampf(value, 0.0, 1.0), 0.05)
+	_apply_volumes()
+	queue_redraw()
+	refresh_overlay()
+
+
+## The slider track inside a settings row.
+func _slider_rect(row: Rect2) -> Rect2:
+	return Rect2(row.position.x + 150.0, row.position.y + 6.0, row.size.x - 210.0, 8.0)
+
+
+func _slider_value_at(id: String, pos: Vector2) -> void:
+	var i: int = settings_menu.index_of(id)
+	if i < 0 or i >= settings_menu.rects.size():
+		return
+	var bar := _slider_rect(settings_menu.rects[i] as Rect2)
+	_set_volume(id, (pos.x - bar.position.x) / maxf(1.0, bar.size.x))
+
+
+func _settings_mouse_motion(pos: Vector2) -> void:
+	if _slider_drag != "":
+		_slider_value_at(_slider_drag, pos)
+		return
+	if settings_menu.hover(pos):
+		audio.sfx_select()
+		queue_redraw()
+		refresh_overlay()
+
+
+## A click selects the row and acts once: a slider jumps to the pointer and
+## follows it while the button is held, a toggle changes, BACK goes back.
+func _settings_click(pos: Vector2) -> void:
+	var i: int = settings_menu.item_at(pos)
+	if i < 0:
+		return
+	settings_menu.index = i
+	var id := String(settings_menu.current_id())
+	if id in VOLUME_IDS:
+		_slider_drag = id
+		_slider_value_at(id, pos)
+		audio.sfx_select()
+	elif id == "back":
+		_settings_back()
+	else:
+		_settings_adjust(1)
+	queue_redraw()
+	refresh_overlay()
+
+
+func _settings_release() -> void:
+	if _slider_drag != "":
+		_slider_drag = ""
+		_save_settings()
+
+
+## Draws the settings panel onto `ci` (the controller on the title screen, the
+## overlay inside the pause menu), and records the row rects for the mouse.
+func draw_settings_panel(ci: CanvasItem) -> void:
+	var panel := SETTINGS_PANEL
+	ui.modal(ci, panel)
+	skin.text(ci, panel.position + Vector2(14, 12), "SETTINGS", SFPalette.CYAN)
+	var origin := panel.position + Vector2(20, 30)
+	var width := panel.size.x - 40.0
+	var rects: Array = []
+	for i in settings_menu.items.size():
+		var item: Dictionary = settings_menu.items[i] as Dictionary
+		var r := Rect2(origin.x, origin.y + float(i) * SETTINGS_ROW_H, width, SETTINGS_ROW_H - 2.0)
+		var focused: bool = i == settings_menu.index
+		skin.button(ci, r, "", focused, true)
+		var id := String(item.get("id", ""))
+		if id == "back":
+			skin.text_c(ci, r.position.x + r.size.x * 0.5, r.position.y + 6, "BACK", SFPalette.PAPER)
+		else:
+			skin.text(ci, r.position + Vector2(10, 6), String(item.get("label", "")), SFPalette.PAPER)
+		if bool(item.get("slider", false)):
+			var v: float = float(settings.get(id, 1.0))
+			var bar := _slider_rect(r)
+			ci.draw_rect(bar, SFPalette.INK, true)
+			ci.draw_rect(Rect2(bar.position, Vector2(round(bar.size.x * v), bar.size.y)), SFPalette.CYAN if focused else SFPalette.CYAN_DIM, true)
+			ci.draw_rect(bar, SFPalette.STEEL_DARK, false, 1.0)
+			ci.draw_rect(Rect2(bar.position.x + round(bar.size.x * v) - 1, bar.position.y - 2, 3, bar.size.y + 4), SFPalette.PAPER, true)
+			skin.text_r(ci, r.end.x - 10, r.position.y + 6, "%d%%" % int(round(v * 100.0)), SFPalette.PAPER_DIM)
+		elif String(item.get("detail", "")) != "":
+			skin.text_r(ci, r.end.x - 10, r.position.y + 6, String(item.get("detail", "")), SFPalette.CYAN_DIM if not focused else SFPalette.CYAN)
+		rects.append(r)
+	settings_menu.rects = rects
+	var y := origin.y + float(settings_menu.items.size()) * SETTINGS_ROW_H + 6.0
+	skin.wrap(ci, Vector2(origin.x, y), width,
+		"Saved on this computer. Nothing here changes the campaign, the report or the score. Reduced motion removes screen shake and flashes.",
+		SFPalette.PAPER_DIM, 1, 3)
+	skin.text_c(ci, panel.position.x + panel.size.x * 0.5, panel.end.y - 14,
+		"UP/DOWN SELECT   LEFT/RIGHT OR DRAG ADJUST   ESC BACK", SFPalette.ASH_LIGHT)
 
 
 # ---------------------------------------------------------------- world
@@ -1035,18 +1290,64 @@ func _on_world_focus_changed(label: String) -> void:
 
 
 func _open_pause() -> void:
+	if pause_open or not uses_main_pause():
+		return
 	_rebuild_pause_menu()
 	pause_menu.index = 0
 	pause_open = true
+	pause_settings_open = false
 	if world != null:
 		world.set_input_enabled(false)
+		world.release_input()
+	for action in ["move_up", "move_down", "move_left", "move_right", "run"]:
+		Input.action_release(action)
+	# The screen underneath is frozen outright: no process, no input. Its timers,
+	# spawns, cinematic clock and animations all stop where they are.
+	_pause_node = _paused_screen_node()
+	if _pause_node != null:
+		_pause_node.process_mode = Node.PROCESS_MODE_DISABLED
+	if cinematic_screen != null:
+		cinematic_screen.paused = true
+	audio.set_paused(true)
 	refresh_overlay()
 
 
+func _paused_screen_node() -> Node:
+	match screen:
+		Screen.WORLD:
+			return _world_scene
+		Screen.ARCHIVE:
+			return archive_screen
+		Screen.PROGRESSION:
+			return progression_screen
+		Screen.FINAL_ASSEMBLY:
+			return assembly_screen
+		Screen.CINEMATIC:
+			return cinematic_screen
+		Screen.REPORT:
+			return report_screen
+		Screen.CREDITS:
+			return credits_screen
+	return null
+
+
+func _resume_paused_node() -> void:
+	if _pause_node != null and is_instance_valid(_pause_node):
+		_pause_node.process_mode = Node.PROCESS_MODE_INHERIT
+	_pause_node = null
+	if cinematic_screen != null:
+		cinematic_screen.paused = false
+
+
 func _close_pause() -> void:
+	if not pause_open:
+		return
 	pause_open = false
-	if world != null:
-		world.set_input_enabled(dialogue == null)
+	pause_settings_open = false
+	_slider_drag = ""
+	_resume_paused_node()
+	apply_focus_state()
+	audio.set_paused(false)
 	refresh_overlay()
 
 
@@ -1431,7 +1732,9 @@ func _begin_launch() -> void:
 	signal_locks = 0
 	signal_attempts = 0
 	signal_timer = 0.0
-	signal_marker = 0.0
+	signal_marker = 0.5
+	signal_phase = 0.0
+	signal_manual = 0.0
 	signal_target = randf_range(0.25, 0.75)
 	crash_shake = 0.0
 	audio.set_ambience("none")
@@ -1440,17 +1743,10 @@ func _begin_launch() -> void:
 
 
 func _launch_key(key: int) -> void:
-	# The launch sequence cannot be skipped, in any build: Esc does nothing here.
-	# Only the signal minigame takes input. (Testers jump past it with the
-	# debug phase hotkeys instead; see debug_jump.gd.)
+	# The launch sequence cannot be skipped, in any build. Esc pauses (handled
+	# before this); only the signal investigation takes keys: A/D or the arrows
+	# tune the reticle (read in _process_launch), E / Enter / Space lock it.
 	match key:
-		KEY_ESCAPE:
-			# The launch sequence cannot be skipped, in headless runs as well as
-			# windowed ones: the sequence always plays to the crash on its own.
-			# (Automated tests advance it by calling _process_launch() directly,
-			# so no test-only branch is needed here.)
-			pass
-		# Only the signal minigame takes input.
 		KEY_E, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
 			if launch_phase == LaunchPhase.SIGNAL:
 				_signal_lock()
@@ -1511,19 +1807,34 @@ func _process_launch(delta: float) -> void:
 			if (launch_timer <= delta or step != int((launch_timer - delta) / 0.85)) and step < 3:
 				if audio.has_method("sfx_countdown"):
 					audio.sfx_countdown()
-			if launch_timer > 2.6:
+			if launch_timer > COUNTDOWN_SECONDS:
 				launch_phase = LaunchPhase.ASCENT
 				launch_timer = 0.0
+				# Ignition: the roar starts with the flame at the bottom nozzles.
 				audio.sfx_launch()
 		LaunchPhase.ASCENT:
-			if launch_timer > 3.4:
+			# Liftoff gets its own push as VELA leaves the pad.
+			if launch_timer - delta < IGNITION_END and launch_timer >= IGNITION_END:
+				audio.sfx_launch()
+			if launch_timer > ASCENT_SECONDS:
 				launch_phase = LaunchPhase.SIGNAL
 				launch_timer = 0.0
 				if audio.has_method("sfx_signal_sweep"):
 					audio.sfx_signal_sweep()
 		LaunchPhase.SIGNAL:
 			signal_timer += delta
-			signal_marker = 0.5 + 0.42 * sin(signal_timer * 2.1)
+			# The reticle sweeps on its own; A/D or the arrows steer it, and the
+			# sweep resumes from wherever the player left it.
+			var steer: float = Input.get_axis("move_left", "move_right")
+			if absf(steer) > 0.1:
+				signal_marker = clampf(signal_marker + steer * 0.55 * delta, 0.0, 1.0)
+				signal_manual = 1.2
+				signal_phase = asin(clampf((signal_marker - 0.5) / 0.42, -1.0, 1.0))
+			elif signal_manual > 0.0:
+				signal_manual = maxf(0.0, signal_manual - delta)
+			else:
+				signal_phase += delta * 2.1
+				signal_marker = 0.5 + 0.42 * sin(signal_phase)
 			# The sequence always resolves. Three locks are the guided path; a
 			# player who never presses the key still reaches the rift.
 			if signal_timer > 20.0:
@@ -1565,11 +1876,12 @@ func _play_memory(id: String, on_done: Callable) -> void:
 	memory_chars = 0.0
 	memory_next = on_done
 	audio.set_ambience("none")
-	audio.sfx_memory()
 	campaign.view_memory(id)
 	Events.memory_viewed.emit(id)
 	_save_quietly()
 	_go(Screen.MEMORY)
+	# After the screen change, which cuts gameplay sounds from the last screen.
+	audio.sfx_memory()
 
 
 func _memory_lines() -> Array:
@@ -1589,8 +1901,13 @@ func _memory_key(key: int) -> void:
 				audio.sfx_blip()
 				if memory_index >= _memory_lines().size():
 					_finish_memory_playback()
-		KEY_ESCAPE:
-			_finish_memory_playback()
+
+
+## The explicit skip (the SKIP button or SKIP MEMORY in the pause menu). It runs
+## the same completion callback as reading to the end.
+func _skip_memory() -> void:
+	audio.sfx_back()
+	_finish_memory_playback()
 
 
 ## Leaves the memory screen and runs its completion callback. Used by both the
@@ -1619,7 +1936,8 @@ func _finish_memory() -> void:
 
 func _checkpoint_key(key: int) -> void:
 	match key:
-		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE:
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+			# Esc pauses here (handled earlier); it never starts the next chapter.
 			audio.sfx_confirm()
 			# Two different summaries share this screen. After Phase 2 the
 			# summary is the stopping point, so it returns to the title with the
@@ -1924,6 +2242,12 @@ func _on_coast_victory_done() -> void:
 ## Main-menu practice. The campaign object and the save file are never read
 ## or written on this path: the arena keeps all its state in its own model.
 func _start_eco_practice() -> void:
+	# The guard lives here, not only on the menu row, so no input path can open
+	# practice before the campaign has earned it.
+	if not practice_unlocked:
+		audio.sfx_denied()
+		ui.notify("Practice unlocks after the Scrap King falls in the campaign.", "warn", 3.0)
+		return
 	audio.sfx_confirm()
 	_open_eco_arena("practice", false)
 
@@ -1959,6 +2283,7 @@ func _enter_eco_arena() -> void:
 func _on_eco_boss_defeated() -> void:
 	if campaign.defeat_boss(SFCampaign.FLAG_SCRAP_KING_DEFEATED):
 		_save_quietly()
+	_unlock_practice()
 
 
 func _on_eco_reward_collected() -> void:
@@ -2410,6 +2735,7 @@ func _enter_cinematic() -> void:
 	cinematic_screen.setup(skin, ui, campaign, finale_data, reconstruction_data)
 	cinematic_screen.reduced_motion = setting_reduced_motion
 	cinematic_screen.cinematic_finished.connect(_on_cinematic_finished)
+	cinematic_screen.pause_requested.connect(_on_screen_pause_requested)
 	add_child(cinematic_screen)
 	audio.set_ambience("none")
 	if audio.has_method("play_music"):
@@ -2420,6 +2746,12 @@ func _enter_cinematic() -> void:
 ## The cinematic ended, naturally or by skip. Both paths land here exactly once,
 ## and every persistent outcome is applied here rather than in the screen, so
 ## watching and skipping cannot diverge.
+## A screen's own pause button (the cinematic badge) opens the shared pause.
+func _on_screen_pause_requested() -> void:
+	audio.sfx_back()
+	_open_pause()
+
+
 func _on_cinematic_finished(skipped: bool) -> void:
 	campaign.set_cinematic_skipped(skipped)
 	campaign.complete_return()
@@ -2455,7 +2787,7 @@ func _enter_credits() -> void:
 	add_child(credits_screen)
 	audio.set_ambience("none")
 	if audio.has_method("play_music"):
-		audio.play_music("title")
+		audio.play_music("outro")
 	queue_redraw()
 
 
@@ -2468,23 +2800,17 @@ func _on_credits_closed() -> void:
 	_go(Screen.TITLE)
 
 
-# ---------------------------------------------------------------- QA stage skip
+# ---------------------------------------------------------------- milestone driver
+#
+# The former I + O + P stage skip is gone: no key, chord or launch flag reaches
+# this code. `_apply_qa_skip()` survives only as the headless test driver that
+# walks a campaign milestone by milestone through the real campaign methods
+# (tests/star_fall/test_flow.gd, test_phase4.gd and capture.gd call it). It has
+# no input binding in any build.
 
 ## Polled every frame. Only the chord triggers anything; individual I, O or P
 ## presses fall through to whatever screen owns input, so normal controls are
 ## unaffected. The controller applies exactly one milestone per press.
-func _poll_qa_skip(delta: float) -> void:
-	if not qa_enabled or qa == null:
-		return
-	# Practice never touches the campaign, not even through the QA skip.
-	if screen == Screen.ECO_ARENA and eco_mode != "campaign":
-		return
-	var fired: bool = qa.poll(Input.is_key_pressed(KEY_I), Input.is_key_pressed(KEY_O), Input.is_key_pressed(KEY_P), delta)
-	if not fired:
-		return
-	_apply_qa_skip()
-
-
 ## Advances one campaign milestone, using the same campaign methods the normal
 ## flow uses. Returns true when something changed. Public so the tests can drive
 ## it directly without simulating key state.
@@ -2733,6 +3059,7 @@ func _draw_ready_summary() -> void:
 	draw_rect(Rect2(0, VH - 30, VW, 30), Color(0.03, 0.05, 0.05, 0.9), true)
 	skin.text_c(self, VW * 0.5, VH - 23, "ENTER  FINAL ASSEMBLY", SFPalette.PAPER)
 	skin.text_c(self, VW * 0.5, VH - 12, "PHASE 4: COMPLETE ASSEMBLY AND LAUNCH", SFPalette.ASH_LIGHT)
+	_draw_checkpoint_buttons()
 
 
 ## The healthy Dawn forest: layered trunks, a full canopy, birds, a boardwalk.
@@ -2800,10 +3127,10 @@ func _manual_save() -> void:
 func _process(delta: float) -> void:
 	time += delta
 	blink += delta
-	campaign.play_seconds += delta
+	if not pause_open:
+		campaign.play_seconds += delta
 	skin.tick(delta)
 	ui.tick(delta)
-	_poll_qa_skip(delta)
 	if transition_alpha > 0.0:
 		if DisplayServer.get_name() == "headless":
 			transition_alpha = 0.0
@@ -2814,9 +3141,9 @@ func _process(delta: float) -> void:
 			_transition_node.queue_redraw()
 	if dialogue != null:
 		dialogue.tick(delta)
-	if screen == Screen.LAUNCH:
+	if screen == Screen.LAUNCH and not pause_open:
 		_process_launch(delta)
-	if screen == Screen.MEMORY:
+	if screen == Screen.MEMORY and not pause_open:
 		var lines: Array = _memory_lines()
 		if not lines.is_empty():
 			var line := String(lines[mini(memory_index, lines.size() - 1)])
@@ -2831,7 +3158,7 @@ func _process(delta: float) -> void:
 
 ## True when the pause menu is showing. The overlay node asks this.
 func is_pause_open() -> bool:
-	return pause_open and screen == Screen.WORLD and dialogue == null
+	return pause_open and dialogue == null
 
 
 ## Requests a redraw of the in-world overlay layer, if it exists.
@@ -2909,6 +3236,9 @@ func _draw_title() -> void:
 	draw_rect(Rect2(column.position, Vector2(column.size.x, 1)), SFPalette.CYAN, true)
 	ui.menu_list(self, title_menu, column.position + Vector2(13, 12), column.size.x - 26, 19.0, SFPalette.CYAN)
 
+	if not practice_unlocked:
+		skin.text_c(self, column.position.x + column.size.x * 0.5, column.end.y + 8.0, "ECO ARENA PRACTICE UNLOCKS", SFPalette.ASH_LIGHT)
+		skin.text_c(self, column.position.x + column.size.x * 0.5, column.end.y + 18.0, "AFTER THE SCRAP KING FALLS", SFPalette.ASH_LIGHT)
 	var note_y: float = column.end.y - 14.0
 	if not save_available:
 		skin.text_c(self, column.position.x + column.size.x * 0.5, note_y, "NO SAVE YET", SFPalette.ASH_LIGHT)
@@ -2918,7 +3248,7 @@ func _draw_title() -> void:
 	# Footer on a solid strip, never over the planet.
 	draw_rect(Rect2(0, VH - 26, VW, 26), Color(0.03, 0.06, 0.08, 0.92), true)
 	draw_rect(Rect2(0, VH - 26, VW, 1), SFPalette.STEEL_DARK, true)
-	skin.text_c(self, VW * 0.5, VH - 20, "UP/DOWN SELECT     ENTER CONFIRM     ESC QUIT", SFPalette.PAPER_DIM)
+	skin.text_c(self, VW * 0.5, VH - 20, "CLICK OR UP/DOWN + ENTER     ESC QUIT", SFPalette.PAPER_DIM)
 	skin.text_c(self, VW * 0.5, VH - 10, "A FICTIONAL STORY. TIME TRAVEL IS NOT REAL.", SFPalette.ASH_LIGHT)
 	skin.vignette(self)
 
@@ -2928,14 +3258,7 @@ func _draw_title() -> void:
 func _draw_settings() -> void:
 	draw_rect(Rect2(0, 0, VW, VH), SFPalette.INK, true)
 	ui.header(self, "SETTINGS", "Local preferences. Nothing here affects the campaign.")
-	var panel := Rect2(100, 60, 440, 200)
-	ui.modal(self, panel)
-	skin.text(self, panel.position + Vector2(14, 14), "SETTINGS", SFPalette.CYAN)
-	ui.menu_list(self, settings_menu, panel.position + Vector2(24, 40), panel.size.x - 48, 22.0)
-	skin.wrap(self, panel.position + Vector2(24, 130), panel.size.x - 48,
-		"Ambient sound toggles the synthesised wind and machinery. Text speed changes how quickly dialogue appears. Reduced motion removes screen shake and screen flashes; it never changes progress, the report or the score.",
-		SFPalette.PAPER_DIM, 1, 4)
-	ui.footer(self, ["UP/DOWN:SELECT", "LEFT/RIGHT:CHANGE", "ESC:BACK"])
+	draw_settings_panel(self)
 
 
 # ---------------------------------------------------------------- launch draw
@@ -2957,69 +3280,162 @@ func _draw_launch() -> void:
 
 
 func _draw_countdown() -> void:
-	_draw_day_sky()
-	var pad_c := Vector2(VW * 0.5, 300)
-	skin.contact_shadow(self, pad_c, 90.0, 0.35)
-	draw_rect(Rect2(pad_c.x - 46, pad_c.y - 8, 92, 12), SFPalette.CONCRETE_DARK, true)
-	# The assembled ship, nose up.
-	_draw_ship_silhouette(pad_c + Vector2(0, -4))
+	# A. Ready on the pad: engines off, the gantry beside it, a launch-ready cue.
+	_draw_launch_sky(0.0)
+	_draw_launch_pad(0.0, 0.0, 0.0)
+	_draw_ship_silhouette(LAUNCH_PAD)
 	var n: int = 3 - int(launch_timer / 0.85)
 	if n < 0:
 		n = 0
-	skin.text_c(self, VW * 0.5, 92, "LAUNCH CLEARANCE GRANTED", SFPalette.PAPER)
-	skin.text_c(self, VW * 0.5, 130, "T-%d" % n if n > 0 else "IGNITION", SFPalette.GOLD, 3)
-	skin.text_c(self, VW * 0.5, 190, "VELA / SIGNAL INVESTIGATION", SFPalette.PAPER_DIM)
+	_launch_caption_box(34, 74)
+	skin.text_c(self, VW * 0.5, 40, "VELA READY ON PAD 1 - LAUNCH CLEARANCE GRANTED", SFPalette.PAPER)
+	skin.text_c(self, VW * 0.5, 54, "T-%d" % n if n > 0 else "IGNITION", SFPalette.GOLD, 3)
+	skin.text_c(self, VW * 0.5, 96, "ENGINES OFF   PREFLIGHT PASSED   SIGNAL INVESTIGATION", SFPalette.PAPER_DIM)
 
 
 func _draw_ascent() -> void:
-	draw_rect(Rect2(0, 0, VW, VH), SFPalette.INK, true)
-	# Sky darkens as altitude increases.
-	var t: float = clampf(launch_timer / 3.4, 0.0, 1.0)
-	var sky_top := SFPalette.SKY_DEEP.lerp(SFPalette.INK, t)
-	var sky_low := SFPalette.SKY.lerp(SFPalette.SKY_DEEP.darkened(0.35), t)
-	draw_rect(Rect2(0, 0, VW, 240), sky_top, true)
-	draw_rect(Rect2(0, 240, VW, 120), sky_low, true)
-	# Thin the horizon line between the two bands.
-	draw_rect(Rect2(0, 239, VW, 2), sky_low.lerp(sky_top, 0.5), true)
-	# Stars fade in.
-	for i in 60:
-		var a := t * 0.9
-		var x := float((i * 83) % VW)
-		var y := float((i * 53) % 230)
-		draw_rect(Rect2(x, y, 1, 1), Color(1, 1, 1, a), true)
-	# Ground falls away, and the coastline recedes with it.
-	var ground_y: float = 250.0 + t * 210.0
-	if ground_y < VH:
-		draw_rect(Rect2(0, ground_y, VW, VH - ground_y), SFPalette.GRASS_DARK, true)
-		draw_rect(Rect2(0, ground_y, VW, 2), SFPalette.GRASS, true)
-		# A shrinking curve of coastline reads as altitude.
-		var cw: float = 900.0 * (1.0 - t * 0.55)
-		var ch: float = 50.0 * (1.0 - t * 0.4)
-		for i in 30:
-			var ang: float = PI + (float(i) / 29.0) * PI
-			var cp := Vector2(VW * 0.5 + cos(ang) * cw * 0.5, ground_y + sin(ang) * ch)
-			draw_rect(Rect2(round(cp.x), round(cp.y), 2, 2), SFPalette.LEAF, true)
-	var ship_y: float = 260.0 - t * 110.0
-	_draw_ship_silhouette(Vector2(VW * 0.5, ship_y))
-	# Exhaust, anchored to the engine bells at the base of the hull.
-	var bell_y: float = ship_y - 4.0
-	for i in 9:
-		var ey: float = bell_y + float(i) * 6.0
-		var w: float = 7.0 - float(i) * 0.55
-		var a: float = 0.85 - float(i) * 0.085
-		draw_rect(Rect2(round(VW * 0.5 - w * 0.5), round(ey), round(w), 5), Color(1.0, 0.72, 0.32, a), true)
-		draw_rect(Rect2(round(VW * 0.5 - w * 0.22), round(ey), maxf(1.0, round(w * 0.44)), 4), Color(1.0, 0.92, 0.7, a), true)
-	# A faint shockwave ring just above the pad line at ignition.
-	if t < 0.35:
-		var ring_r: float = 20.0 + t * 200.0
-		var ring_a: float = (0.35 - t) / 0.35 * 0.5
-		for i in 40:
-			var ang2: float = float(i) / 40.0 * TAU
-			draw_rect(Rect2(round(VW * 0.5 + cos(ang2) * ring_r), round(bell_y + 14.0 + sin(ang2) * ring_r * 0.28), 2, 1), Color(1.0, 0.9, 0.75, ring_a), true)
+	# B. Ignition, C. liftoff, D. atmosphere, E. space: one continuous shot.
+	# VELA keeps its built design and stays upright, nose up, flame below.
+	var t: float = launch_timer
+	var thrust: float = clampf(t / IGNITION_END, 0.0, 1.0)
+	var rise: float = 0.0
+	if t > IGNITION_END:
+		rise = pow(t - IGNITION_END, 2.0) * 60.0
+	var climb: float = minf(rise, LAUNCH_FOLLOW)
+	var cam: float = maxf(0.0, rise - LAUNCH_FOLLOW)
+	var altitude: float = clampf((t - IGNITION_END) / (ATMOSPHERE_END - IGNITION_END), 0.0, 1.0)
+	var space: float = clampf((t - ATMOSPHERE_END) / (ASCENT_SECONDS - ATMOSPHERE_END), 0.0, 1.0)
+
+	_draw_launch_sky(altitude)
+	# Clouds slide past once the camera follows the climb.
+	for layer in 3:
+		var base_y: float = -60.0 - float(layer) * 150.0 + cam * (0.9 + float(layer) * 0.15)
+		if base_y < -40.0 or base_y > VH + 20.0:
+			continue
+		for i in 7:
+			var cx: float = fmod(float(i) * 113.0 + float(layer) * 47.0, float(VW + 80)) - 40.0
+			var cw: float = 48.0 + float((i * 37 + layer * 11) % 40)
+			var a: float = 0.55 * (1.0 - space)
+			draw_rect(Rect2(round(cx), round(base_y + float((i * 23) % 30)), cw, 7), Color(0.92, 0.95, 0.97, a), true)
+			draw_rect(Rect2(round(cx + 8.0), round(base_y + float((i * 23) % 30) - 4.0), cw - 16.0, 5), Color(1.0, 1.0, 1.0, a * 0.8), true)
+	# E. Earth below: the curved limb rises into view as the sky goes black.
+	if space > 0.0:
+		var limb_top: float = VH + 20.0 - space * 190.0
+		var radius: float = 900.0
+		var y: float = limb_top
+		while y < VH:
+			var dy: float = y - (limb_top + radius)
+			var half: float = sqrt(maxf(0.0, radius * radius - dy * dy))
+			var depth: float = (y - limb_top) / 60.0
+			var col: Color = SFPalette.SKY.lerp(SFPalette.SKY_DEEP, clampf(depth, 0.0, 1.0))
+			draw_rect(Rect2(round(VW * 0.5 - half), y, round(half * 2.0), 2), col, true)
+			y += 2.0
+		# Atmosphere glow along the limb.
+		for i in 64:
+			var ang: float = PI + float(i) / 63.0 * PI
+			var gx: float = VW * 0.5 + cos(ang) * radius
+			var gy: float = limb_top + radius + sin(ang) * radius
+			if gy < VH and gx > -4.0 and gx < VW + 4.0:
+				draw_rect(Rect2(round(gx), round(gy) - 1, 12, 2), Color(SFPalette.CYAN.r, SFPalette.CYAN.g, SFPalette.CYAN.b, 0.55), true)
+	# The pad and its smoke fall away below once the camera follows.
+	if cam < VH:
+		_draw_launch_pad(cam, thrust, t)
+	# Restrained vibration around ignition and liftoff only.
+	var shake_x: float = 0.0
+	if not setting_reduced_motion and t > 0.3 and t < LIFTOFF_END:
+		shake_x = round(sin(time * 47.0) * (1.0 if t < IGNITION_END else 0.6))
+	var ship_ground := Vector2(LAUNCH_PAD.x + shake_x, LAUNCH_PAD.y - climb)
+	SFVela._draw_flame(self, ship_ground + Vector2(0, -10), 1, 0.35 + 0.65 * thrust, time)
+	_draw_ship_silhouette(ship_ground, rise < 1.0)
+
+	# Captions: none while the engines build up on the pad, the first line from
+	# liftoff, the second (the signal) once VELA reaches orbit.
 	var lines: Array = campaign.content.dialogue_lines("launch")
-	var idx: int = mini(int(t * lines.size()), maxi(0, lines.size() - 1))
-	if not lines.is_empty():
-		skin.text_c(self, VW * 0.5, VH - 34, String(lines[idx]), SFPalette.PAPER)
+	var idx: int = -1
+	if t >= IGNITION_END:
+		idx = 0 if t < ATMOSPHERE_END else 1
+	idx = mini(idx, lines.size() - 1)
+	var stage_label := "IGNITION"
+	if t >= ATMOSPHERE_END:
+		stage_label = "ORBIT - EARTH BELOW"
+	elif t >= LIFTOFF_END:
+		stage_label = "ATMOSPHERIC ASCENT"
+	elif t >= IGNITION_END:
+		stage_label = "LIFTOFF"
+	_launch_caption_box(VH - 46, 36)
+	skin.text_c(self, VW * 0.5, VH - 42, stage_label if t >= IGNITION_END else "IGNITION - ENGINES LIT", SFPalette.GOLD)
+	if idx >= 0:
+		skin.text_c(self, VW * 0.5, VH - 28, String(lines[idx]), SFPalette.PAPER)
+
+
+func _launch_caption_box(y: float, h: float) -> void:
+	draw_rect(Rect2(60, y, VW - 120, h), Color(0.02, 0.04, 0.05, 0.72), true)
+	draw_rect(Rect2(60, y, VW - 120, 1), SFPalette.CYAN_DARK, true)
+
+
+## Day sky that darkens toward space as `altitude` goes 0 -> 1.
+func _draw_launch_sky(altitude: float) -> void:
+	var bands := 18
+	for b in bands:
+		var f: float = float(b) / float(bands - 1)
+		var day: Color = SFPalette.SKY_DEEP.lerp(SFPalette.SKY, f)
+		var night: Color = SFPalette.INK.lerp(SFPalette.SKY_DEEP.darkened(0.55), f * 0.6)
+		draw_rect(Rect2(0, float(b) * 20.0, VW, 20), day.lerp(night, altitude), true)
+	if altitude > 0.25:
+		var a: float = (altitude - 0.25) / 0.75
+		for i in 70:
+			draw_rect(Rect2(float((i * 83) % VW), float((i * 53) % 300), 1, 1), Color(1, 1, 1, a * (0.4 + 0.5 * float(i % 3) / 2.0)), true)
+
+
+## The launch site: grass, a concrete deck over a flame trench, the service
+## gantry with its access arm, and floodlight masts for scale. `cam` moves the
+## whole site down as the camera follows VELA; `thrust` and `t` drive the
+## exhaust smoke at the pad (none while the engines are off).
+func _draw_launch_pad(cam: float, thrust: float, t: float) -> void:
+	var g: float = LAUNCH_PAD.y + cam
+	draw_rect(Rect2(0, g - 40, VW, VH - g + 40 + cam), SFPalette.GRASS_DARK, true)
+	draw_rect(Rect2(0, g - 40, VW, 3), SFPalette.GRASS, true)
+	# Distant tree line and a hangar for scale.
+	for i in 16:
+		var tx: float = float(i) * 42.0 + float((i * 17) % 13)
+		draw_rect(Rect2(tx, g - 52 - float((i * 7) % 6), 26, 14), SFPalette.LEAF_DARK, true)
+	draw_rect(Rect2(470, g - 78, 120, 40), SFPalette.CONCRETE_DARK, true)
+	draw_rect(Rect2(470, g - 78, 120, 3), SFPalette.STEEL_MID, true)
+	draw_rect(Rect2(500, g - 62, 60, 24), SFPalette.STEEL_DARK, true)
+	# Deck and trench.
+	draw_rect(Rect2(LAUNCH_PAD.x - 70, g - 2, 140, 14), SFPalette.CONCRETE_DARK, true)
+	draw_rect(Rect2(LAUNCH_PAD.x - 70, g - 2, 140, 2), SFPalette.STEEL_MID, true)
+	draw_rect(Rect2(LAUNCH_PAD.x - 18, g + 2, 36, 10), SFPalette.INK, true)
+	for i in 6:
+		draw_rect(Rect2(LAUNCH_PAD.x - 66 + float(i) * 26.0, g + 4, 2, 8), SFPalette.STEEL_DARK, true)
+	# Service gantry: a lattice tower left of the ship with an access arm.
+	var gx: float = LAUNCH_PAD.x - 64.0
+	draw_rect(Rect2(gx, g - 150, 14, 148), SFPalette.STEEL_DARK, true)
+	var ly: float = g - 146.0
+	while ly < g - 4.0:
+		draw_rect(Rect2(gx + 1, ly, 12, 1), SFPalette.STEEL_MID, true)
+		draw_rect(Rect2(gx + 6, ly, 2, 8), SFPalette.STEEL_MID, true)
+		ly += 10.0
+	var arm_open: float = clampf(t / 0.8, 0.0, 1.0) if thrust > 0.0 else 0.0
+	draw_rect(Rect2(gx + 14, g - 112, 30.0 - 18.0 * arm_open, 3), SFPalette.RUST, true)
+	draw_rect(Rect2(gx + 3, g - 156, 8, 6), SFPalette.RED, true)
+	# Floodlight masts.
+	for mx in [LAUNCH_PAD.x - 150.0, LAUNCH_PAD.x + 150.0]:
+		draw_rect(Rect2(mx, g - 120, 2, 118), SFPalette.STEEL_MID, true)
+		draw_rect(Rect2(mx - 5, g - 124, 12, 4), SFPalette.PAPER, true)
+	skin.contact_shadow(self, Vector2(LAUNCH_PAD.x, g + 2), 70.0, 0.30)
+	# Exhaust smoke: builds during ignition, then rolls out along the deck.
+	if thrust > 0.0:
+		var puffs: int = int(clampf(t / IGNITION_END, 0.0, 1.0) * 14.0) + (10 if t > IGNITION_END else 0)
+		for i in puffs:
+			var side: float = -1.0 if i % 2 == 0 else 1.0
+			var spread: float = 10.0 + float(i) * 4.0 + maxf(0.0, t - IGNITION_END) * 30.0
+			var px: float = LAUNCH_PAD.x + side * minf(spread, 240.0) + sin(float(i) * 2.3 + t) * 6.0
+			var py: float = g + 4.0 - float((i * 7) % 18) - maxf(0.0, t - IGNITION_END) * 6.0
+			var r: float = 6.0 + float(i % 4) * 3.0 + maxf(0.0, t - IGNITION_END) * 4.0
+			var a: float = 0.55 * clampf(1.0 - maxf(0.0, t - LIFTOFF_END) / 3.0, 0.0, 1.0)
+			draw_rect(Rect2(round(px - r), round(py - r * 0.6), round(r * 2.0), round(r * 1.2)), Color(0.86, 0.86, 0.84, a), true)
+			draw_rect(Rect2(round(px - r * 0.6), round(py - r), round(r * 1.2), round(r * 0.6)), Color(0.95, 0.95, 0.93, a * 0.8), true)
 
 
 func _draw_signal() -> void:
@@ -3041,10 +3457,11 @@ func _draw_signal() -> void:
 	# Moving marker.
 	var mx := track.position.x + (track.size.x - 4) * signal_marker
 	draw_rect(Rect2(mx, track.position.y - 2, 4, track.size.y + 4), SFPalette.PAPER, true)
-	skin.text_c(self, dial.position.x + dial.size.x * 0.5, dial.end.y - 20, "PRESS E WHEN MARKER HITS THE ZONE", SFPalette.PAPER_DIM)
+	skin.text_c(self, dial.position.x + dial.size.x * 0.5, dial.end.y - 20, "A/D OR ARROWS TUNE   E OR LOCK TO LOCK", SFPalette.PAPER_DIM)
 	skin.text_c(self, VW * 0.5, 214, "THE SIGNAL IS NOT WHERE THE BRIEF SAID IT WOULD BE.", SFPalette.PAPER)
 	if signal_attempts > 0 and signal_locks == 0:
 		skin.text_c(self, VW * 0.5, 228, "Keep trying. The sequence resolves either way.", SFPalette.ASH_LIGHT)
+	skin.button(self, SIGNAL_LOCK_BUTTON, "LOCK SIGNAL", SIGNAL_LOCK_BUTTON.has_point(_ui_mouse()), true)
 	# Waveform, decorative but truthful about the lock count.
 	for i in 120:
 		var x := 60.0 + float(i) * 4.4
@@ -3094,7 +3511,7 @@ func _draw_rift() -> void:
 		seam += 1
 
 	# The VELA, small against the tear, being pulled off course.
-	_draw_ship_silhouette(Vector2(cx + sin(time * 2.2) * 12.0 + 56.0, cy + 96.0))
+	_draw_ship_silhouette(Vector2(cx + sin(time * 2.2) * 12.0 + 56.0, cy + 96.0), false)
 
 	var lines: Array = campaign.content.dialogue_lines("rift")
 	var idx: int = mini(int(launch_timer / 1.1), maxi(0, lines.size() - 1))
@@ -3177,34 +3594,16 @@ func _draw_crash() -> void:
 ## Ship drawing with a roll applied, used for the crash approach.
 func _draw_ship_tilted(ground: Vector2, tilt: float) -> void:
 	draw_set_transform(ground, tilt, Vector2.ONE)
-	_draw_ship_silhouette(Vector2.ZERO)
+	_draw_ship_silhouette(Vector2.ZERO, tilt <= 0.001)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-
-
-func _draw_day_sky() -> void:
-	var g := 0
-	while g < 10:
-		var t := float(g) / 10.0
-		draw_rect(Rect2(0, 0, VW, 200), SFPalette.SKY_DEEP.lerp(SFPalette.SKY, t), true)
-		g += 1
-	draw_rect(Rect2(0, 200, VW, 160), SFPalette.GRASS, true)
-	draw_rect(Rect2(0, 200, VW, 3), SFPalette.GRASS_DARK, true)
 
 
 ## A compact side/three-quarter silhouette of the assembled ship, using the
 ## same visual language as the construction screen.
-func _draw_ship_silhouette(ground: Vector2) -> void:
-	draw_rect(Rect2(ground.x - 13, ground.y - 76, 26, 62), SFPalette.STEEL, true)
-	draw_rect(Rect2(ground.x - 13, ground.y - 76, 5, 62), SFPalette.STEEL_MID, true)
-	draw_rect(Rect2(ground.x + 8, ground.y - 76, 5, 62), SFPalette.STEEL_DARK, true)
-	draw_rect(Rect2(ground.x - 7, ground.y - 88, 14, 14), SFPalette.STEEL_MID, true)
-	draw_rect(Rect2(ground.x - 4, ground.y - 96, 8, 10), SFPalette.STEEL, true)
-	draw_rect(Rect2(ground.x - 2, ground.y - 100, 4, 6), SFPalette.STEEL_MID, true)
-	# Engine bells.
-	draw_rect(Rect2(ground.x - 12, ground.y - 16, 8, 10), SFPalette.STEEL_DARK, true)
-	draw_rect(Rect2(ground.x + 4, ground.y - 16, 8, 10), SFPalette.STEEL_DARK, true)
-	# Cabin light.
-	draw_rect(Rect2(ground.x - 3, ground.y - 70, 6, 5), SFPalette.CYAN_DIM, true)
+## The player-built day-one VELA, drawn by the same function as the assembly
+## console, so the pad, the climb, the rift and the crash all show one ship.
+func _draw_ship_silhouette(ground: Vector2, grounded: bool = true) -> void:
+	SFConstruction.draw_day_one_ship(self, skin, ground, campaign.design, campaign.content, time, false, grounded)
 
 
 # ---------------------------------------------------------------- memory draw
@@ -3249,7 +3648,10 @@ func _draw_memory() -> void:
 			visible = text.substr(0, int(memory_chars))
 		skin.wrap(self, box.position + Vector2(12, 10), box.size.x - 24, visible, SFPalette.PAPER, 1, 4)
 		skin.text_r(self, box.end.x - 10, box.end.y - 12, "%d / %d" % [idx + 1, lines.size()], SFPalette.PAPER_DIM)
-	skin.text_c(self, cx, VH - 16, "ENTER CONTINUE     ESC SKIP", SFPalette.ASH_LIGHT)
+	skin.text(self, Vector2(100, VH - 20), "ENTER OR CLICK: NEXT", SFPalette.ASH_LIGHT)
+	var mouse := _ui_mouse()
+	skin.button(self, MEMORY_NEXT, "NEXT", MEMORY_NEXT.has_point(mouse), true)
+	skin.button(self, MEMORY_SKIP, "SKIP", MEMORY_SKIP.has_point(mouse), true)
 	skin.scanlines(self, 0.05)
 
 
@@ -3409,6 +3811,13 @@ func _draw_checkpoint() -> void:
 	else:
 		skin.text_c(self, VW * 0.5, VH - 23, "ENTER  CONTINUE", SFPalette.PAPER)
 		skin.text_c(self, VW * 0.5, VH - 12, "FORGOTTEN CITY - PHASE 2", SFPalette.ASH_LIGHT)
+	_draw_checkpoint_buttons()
+
+
+func _draw_checkpoint_buttons() -> void:
+	var mouse := _ui_mouse()
+	skin.button(self, CHECKPOINT_CONTINUE, "CONTINUE", true, true, SFPalette.GREEN_OK if CHECKPOINT_CONTINUE.has_point(mouse) else SFPalette.CYAN)
+	skin.button(self, CHECKPOINT_MENU, "MENU", CHECKPOINT_MENU.has_point(mouse), true)
 
 
 # ---------------------------------------------------------------- save error draw
@@ -3428,65 +3837,76 @@ func _draw_save_error() -> void:
 # ---------------------------------------------------------------- pause menu input
 
 func _input(event: InputEvent) -> void:
-	# Pause menu is an overlay on the world, so its keys are handled ahead of
-	# the world. This mirrors the World branch of _unhandled_input.
-	if screen != Screen.WORLD or dialogue != null or world == null:
-		return
-	if world.player.input_enabled:
-		return
-	if event is InputEventMouseMotion:
-		var pos: Vector2 = get_local_mouse_position()
-		var idx := _menu_item_at(pause_menu, Vector2(216, 126), 208.0, 20.0, pos)
-		if idx >= 0 and idx != pause_menu.index:
-			pause_menu.index = idx
-			audio.sfx_select()
+	# The shared pause menu owns all input while it is open, ahead of every
+	# screen, so nothing leaks into the frozen screen underneath.
+	if pause_open:
+		if event is InputEventKey or event is InputEventMouseButton or event is InputEventMouseMotion:
 			get_viewport().set_input_as_handled()
-			queue_redraw()
+			_pause_input(event)
+		return
+	# Esc opens it. A dialogue gets Esc first (it closes the dialogue), so one
+	# key press can never both close a modal and reopen pause.
+	if event is InputEventKey:
+		var k := event as InputEventKey
+		if k.pressed and not k.echo and k.keycode == KEY_ESCAPE and dialogue == null and uses_main_pause():
+			get_viewport().set_input_as_handled()
+			audio.sfx_back()
+			_open_pause()
+
+
+func _pause_input(event: InputEvent) -> void:
+	if pause_settings_open:
+		_pause_settings_input(event)
+		return
+	var pos: Vector2 = _ui_mouse()
+	if event is InputEventMouseMotion:
+		if pause_menu.hover(pos):
+			audio.sfx_select()
+			refresh_overlay()
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.pressed:
-			var pos2: Vector2 = get_local_mouse_position()
-			if mb.button_index == MOUSE_BUTTON_RIGHT:
-				get_viewport().set_input_as_handled()
-				audio.sfx_back()
-				_close_pause()
-				return
-			if mb.button_index == MOUSE_BUTTON_LEFT:
-				var idx2 := _menu_item_at(pause_menu, Vector2(216, 126), 208.0, 20.0, pos2)
-				get_viewport().set_input_as_handled()
-				if idx2 >= 0:
-					pause_menu.index = idx2
-					_pause_activate()
-				elif not Rect2(200, 96, 240, 146).has_point(pos2):
-					audio.sfx_back()
-					_close_pause()
-				queue_redraw()
-		return
-	if not (event is InputEventKey):
+		if not mb.pressed:
+			return
+		# Only a left click on a row acts; right click never resumes.
+		if mb.button_index == MOUSE_BUTTON_LEFT and pause_menu.click(pos) != "":
+			_pause_activate()
+		refresh_overlay()
 		return
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
 		return
-	var key := key_event.keycode
-	if key == KEY_ESCAPE:
-		get_viewport().set_input_as_handled()
-		audio.sfx_back()
-		_close_pause()
-		return
-	match key:
+	match key_event.keycode:
+		KEY_ESCAPE:
+			audio.sfx_back()
+			_close_pause()
 		KEY_UP, KEY_W:
 			pause_menu.move_enabled(-1)
 			audio.sfx_select()
-			get_viewport().set_input_as_handled()
 		KEY_DOWN, KEY_S:
 			pause_menu.move_enabled(1)
 			audio.sfx_select()
-			get_viewport().set_input_as_handled()
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
-			get_viewport().set_input_as_handled()
 			_pause_activate()
-	queue_redraw()
+	refresh_overlay()
+
+
+func _pause_settings_input(event: InputEvent) -> void:
+	var pos: Vector2 = _ui_mouse()
+	if event is InputEventMouseMotion:
+		_settings_mouse_motion(pos)
+	elif event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if not mb.pressed:
+			if mb.button_index == MOUSE_BUTTON_LEFT:
+				_settings_release()
+		elif mb.button_index == MOUSE_BUTTON_LEFT:
+			_settings_click(pos)
+	elif event is InputEventKey:
+		var k := event as InputEventKey
+		if k.pressed and not k.echo:
+			_settings_key(k.keycode)
+	refresh_overlay()
 
 
 func _pause_activate() -> void:
@@ -3496,6 +3916,17 @@ func _pause_activate() -> void:
 			_close_pause()
 		"save":
 			_manual_save()
+		"skip":
+			_close_pause()
+			match screen:
+				Screen.CINEMATIC:
+					if cinematic_screen != null:
+						cinematic_screen.skip()
+				Screen.MEMORY:
+					_skip_memory()
+				Screen.FINAL_ASSEMBLY:
+					if assembly_screen != null:
+						assembly_screen.skip_installation()
 		"journal":
 			audio.sfx_blip()
 			journal_return = Screen.WORLD
@@ -3505,9 +3936,9 @@ func _pause_activate() -> void:
 			audio.sfx_blip()
 			_rebuild_settings_menu()
 			settings_menu.index = 0
-			previous_screen = Screen.WORLD
-			_go(Screen.SETTINGS)
+			pause_settings_open = true
 		"title":
 			audio.sfx_back()
 			_save_quietly()
 			_go(Screen.TITLE)
+	refresh_overlay()

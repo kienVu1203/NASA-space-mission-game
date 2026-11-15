@@ -38,6 +38,7 @@ const SCRIPTS := [
 	"res://core/star_fall/sf_flight.gd",
 	"res://core/star_fall/sf_vela.gd",
 	"res://core/star_fall/sf_qa.gd",
+	"res://core/star_fall/sf_settings.gd",
 	"res://core/star_fall/sf_debug_presets.gd",
 	"res://scenes/star_fall/player.gd",
 	"res://scenes/star_fall/bill_companion.gd",

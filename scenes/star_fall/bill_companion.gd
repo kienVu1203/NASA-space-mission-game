@@ -232,7 +232,7 @@ func _draw() -> void:
 	var tex: Texture2D = skin.sprites.get("bill_phase_two", skin.sprites.get("bill_on", null))
 	if tex == null:
 		return
-	skin.contact_shadow(self, Vector2(0, 0), 12.0, 0.24)
+	skin.contact_shadow(self, Vector2(0, 0), 16.0, 0.40)
 	if highlighted or mouse_hovered:
 		var glow := Color(0.37, 0.90, 0.85, 0.45) if highlighted else Color(0.95, 0.82, 0.35, 0.40)
 		glow.a = 0.32 + 0.22 * sin(_pulse * 5.0)

@@ -25,6 +25,9 @@ var plan: Array = [
 	{"name": "06_preflight_pass", "setup": "_setup_preflight_pass", "wait": 8},
 	{"name": "07_countdown", "setup": "_setup_launch", "wait": 8},
 	{"name": "08_ascent", "setup": "_setup_ascent", "wait": 12},
+	{"name": "08b_ignition", "setup": "_setup_ignition", "wait": 6},
+	{"name": "08c_atmosphere", "setup": "_setup_atmosphere", "wait": 6},
+	{"name": "08d_space", "setup": "_setup_space", "wait": 6},
 	{"name": "09_signal", "setup": "_setup_signal", "wait": 12},
 	{"name": "10_rift", "setup": "_setup_rift", "wait": 12},
 	{"name": "11_crash", "setup": "_setup_crash", "wait": 10},
@@ -75,6 +78,7 @@ var plan: Array = [
 	{"name": "54_final_message", "setup": "_setup_final_message", "wait": 20},
 	{"name": "55_mission_report", "setup": "_setup_mission_report", "wait": 10},
 	{"name": "56_credits", "setup": "_setup_credits", "wait": 16},
+	{"name": "57_pause_settings", "setup": "_setup_pause_settings", "wait": 8},
 ]
 var hold: int = 0
 
@@ -206,6 +210,21 @@ func _setup_launch() -> void:
 func _setup_ascent() -> void:
 	main.launch_phase = main.LaunchPhase.ASCENT
 	main.launch_timer = 1.8
+
+
+func _setup_ignition() -> void:
+	main.launch_phase = main.LaunchPhase.ASCENT
+	main.launch_timer = 0.9
+
+
+func _setup_atmosphere() -> void:
+	main.launch_phase = main.LaunchPhase.ASCENT
+	main.launch_timer = 4.3
+
+
+func _setup_space() -> void:
+	main.launch_phase = main.LaunchPhase.ASCENT
+	main.launch_timer = 6.6
 
 
 func _setup_signal() -> void:
@@ -859,7 +878,7 @@ func _setup_credits() -> void:
 	if main.report_screen != null:
 		main.report_screen.handle_key(KEY_ENTER)
 	if main.credits_screen != null:
-		main.credits_screen.scroll = 40.0
+		main.credits_screen.scroll = 0.0
 	_clear_dialogue()
 
 
@@ -869,3 +888,10 @@ func _setup_checkpoint() -> void:
 	main.campaign.mission_manifest["surviving_data_mb"] = main.campaign.surviving_data_mb()
 	main.campaign.advance_to(main.campaign.STAGE_CHECKPOINT)
 	main._go(main.Screen.CHECKPOINT)
+
+
+func _setup_pause_settings() -> void:
+	main._go(main.Screen.REPORT)
+	main._open_pause()
+	main.pause_menu.index = main.pause_menu.index_of("settings")
+	main._pause_activate()

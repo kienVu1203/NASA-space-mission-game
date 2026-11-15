@@ -7,7 +7,9 @@ extends Node2D
 ## Controls
 ##   MOUSE    rotate the shield (always active, no button held)
 ##   SPACE    counterattack, only when the charge meter above Nick is full
-##   ESC      pause (resume, retry, main menu)
+##   ESC      pause (resume, retry, main menu); every menu row is clickable
+## Nick never moves here: WASD and the arrows do nothing in the fight, and
+## Enter / E never fire, so a menu key cannot trigger the counterattack.
 ##
 ## The screen is deliberately node-light: everything is drawn in _draw() from
 ## data/star_fall/encounters.json, so the presentation can never disagree with
@@ -62,6 +64,10 @@ var shield_impact_flash: float = 0.0
 var shield_jitter_phase: float = 0.0
 var last_impact_point: Vector2 = Vector2.ZERO
 var reduced_motion: bool = false
+
+const CONTINUE_BUTTON := Rect2(250, 190, 140, 18)
+const RETRY_BUTTON := Rect2(176, 200, 136, 18)
+const MENU_BUTTON := Rect2(328, 200, 136, 18)
 
 
 func setup(skin_ref, ui_ref, boss_data: Dictionary, all_data) -> void:
@@ -120,14 +126,25 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# A dialogue owns every key and click while it is open over the arena.
+	# Without this, the Space that advances Bill's briefing would also fire a
+	# counterattack.
+	if input_locked:
+		return
+	if event is InputEventMouseMotion:
+		if state == State.PAUSED and pause_menu.hover(get_local_mouse_position()):
+			skin.audio.sfx_select()
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			handle_click(get_local_mouse_position())
+			get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventKey):
 		return
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
-		return
-	# A dialogue owns every key while it is open over the arena. Without this,
-	# the Space that advances Bill's briefing would also fire a counterattack.
-	if input_locked:
 		return
 	if state == State.PAUSED:
 		_pause_key(key_event.keycode)
@@ -135,19 +152,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match key_event.keycode:
 		KEY_ESCAPE:
-			if state == State.FIGHT:
-				audio_pause()
-			elif state == State.DEFEAT:
-				audio_pause()
-			elif state == State.VICTORY:
-				# The fight is already won; Esc must not skip the award, so it
-				# simply opens the same continue path as Enter.
-				_confirm_victory()
-				get_viewport().set_input_as_handled()
-		KEY_SPACE, KEY_ENTER, KEY_KP_ENTER, KEY_E:
+			# Esc always pauses, in the fight and on the result panels. It never
+			# continues past the victory panel.
+			audio_pause()
+			get_viewport().set_input_as_handled()
+		KEY_SPACE:
 			match state:
 				State.FIGHT:
 					_try_counterattack()
+				State.VICTORY:
+					_confirm_victory()
+				State.DEFEAT:
+					retry()
+		KEY_ENTER, KEY_KP_ENTER, KEY_E:
+			match state:
 				State.VICTORY:
 					_confirm_victory()
 				State.DEFEAT:
@@ -171,6 +189,24 @@ func _notification(what: int) -> void:
 		# arena, and opening a pause menu underneath it would strand the player.
 		if state == State.FIGHT and not input_locked:
 			_open_pause()
+
+
+## Mouse clicks: the pause rows, CONTINUE on the victory panel, RETRY / MENU on
+## the defeat panel. A click in the arena does nothing, so it can never fire.
+func handle_click(pos: Vector2) -> void:
+	match state:
+		State.PAUSED:
+			if pause_menu.click(pos) != "":
+				_activate_pause_item()
+		State.VICTORY:
+			if encounter.model.victory_timer >= encounter.model.victory_hold and CONTINUE_BUTTON.has_point(pos):
+				_confirm_victory()
+		State.DEFEAT:
+			if RETRY_BUTTON.has_point(pos):
+				retry()
+			elif MENU_BUTTON.has_point(pos):
+				audio_pause()
+	queue_redraw()
 
 
 func audio_pause() -> void:
@@ -208,12 +244,15 @@ func _confirm_victory() -> void:
 func _open_pause() -> void:
 	pause_origin = state
 	state = State.PAUSED
+	refresh_pause_menu()
 	pause_menu.index = 0
+	skin.audio.set_paused(true)
 	queue_redraw()
 
 
 func _close_pause() -> void:
 	state = pause_origin
+	skin.audio.set_paused(false)
 	queue_redraw()
 
 
@@ -222,7 +261,8 @@ func refresh_pause_menu() -> void:
 		return
 	pause_menu.set_items([
 		{"id": "resume", "label": "RESUME", "enabled": true},
-		{"id": "retry", "label": "RESTART FIGHT", "enabled": true},
+		# A won fight cannot be restarted from its victory panel.
+		{"id": "retry", "label": "RESTART FIGHT", "enabled": pause_origin != State.VICTORY},
 		{"id": "menu", "label": "RETURN TO MAIN MENU", "enabled": true},
 	], "resume")
 
@@ -249,10 +289,14 @@ func _activate_pause_item() -> void:
 			skin.audio.sfx_blip()
 			_close_pause()
 		"retry":
+			if pause_origin == State.VICTORY:
+				return
 			state = pause_origin
+			skin.audio.set_paused(false)
 			retry()
 		"menu":
 			skin.audio.sfx_back()
+			skin.audio.set_paused(false)
 			duel_aborted.emit()
 	queue_redraw()
 
@@ -1185,8 +1229,8 @@ func _draw_victory_panel() -> void:
 	skin.wrap(self, Vector2(172, 152), 296,
 		String(boss.get("name", "The robot")) + " has stopped attacking. The route is open.",
 		SFPalette.PAPER, 1, 3)
-	skin.text_c(self, 320, 196, "ENTER  CONTINUE", SFPalette.GOLD)
-	skin.text_c(self, 320, 214, "REWARD IS AWARDED ONCE, ON CONTINUE", SFPalette.PAPER_DIM)
+	skin.button(self, CONTINUE_BUTTON, "CONTINUE", true, true, SFPalette.GOLD)
+	skin.text_c(self, 320, 216, "ENTER OR CLICK - THE CORE DROPS ON THE QUAY", SFPalette.PAPER_DIM)
 
 
 func _draw_defeat_panel() -> void:
@@ -1195,12 +1239,14 @@ func _draw_defeat_panel() -> void:
 	skin.wrap(self, Vector2(172, 148), 296,
 		"The encounter restarts. Progress, salvage and earlier rewards are kept.",
 		SFPalette.PAPER, 1, 3)
-	skin.text_c(self, 320, 196, "ENTER / R  RETRY", SFPalette.GOLD)
-	skin.text_c(self, 320, 218, "ESC  PAUSE MENU", SFPalette.PAPER_DIM)
+	var mouse := get_local_mouse_position()
+	skin.button(self, RETRY_BUTTON, "RETRY", true, true, SFPalette.GOLD)
+	skin.button(self, MENU_BUTTON, "PAUSE MENU", MENU_BUTTON.has_point(mouse), true)
+	skin.text_c(self, 320, 230, "ENTER / R RETRY     ESC PAUSE", SFPalette.PAPER_DIM)
 
 
 func _draw_pause_panel() -> void:
 	ui.modal(self, Rect2(200, 96, 240, 160), SFPalette.CYAN)
 	skin.text_c(self, 320, 108, "PAUSED", SFPalette.CYAN)
 	ui.menu_list(self, pause_menu, Vector2(216, 128), 208.0, 20.0)
-	skin.text_c(self, 320, 232, "ESC  RESUME", SFPalette.PAPER_DIM)
+	skin.text_c(self, 320, 232, "ESC OR CLICK RESUME", SFPalette.PAPER_DIM)

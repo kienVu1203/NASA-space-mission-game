@@ -33,20 +33,25 @@ extends Node2D
 ## as memories were really found.
 ##
 ## Controls
-##   SPACE              pause / resume (pause freezes subtitles and the clock)
-##   ESC                skip the rest of the sequence (safe, idempotent)
-##   ANY OTHER KEY      fast-forward to the next minor beat
-##   LEFT CLICK         the same, outside the HUD
+##   ESC / RIGHT CLICK  pause (the controller's shared pause menu: resume,
+##                      skip sequence, settings, main menu)
+##   II PAUSE badge     the same, with the mouse
+##   NEXT badge, ENTER  advance to the next subtitle beat (never during flight)
+##   CONTINUE / ENTER   leave the closing card
 ##   A / D, Left/Right  steer during the playable segments
 ##   MOUSE              steer toward the pointer during the playable segments
+## No other key does anything: Space never pauses and no stray key skips.
 ##
 ## Safety: `skip()` and the natural end both call `_finish()` once. Focus loss
-## pauses rather than letting the sequence run unseen. Leaving the screen is the
+## pauses (the controller opens its pause menu) rather than letting the
+## sequence run unseen. Leaving the screen is the
 ## controller's job (`_go()` frees this node), so no timer here outlives it.
 ## Every per-scene effect (contacts, shake, flight state, notices) is reset in
 ## `_next_scene()`, so nothing leaks into the next beat.
 
 signal cinematic_finished(skipped: bool)
+## The pause badge, a right click or Esc asks the controller for its pause menu.
+signal pause_requested
 
 const SFPalette := preload("res://core/star_fall/sf_palette.gd")
 const SFFinale := preload("res://core/star_fall/sf_finale.gd")
@@ -56,8 +61,10 @@ const SFVela := preload("res://core/star_fall/sf_vela.gd")
 const VW := 640
 const VH := 360
 
-## Keys that are never "any key": Esc skips, Space pauses.
-const RESERVED_KEYS := [KEY_ESCAPE, KEY_SPACE]
+## The two header buttons and the closing card's continue button.
+const PAUSE_BADGE := Rect2(520, 4, 116, 22)
+const NEXT_BADGE := Rect2(446, 4, 68, 22)
+const CONTINUE_BUTTON := Rect2(260, 328, 120, 20)
 
 # ---- departure station (scene A) timing, seconds of scene time
 const TRANSFER_START := 2.6
@@ -172,15 +179,6 @@ func _ready() -> void:
 	scene_time = 0.0
 	elapsed = 0.0
 	queue_redraw()
-
-
-func _notification(what: int) -> void:
-	# Losing focus pauses the sequence: it must never play unseen, and it must
-	# never leave the player locked in a scene that moved on without them.
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
-		if not finished:
-			paused = true
-			queue_redraw()
 
 
 # ---------------------------------------------------------------- timing
@@ -477,7 +475,7 @@ func _fire_scene_cues() -> void:
 	elif id == "portal":
 		_cue("open", 0.3, "sfx_signal_sweep")
 	elif id == "home":
-		_cue("touchdown", TOUCHDOWN_AT, "sfx_hull_creak")
+		_cue("touchdown", TOUCHDOWN_AT, "sfx_landing")
 		_cue("hatch", HATCH_OPEN_AT, "sfx_install")
 		_cue("celebrate", CELEBRATE_AT, "sfx_confirm")
 
@@ -546,8 +544,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			handle_click(get_local_mouse_position())
 		elif mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
 			get_viewport().set_input_as_handled()
-			paused = true
-			queue_redraw()
+			pause_requested.emit()
 		return
 	if event is InputEventMouseMotion:
 		handle_mouse_motion(get_local_mouse_position())
@@ -566,39 +563,36 @@ func handle_key(keycode: int) -> void:
 		return
 	match keycode:
 		KEY_ESCAPE:
-			skip()
-			return
-		KEY_SPACE:
-			paused = not paused
-			if paused:
-				_sfx("sfx_back")
-			else:
-				_sfx("sfx_select")
-			queue_redraw()
-			return
-	# A playable segment owns every other key: they steer (through the input
-	# actions) and never touch the segment clock, so a player cannot skip past
-	# the flight or trip the navigation assist by mashing.
-	if is_interactive():
-		return
-	fast_forward()
+			pause_requested.emit()
+		KEY_ENTER, KEY_KP_ENTER:
+			# A playable segment owns its keys: they steer (through the input
+			# actions) and never touch the segment clock, so a player cannot skip
+			# past the flight or trip the navigation assist by mashing.
+			if not is_interactive():
+				fast_forward()
 
 
 ## A left click advances a beat, unless it lands on the pause badge. During a
 ## playable segment a click steers, so it never skips dialogue.
+## The header buttons act on a click; during a playable segment a click
+## elsewhere steers. A click on the scene itself never skips anything.
 func handle_click(pos: Vector2) -> void:
 	if finished:
 		return
-	if Rect2(520, 4, 116, 22).has_point(pos):
-		paused = not paused
-		queue_redraw()
+	if show_final_message:
+		if CONTINUE_BUTTON.has_point(pos):
+			fast_forward()
+		return
+	if PAUSE_BADGE.has_point(pos):
+		pause_requested.emit()
 		return
 	if is_interactive():
 		if is_playable():
 			_mouse_engaged = true
 			_mouse_target = pos.x
 		return
-	fast_forward()
+	if NEXT_BADGE.has_point(pos):
+		fast_forward()
 
 
 func handle_mouse_motion(pos: Vector2) -> void:
@@ -652,8 +646,6 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if show_final_message:
 		_draw_final_message()
-		if paused:
-			_draw_paused()
 		skin.vignette(self)
 		return
 	var scene: Dictionary = current_scene()
@@ -679,8 +671,6 @@ func _draw() -> void:
 	_draw_flight_hud()
 	_draw_scene_header(scene)
 	_draw_subtitle(scene)
-	if paused:
-		_draw_paused()
 	skin.vignette(self)
 
 
@@ -691,13 +681,12 @@ func _draw_scene_header(scene: Dictionary) -> void:
 		return
 	draw_rect(Rect2(0, 0, VW, 26), Color(0.02, 0.04, 0.05, 0.72), true)
 	skin.text(self, Vector2(14, 8), title, SFPalette.CYAN)
-	skin.text_r(self, 506, 8, "%d / %d" % [scene_index + 1, scenes.size()], SFPalette.PAPER_DIM)
-	# A small pause badge, the only HUD button in the sequence.
-	var badge := Rect2(520, 4, 116, 22)
-	draw_rect(badge, Color(0.05, 0.09, 0.11, 0.95), true)
-	draw_rect(badge, SFPalette.STEEL_DARK, false, 1.0)
-	skin.text_c(self, badge.position.x + badge.size.x * 0.5, badge.position.y + 7,
-		"II  PAUSE", SFPalette.PAPER_DIM)
+	skin.text_r(self, 432, 8, "%d / %d" % [scene_index + 1, scenes.size()], SFPalette.PAPER_DIM)
+	# The only HUD buttons in the sequence: next beat (outside flight) and pause.
+	var mouse := get_local_mouse_position()
+	if not is_interactive():
+		skin.button(self, NEXT_BADGE, "NEXT >", NEXT_BADGE.has_point(mouse), true)
+	skin.button(self, PAUSE_BADGE, "II  PAUSE", PAUSE_BADGE.has_point(mouse), true)
 
 
 ## The playable segments draw their own thin state strip under the header:
@@ -759,15 +748,6 @@ func _draw_subtitle(scene: Dictionary) -> void:
 	skin.wrap(self, box.position + Vector2(12, 7), box.size.x - 24, text, c, 1, 2)
 	var hint := String((finale_data.get("cinematic", {}) as Dictionary).get("skip_hint", "ESC SKIP"))
 	skin.text_r(self, VW - 14, VH - 16, hint, SFPalette.ASH_LIGHT)
-
-
-func _draw_paused() -> void:
-	draw_rect(Rect2(0, 0, VW, VH), Color(0.02, 0.04, 0.05, 0.55), true)
-	draw_rect(Rect2(200, 146, 240, 64), Color(0.04, 0.08, 0.09, 0.96), true)
-	draw_rect(Rect2(200, 146, 240, 64), SFPalette.CYAN, false, 1.0)
-	skin.text_c(self, VW * 0.5, 158, "PAUSED", SFPalette.CYAN, 2)
-	skin.text_c(self, VW * 0.5, 184, "SPACE RESUME     ESC SKIP", SFPalette.PAPER_DIM)
-	skin.text_c(self, VW * 0.5, 196, "ANY OTHER KEY NEXT BEAT", SFPalette.ASH_LIGHT)
 
 
 # ---------------------------------------------------------------- shared art
@@ -1756,6 +1736,5 @@ func _draw_final_message() -> void:
 		skin.text_c(self, VW * 0.5, y2, String(line), Color(SFPalette.PAPER.r, SFPalette.PAPER.g, SFPalette.PAPER.b, alpha), 2)
 		y2 += 34.0
 	if alpha >= 1.0 and scene_time > 3.0:
-		var pulse := 0.55 + 0.35 * sin(elapsed * 2.2)
-		skin.text_c(self, VW * 0.5, VH - 24, "ANY KEY CONTINUE", Color(SFPalette.CYAN.r, SFPalette.CYAN.g, SFPalette.CYAN.b, pulse))
-	skin.text_r(self, VW - 14, VH - 16, "ESC SKIP", SFPalette.ASH_LIGHT)
+		skin.button(self, CONTINUE_BUTTON, "CONTINUE", true, true)
+		skin.text_c(self, VW * 0.5, VH - 46, "ENTER OR CLICK CONTINUE", SFPalette.ASH_LIGHT)

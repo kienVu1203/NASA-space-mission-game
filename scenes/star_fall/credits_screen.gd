@@ -1,14 +1,15 @@
 extends Node2D
 ## Phase 4: credits. A restrained scroll over the healthy planet, with the
 ## project's own asset and source notes (data/star_fall/finale.json, credits).
-## It credits only what the repository genuinely contains: original procedural
-## art and audio, the engine, and the project's own tooling. No NASA imagery,
-## logo or dataset is claimed, and no endorsement is implied.
+## The roll opens with the six team members, exactly as listed in the data,
+## drawn at double size. It credits only what the repository genuinely
+## contains: original procedural art and audio, the engine, and the project's
+## own tooling. No agency imagery, logo or affiliation appears.
 ##
 ## Controls
-##   UP / DOWN, W / S   scroll manually
-##   ENTER / SPACE / E  continue to the title
-##   ESC                continue to the title
+##   UP / DOWN, W / S, mouse wheel   scroll manually
+##   ENTER / SPACE / E, RETURN button continue to the title
+##   ESC                              the shared pause menu (controller)
 ##
 ## Ending here is deliberate: the credit roll is the last screen. Whatever the
 ## player does, the controller applies the same completion state once.
@@ -19,6 +20,9 @@ const SFPalette := preload("res://core/star_fall/sf_palette.gd")
 
 const VW := 640
 const VH := 360
+const RETURN_BUTTON := Rect2(470, 333, 156, 20)
+const TEAM_LINE_H := 24.0
+const LINE_H := 14.0
 
 var skin
 var ui
@@ -59,8 +63,12 @@ func content_height() -> float:
 	var h := 0.0
 	for s in _sections():
 		var section: Dictionary = s
-		h += 24.0 + float((section.get("lines", []) as Array).size()) * 14.0 + 16.0
+		h += 24.0 + float((section.get("lines", []) as Array).size()) * _line_h(section) + 16.0
 	return h + 60.0
+
+
+func _line_h(section: Dictionary) -> float:
+	return TEAM_LINE_H if bool(section.get("team", false)) else LINE_H
 
 
 func at_end() -> bool:
@@ -70,6 +78,20 @@ func at_end() -> bool:
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if not mb.pressed:
+			return
+		get_viewport().set_input_as_handled()
+		match mb.button_index:
+			MOUSE_BUTTON_WHEEL_DOWN:
+				handle_key(KEY_DOWN)
+			MOUSE_BUTTON_WHEEL_UP:
+				handle_key(KEY_UP)
+			MOUSE_BUTTON_LEFT:
+				if RETURN_BUTTON.has_point(get_local_mouse_position()):
+					handle_key(KEY_ENTER)
+		return
 	if not (event is InputEventKey):
 		return
 	var key := event as InputEventKey
@@ -84,7 +106,7 @@ func handle_key(keycode: int) -> void:
 		KEY_UP, KEY_W, KEY_DOWN, KEY_S:
 			holding = true
 			scroll = clampf(scroll + (18.0 if keycode == KEY_DOWN or keycode == KEY_S else -18.0), 0.0, content_height())
-		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E, KEY_ESCAPE:
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E:
 			if closed_once:
 				return
 			closed_once = true
@@ -114,14 +136,18 @@ func _draw() -> void:
 	var y: float = band_top + 24.0 - scroll
 	for s in _sections():
 		var section: Dictionary = s
+		var team: bool = bool(section.get("team", false))
 		if y >= band_top + 8.0 and y <= band_bottom - 8.0:
 			skin.text_c(self, VW * 0.5, y, String(section.get("heading", "")), SFPalette.CYAN)
 			draw_rect(Rect2(VW * 0.5 - 90.0, y + 12.0, 180.0, 1), SFPalette.STEEL_DARK, true)
 		y += 24.0
 		for line in section.get("lines", []) as Array:
-			if y >= band_top + 8.0 and y <= band_bottom - 8.0:
-				skin.text_c(self, VW * 0.5, y, String(line), SFPalette.PAPER)
-			y += 14.0
+			# A line is drawn only when all of it fits inside the band, so no name
+			# is ever cut by the header or footer strip.
+			var h: float = 14.0 if team else 7.0
+			if y >= band_top + 6.0 and y + h <= band_bottom - 6.0:
+				skin.text_c(self, VW * 0.5, y, String(line), SFPalette.WARM if team else SFPalette.PAPER, 2 if team else 1)
+			y += _line_h(section)
 		y += 16.0
 
 	# Header strip keeps the credits readable against the moving backdrop. It is
@@ -140,10 +166,10 @@ func _draw() -> void:
 		for line in msg:
 			skin.text_c(self, VW * 0.5, my, String(line), SFPalette.WARM, 2)
 			my += 30.0
-		var pulse := 0.55 + 0.35 * sin(time * 2.2)
-		skin.text_c(self, VW * 0.5, band_bottom + 11.0, "ENTER  RETURN TO TITLE", Color(SFPalette.CYAN.r, SFPalette.CYAN.g, SFPalette.CYAN.b, pulse))
+		skin.text(self, Vector2(14, band_bottom + 11.0), "ENTER OR CLICK: RETURN TO TITLE", SFPalette.PAPER_DIM)
 	else:
-		skin.text_c(self, VW * 0.5, band_bottom + 11.0, "UP/DOWN SCROLL     ENTER RETURN TO TITLE", SFPalette.PAPER_DIM)
+		skin.text(self, Vector2(14, band_bottom + 11.0), "UP/DOWN OR WHEEL SCROLL     ESC PAUSE", SFPalette.PAPER_DIM)
+	skin.button(self, RETURN_BUTTON, "RETURN TO TITLE", at_end() or RETURN_BUTTON.has_point(get_local_mouse_position()), true)
 
 
 func _draw_backdrop() -> void:

@@ -9,6 +9,12 @@ var skin
 var toast_text: String = ""
 var toast_tone: String = "info"
 var toast_timer: float = 0.0
+## Clickable regions recorded while drawing, read by the input code so a hit
+## region always matches the drawn button: the world HUD's menu badge, and the
+## journal's BACK button and word rows.
+var hud_menu_rect: Rect2 = Rect2()
+var journal_back_rect: Rect2 = Rect2()
+var journal_rows: Array = []
 
 
 func _init(skin_ref) -> void:
@@ -123,11 +129,15 @@ func hud(ci: CanvasItem, campaign, objective: String, inventory_rows: Array, zon
 	ci.draw_rect(Rect2(8, 8, 3, 16), SFPalette.CYAN, true)
 	skin.text(ci, Vector2(16, 13), objective, SFPalette.PAPER)
 
-	# Zone title, top right.
+	# Zone title, top right. It doubles as the pause button for the mouse, so it
+	# is drawn as one: a framed badge with the pause glyph.
 	if zone_title != "":
-		var zw: float = skin.font.text_width(zone_title) + 16.0
-		ci.draw_rect(Rect2(632 - zw, 8, zw, 15), Color(0.04, 0.07, 0.08, 0.65), true)
-		skin.text_r(ci, 626, 12, zone_title, SFPalette.PAPER_DIM)
+		var label := "II  " + zone_title
+		var zw: float = skin.font.text_width(label) + 16.0
+		hud_menu_rect = Rect2(632 - zw, 8, zw, 15)
+		ci.draw_rect(hud_menu_rect, Color(0.04, 0.07, 0.08, 0.78), true)
+		ci.draw_rect(hud_menu_rect, SFPalette.STEEL_DARK, false, 1.0)
+		skin.text_r(ci, 626, 12, label, SFPalette.PAPER_DIM)
 
 	# Inventory strip, bottom left.
 	if not inventory_rows.is_empty():
@@ -188,6 +198,7 @@ func menu_list(ci: CanvasItem, menu, origin: Vector2, width: float, row_h: float
 		if detail != "" and focused:
 			skin.text_r(ci, origin.x + width - 6, r.position.y + 5, detail, SFPalette.PAPER_DIM)
 		rects.append(r)
+	menu.rects = rects
 	return rects
 
 
@@ -210,6 +221,9 @@ func value_row(ci: CanvasItem, pos: Vector2, label: String, value: String, width
 func journal_panel(ci: CanvasItem, entries: Array, index: int, footer_hint: String = "UP/DOWN  BROWSE     ESC  BACK") -> void:
 	var panel := Rect2(40, 34, 560, 292)
 	modal(ci, panel, SFPalette.GREEN_OK)
+	journal_back_rect = Rect2(panel.end.x - 84, panel.end.y - 20, 72, 14)
+	journal_rows = []
+	skin.button(ci, journal_back_rect, "BACK", true, true, SFPalette.GREEN_OK)
 	skin.text(ci, panel.position + Vector2(14, 10), "VOCABULARY JOURNAL", SFPalette.GREEN_OK)
 	skin.text_r(ci, panel.end.x - 14, panel.position.y + 10, "%d WORDS LEARNED" % entries.size(), SFPalette.PAPER_DIM)
 	if entries.is_empty():
@@ -227,6 +241,7 @@ func journal_panel(ci: CanvasItem, entries: Array, index: int, footer_hint: Stri
 	for i in range(first, mini(entries.size(), first + rows)):
 		var e: Dictionary = entries[i]
 		var y := list.position.y + 4.0 + float(i - first) * 16.0
+		journal_rows.append([i, Rect2(list.position.x + 2, y - 2, list.size.x - 4, 13)])
 		if i == sel:
 			ci.draw_rect(Rect2(list.position.x + 2, y - 2, list.size.x - 4, 13), SFPalette.CYAN_DARK, true)
 		skin.text(ci, Vector2(list.position.x + 8, y + 1), String(e.get("text", "")), SFPalette.PAPER if i == sel else SFPalette.PAPER_DIM)
@@ -248,3 +263,11 @@ func journal_panel(ci: CanvasItem, entries: Array, index: int, footer_hint: Stri
 		skin.text(ci, Vector2(dx, y2), "WHY IT MATTERS", SFPalette.GOLD)
 		skin.wrap(ci, Vector2(dx, y2 + 12.0), dw, note, SFPalette.PAPER_DIM, 1, 3)
 	skin.text_c(ci, panel.position.x + panel.size.x * 0.5, panel.end.y - 14, footer_hint, SFPalette.PAPER_DIM)
+
+
+## The journal entry index under `pos`, or -1.
+func journal_row_at(pos: Vector2) -> int:
+	for row in journal_rows:
+		if (row[1] as Rect2).has_point(pos):
+			return int(row[0])
+	return -1

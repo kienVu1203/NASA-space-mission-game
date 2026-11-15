@@ -62,7 +62,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if highlighted or mouse_hovered or is_exit_gate or prop_id.ends_with("checkpoint") or is_pickup():
+	if highlighted or mouse_hovered or is_exit_gate or prop_id.ends_with("checkpoint") or is_pickup() or prop_id == "bill_body":
 		_pulse += delta
 	queue_redraw()
 
@@ -108,10 +108,16 @@ func _draw() -> void:
 	if tex == null:
 		return
 
+	# The dormant robot at the crash site gets its own presentation so it does
+	# not melt into the ash: a pool of spill light from the wreck's floodlight
+	# behind it, a firm contact shadow, and (drawn after the sprite) a small
+	# external marker. None of it is Bill's own light; he is still unpowered.
+	if prop_id == "bill_body":
+		_draw_dormant_bill_ground()
 	# Contact shadow: props are sorted by their ground point, so the shadow
 	# belongs at the origin, not under the visible sprite centre.
 	var shadow_w: float = clampf(tex.get_width() * 0.65, 10.0, 34.0)
-	skin.contact_shadow(self, Vector2(0, 0), shadow_w, 0.20)
+	skin.contact_shadow(self, Vector2(0, 0), shadow_w + (6.0 if prop_id == "bill_body" else 0.0), 0.42 if prop_id == "bill_body" else 0.20)
 
 	var size := tex.get_size()
 	if is_exit_gate:
@@ -138,6 +144,31 @@ func _draw() -> void:
 		_draw_exit_overhead(size)
 	elif prop_id.ends_with("checkpoint"):
 		_draw_checkpoint_badge(size)
+	elif prop_id == "bill_body":
+		_draw_dormant_bill_marker(size)
+
+
+func _draw_dormant_bill_ground() -> void:
+	# Three nested pixel ellipses, brightest at the centre.
+	for i in 3:
+		var rx: float = 24.0 - float(i) * 7.0
+		var ry: float = 8.0 - float(i) * 2.2
+		var c := Color(0.86, 0.90, 0.80, 0.05 + float(i) * 0.03)
+		for dy in range(-int(ry), int(ry) + 1):
+			var half: float = rx * sqrt(maxf(0.0, 1.0 - pow(float(dy) / ry, 2.0)))
+			draw_rect(Rect2(round(-half), float(dy) - 2.0, round(half * 2.0), 1), c, true)
+
+
+## A small pale-gold chevron above the dormant robot: an objective marker in the
+## world, not a light on Bill.
+func _draw_dormant_bill_marker(size: Vector2) -> void:
+	var bob: float = round(sin(_pulse * 2.4) * 1.5)
+	var top: float = -size.y - 9.0 + bob
+	var c := Color(SFPalette.GOLD.r, SFPalette.GOLD.g, SFPalette.GOLD.b, 0.55 + 0.25 * sin(_pulse * 3.0))
+	draw_rect(Rect2(-3, top, 7, 1), c, true)
+	draw_rect(Rect2(-2, top + 1, 5, 1), c, true)
+	draw_rect(Rect2(-1, top + 2, 3, 1), c, true)
+	draw_rect(Rect2(0, top + 3, 1, 1), c, true)
 
 
 func _draw_exit_framing(size: Vector2) -> void:

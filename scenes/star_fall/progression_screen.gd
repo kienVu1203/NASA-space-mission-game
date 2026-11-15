@@ -8,7 +8,8 @@ extends Node2D
 ## player is done.
 ##
 ## Controls
-##   ENTER / E / ESC   continue
+##   ENTER / E / SPACE  continue (or click CONTINUE)
+##   ESC                the shared pause menu (controller); never continues
 
 signal closed
 
@@ -24,6 +25,10 @@ var mode: String = "base_return"
 var lines: Array = []
 var time: float = 0.0
 var closed_once: bool = false
+## Set by the controller while a dialogue is open over this screen (the base
+## return lines, then PHASE 2 COMPLETE). The dialogue owns every key and click
+## then, so nothing here may consume them.
+var input_locked: bool = false
 
 
 func setup(skin_ref, ui_ref, campaign_ref, screen_mode: String) -> void:
@@ -42,21 +47,37 @@ func _ready() -> void:
 	queue_redraw()
 
 
+const CONTINUE_BUTTON := Rect2(500, 340, 120, 16)
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	# Once closed (or while a dialogue is up) every event passes through to the
+	# controller, which routes it to the dialogue. Consuming it here is what
+	# froze the PHASE 2 COMPLETE dialogue.
+	if input_locked or closed_once:
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and CONTINUE_BUTTON.has_point(get_local_mouse_position()):
+			get_viewport().set_input_as_handled()
+			_continue()
+		return
 	if not (event is InputEventKey):
 		return
 	var key_event := event as InputEventKey
 	if not key_event.pressed or key_event.echo:
 		return
-	if key_event.keycode == KEY_ENTER or key_event.keycode == KEY_KP_ENTER \
-			or key_event.keycode == KEY_E or key_event.keycode == KEY_SPACE \
-			or key_event.keycode == KEY_ESCAPE:
-		if closed_once:
-			return
-		closed_once = true
-		skin.audio.sfx_confirm()
-		closed.emit()
-	get_viewport().set_input_as_handled()
+	if key_event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_E, KEY_SPACE]:
+		get_viewport().set_input_as_handled()
+		_continue()
+
+
+func _continue() -> void:
+	if closed_once:
+		return
+	closed_once = true
+	skin.audio.sfx_confirm()
+	closed.emit()
 
 
 func _process(delta: float) -> void:
@@ -85,6 +106,8 @@ func _draw() -> void:
 		y = skin.wrap(self, Vector2(28, y), VW - 56, String(lines[i]), SFPalette.PAPER, 1, 2) + 3.0
 
 	skin.text_c(self, VW * 0.5, VH - 12, "ENTER  CONTINUE", SFPalette.GOLD)
+	if not input_locked and not closed_once:
+		skin.button(self, CONTINUE_BUTTON, "CONTINUE", true, true, SFPalette.GOLD)
 	ui.toast(self)
 
 

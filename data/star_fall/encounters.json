@@ -383,7 +383,7 @@
       },
       "limits": {
         "min_fire_interval": 0.72,
-        "max_projectile_speed": 200.0,
+        "max_projectile_speed": 240.0,
         "max_active": 14,
         "max_volley": 3
       },
@@ -391,7 +391,7 @@
         {
           "at_fraction": 1.0,
           "fire_interval": 2.1,
-          "projectile_speed": 100.0,
+          "projectile_speed": 120.0,
           "max_active": 7,
           "telegraph": 1.15,
           "beneficial_interval": 6.0,
@@ -404,7 +404,7 @@
         {
           "at_fraction": 0.7,
           "fire_interval": 1.7,
-          "projectile_speed": 124.0,
+          "projectile_speed": 148.8,
           "max_active": 9,
           "telegraph": 1.0,
           "beneficial_interval": 5.6,
@@ -417,7 +417,7 @@
         {
           "at_fraction": 0.4,
           "fire_interval": 1.34,
-          "projectile_speed": 150.0,
+          "projectile_speed": 180.0,
           "max_active": 11,
           "telegraph": 0.9,
           "beneficial_interval": 5.2,
@@ -430,7 +430,7 @@
         {
           "at_fraction": 0.15,
           "fire_interval": 1.02,
-          "projectile_speed": 178.0,
+          "projectile_speed": 213.6,
           "max_active": 13,
           "telegraph": 0.8,
           "beneficial_interval": 4.8,

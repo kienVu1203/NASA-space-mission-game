@@ -247,12 +247,18 @@ static func _astronaut(dir: String) -> Image:
 
 
 # ---------------------------------------------------------------- Bill 14x18
-## A boxy maintenance unit: dark chassis, cyan single eye, stubby treads.
+## A boxy maintenance unit: pale chassis, single eye, stubby treads. The shell
+## is lighter than any crash-site ground tone and every edge carries a one-pixel
+## dark outline, so Bill reads against the ash. The white-cyan stripes are
+## reflective safety markings, not lights: they are there while he is dormant
+## too. Only a powered Bill lights his eye, chest lamp and antenna tip.
 
 static func _bill(powered: bool) -> Image:
 	var img := _img(14, 18)
-	var shell: Color = SFPalette.ASH_LIGHT if powered else SFPalette.ASH
-	var shell_dark: Color = SFPalette.ASH if powered else SFPalette.ASH.darkened(0.35)
+	var shell: Color = Color("b3bfba") if powered else Color("8d9893")
+	var shell_dark: Color = Color("76827c") if powered else Color("5e6964")
+	var mark: Color = Color("dff7f4") if powered else Color("c4dcd8")
+	var mark_cyan: Color = SFPalette.CYAN if powered else Color("6fa8a2")
 	var eye: Color = SFPalette.CYAN if powered else SFPalette.CYAN_DARK
 	var joint: Color = SFPalette.STEEL_DARK
 
@@ -264,28 +270,51 @@ static func _bill(powered: bool) -> Image:
 
 	# Body.
 	_rect(img, 3, 6, 8, 9, shell)
-	_rect(img, 3, 6, 8, 1, SFPalette.ASH_LIGHT if powered else SFPalette.ASH)
+	_rect(img, 3, 6, 8, 1, mark)
 	_rect(img, 3, 13, 8, 1, shell_dark)
-	# Chest panel.
-	_rect(img, 5, 9, 4, 3, shell_dark)
-	_px(img, 6, 10, eye)
-	_px(img, 7, 10, eye)
+	# Reflective chest band and the chest panel.
+	_rect(img, 3, 8, 8, 1, mark_cyan)
+	_rect(img, 5, 10, 4, 3, shell_dark)
+	_px(img, 6, 11, eye)
+	_px(img, 7, 11, eye)
 
 	# Head.
 	_rect(img, 4, 1, 6, 5, shell)
-	_rect(img, 4, 1, 6, 1, SFPalette.ASH_LIGHT if powered else SFPalette.ASH)
+	_rect(img, 4, 1, 6, 1, mark)
 	_rect(img, 5, 2, 4, 2, shell_dark)
 	_rect(img, 6, 2, 2, 2, eye)
 	if powered:
 		_px(img, 6, 2, Color("c9fff9"))
 	# Antenna.
 	_rect(img, 10, 0, 1, 3, joint)
-	_px(img, 10, 0, eye)
+	_px(img, 10, 0, SFPalette.CYAN if powered else joint)
 
-	# Arms.
+	# Arms, with a reflective cuff.
 	_rect(img, 1, 8, 2, 4, shell_dark)
 	_rect(img, 11, 8, 2, 4, shell_dark)
+	_px(img, 1, 11, mark_cyan)
+	_px(img, 12, 11, mark_cyan)
+	_outline(img, Color("0b1210"))
 	return img
+
+
+## Adds a one-pixel outline around every opaque pixel, inside the image bounds.
+static func _outline(img: Image, c: Color) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var edge: Array = []
+	for y in h:
+		for x in w:
+			if img.get_pixel(x, y).a > 0.0:
+				continue
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var nx: int = x + d.x
+				var ny: int = y + d.y
+				if nx >= 0 and ny >= 0 and nx < w and ny < h and img.get_pixel(nx, ny).a > 0.0:
+					edge.append(Vector2i(x, y))
+					break
+	for p in edge:
+		img.set_pixelv(p, c)
 
 
 # ---------------------------------------------------------------- vegetation

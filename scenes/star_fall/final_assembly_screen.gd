@@ -10,8 +10,9 @@ extends Node2D
 ##
 ## Controls
 ##   UP / DOWN, W / S   choose CONFIRM or BACK
-##   ENTER / SPACE / E  activate
-##   ESC                back, or skip the installation animation
+##   ENTER / SPACE / E  activate (or click a row)
+##   ENTER / SPACE      skip the installation animation (or click SKIP)
+##   ESC                the shared pause menu (controller)
 ##
 ## Double activation is refused: `_started` latches on the first valid confirm,
 ## so two clicks on the same frame cannot open two sequences.
@@ -104,7 +105,26 @@ func has_started() -> bool:
 
 # ---------------------------------------------------------------- input
 
+const SKIP_BUTTON := Rect2(270, 332, 100, 18)
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if input_locked:
+		return
+	var pos := get_local_mouse_position()
+	if event is InputEventMouseMotion:
+		if phase == Phase.REVIEW and menu.hover(pos):
+			skin.audio.sfx_select()
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			get_viewport().set_input_as_handled()
+			if phase == Phase.INSTALLING and SKIP_BUTTON.has_point(pos):
+				skip_installation()
+			elif phase == Phase.REVIEW and menu.click(pos) != "":
+				activate()
+		return
 	if not (event is InputEventKey):
 		return
 	var key := event as InputEventKey
@@ -118,10 +138,8 @@ func handle_key(keycode: int) -> void:
 	if input_locked:
 		return
 	if phase == Phase.INSTALLING:
-		if keycode == KEY_ESCAPE or keycode == KEY_ENTER or keycode == KEY_SPACE:
-			# Skipping the installation animation is safe: the outcome is applied
-			# by the controller before the animation starts.
-			_finish_installation()
+		if keycode == KEY_ENTER or keycode == KEY_KP_ENTER or keycode == KEY_SPACE:
+			skip_installation()
 		return
 	if phase == Phase.DONE:
 		return
@@ -134,10 +152,14 @@ func handle_key(keycode: int) -> void:
 			skin.audio.sfx_select()
 		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E:
 			activate()
-		KEY_ESCAPE:
-			skin.audio.sfx_back()
-			closed.emit()
 	queue_redraw()
+
+
+## Skipping the installation animation is safe: the outcome is applied by the
+## controller before the animation starts. Used by Enter, the SKIP button and
+## the pause menu's SKIP ANIMATION.
+func skip_installation() -> void:
+	_finish_installation()
 
 
 ## Activates the current row. Public so the controller and the tests use the
@@ -220,7 +242,7 @@ func _draw() -> void:
 	else:
 		ui.menu_list(self, menu, Vector2(272, 286), 344.0, 19.0, SFPalette.GREEN_OK)
 		skin.text_c(self, VW * 0.5, VH - 18,
-			"UP/DOWN: SELECT     ENTER: ACTIVATE     ESC: BACK", SFPalette.PAPER_DIM)
+			"CLICK OR UP/DOWN + ENTER     ESC: PAUSE", SFPalette.PAPER_DIM)
 
 	if message_timer > 0.0 and message != "":
 		var c: Color = SFPalette.RED if message_tone == "bad" else SFPalette.GOLD
@@ -334,4 +356,4 @@ func _draw_install_progress() -> void:
 	var idx: int = mini(steps.size() - 1, int(t * float(steps.size())))
 	if idx >= 0 and not steps.is_empty():
 		skin.text(self, panel.position + Vector2(10, 22), String(steps[idx]), SFPalette.PAPER)
-	skin.text_c(self, VW * 0.5, VH - 14, "ESC SKIP ANIMATION", SFPalette.PAPER_DIM)
+	skin.button(self, SKIP_BUTTON, "SKIP", SKIP_BUTTON.has_point(get_local_mouse_position()), true)

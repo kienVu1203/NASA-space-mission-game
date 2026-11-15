@@ -41,7 +41,8 @@ core/star_fall/                 Pure logic and presentation kit. No UI nodes.
   sf_reconstruction.gd          Phase 3: workshop selection, costs, atomic fabrication
   sf_return_sim.gd              Phase 3: return-mission simulation (pure)
   sf_finale.gd                  Phase 4: finale prerequisites, report, score (pure)
-  sf_qa.gd                      Phase 4: QA stage-skip latch and milestone planning (pure)
+  sf_qa.gd                      Milestone planner for the headless tests (no input; the I+O+P skip is removed)
+  sf_settings.gd                Local preferences file: volumes, text speed, reduced motion, practice unlock
   sf_debug_presets.gd           Debug builds: campaign states for the phase hotkeys (pure)
   sf_campaign.gd                Campaign state, quests, salvage, save dicts (pure)
   sf_save.gd                    Versioned save/load to user:// (pure + FileAccess)
@@ -79,7 +80,7 @@ data/star_fall/
   typing.json                   Phase 3: typing encounter tuning
   reconstruction.json           Phase 3: workshop options and simulation constants
   finale.json                   Phase 4: assembly copy, cinematic script, report copy,
-                                score weights, credits, QA hotkey settings
+                                score weights, credits (team first)
 
 tests/star_fall/
   test_parse.gd                 Every script compiles
@@ -168,7 +169,7 @@ menu -> briefing -> construction -> launch -> flight -> crash_intro
 | `reconstruction` | Workshop | VELA reconstruction and return simulation |
 | `ready_for_final_assembly` | Checkpoint | READY_FOR_FINAL_ASSEMBLY summary; opens the final-assembly gate |
 | `final_assembly` | Final assembly | Prerequisite gate, frozen snapshot, pre-finale checkpoint, install animation |
-| `escape` | Cinematic | Six-scene escape and the closing message; Space pauses, Esc skips |
+| `escape` | Cinematic | Six-scene escape and the closing message; Esc pauses (SKIP SEQUENCE in the pause menu), Enter / NEXT advances a beat |
 | `return_home` | Report | Mission report from the recorded run; the return objective is complete |
 | `mission_report` | Report | Reserved continuation of the same screen; marks the report seen |
 | `credits` | Credits | Credit roll, then the title. The ending state is saved |
@@ -377,13 +378,11 @@ the construction console and menu screens, which are panel-driven.
 | *(workshop)* Up/Down, Left/Right | — | Choose a row, change its option (Shift: fuel x5) |
 | *(workshop)* V / F / C | — | Run simulation / fabricate / scavenge materials |
 | *(final assembly)* Up/Down, Enter, Esc | — | Choose the row, activate, back |
-| *(cinematic)* Space | — | Pause / resume |
-| *(cinematic)* Esc | — | Skip the rest of the sequence (same outcome) |
-| *(cinematic)* Enter | — | Advance a beat, or skip the closing card |
+| *(cinematic)* Esc, right click, II PAUSE badge | — | Shared pause menu (resume, skip sequence, settings, main menu) |
+| *(cinematic)* Enter, NEXT badge | — | Advance a beat; CONTINUE / Enter on the closing card |
 | *(cinematic, playable segments)* A / D, Left / Right, mouse | `move_left`, `move_right` | Steer across the debris corridor; line up under the portal |
-| *(report, credits)* Up/Down | — | Scroll |
-| *(report, credits)* Enter / Space / Esc | — | Continue |
-| *(QA, debug or `--qa`)* I + O + P | — | Advance one campaign milestone |
+| *(report, credits)* Up/Down, mouse wheel | — | Scroll |
+| *(report, credits)* Enter / Space, CONTINUE / RETURN TO TITLE button | — | Continue (Esc pauses) |
 
 Behaviour requirements honoured by the implementation:
 
@@ -529,12 +528,10 @@ static score_for(campaign, report, finale_data) -> Dictionary
 static snapshot(campaign, reconstruction_data) -> Dictionary
 ```
 
-### `SFQA` (pure latch + milestone plan)
+### `SFQA` (pure milestone plan, tests only)
 
 ```gdscript
-static is_enabled() -> bool                     # debug/editor build, or --qa
-poll(i_down, o_down, p_down, delta) -> bool     # one true per press
-armed() / cooldown() / last_fired_milestone() -> ...
+# The I + O + P latch (is_enabled / poll / armed / cooldown) is removed.
 static next_milestone(campaign) -> String
 static milestone_done(campaign, id) -> bool
 static milestone_label(id) -> String
@@ -834,8 +831,10 @@ from scripted typing bots, not from people (section 17).
   mass/power/energy/cost/data readout, a ship drawing that changes with the
   installed parts, preflight validation with actionable hints, and an atomic
   confirm that refuses an invalid design.
-- Launch: countdown, ascent, a guided signal-tuning interaction, the rift, and
-  the crash transition. Esc skips the whole sequence without losing any state.
+- Launch: the player-built VELA on the pad (engines off), ignition, liftoff,
+  atmospheric ascent, Earth from orbit, a guided signal-tuning interaction
+  (A / D reticle), the rift, and the crash transition. It cannot be skipped;
+  Esc pauses it, and a save made during it replays it from the pad.
 - Crash site: walkable area with the wreck, salvage, a dead power junction, and
   Bill's dormant body. Inspecting the wreck grants design-dependent salvage.
 - Salvage and inventory with a hard carry limit, duplicate-proof pickups, and
@@ -964,14 +963,16 @@ blocking fixes are untouched.
 | Entry | Where | Mode | Reports to the campaign |
 |---|---|---|---|
 | Campaign | Forgotten City, control-center door (after the checkpoint) | `campaign` | `boss_defeated` and `reward_collected` |
-| Practice | Main menu, **ECO ARENA — 5-7 MIN** | `practice` | nothing |
+| Practice | Main menu, **ECO ARENA — 5-7 MIN** (locked until the campaign defeats the Scrap King) | `practice` | nothing |
 
 `core/star_fall/sf_eco_arena.gd` (pure rules, no nodes) and
 `scenes/star_fall/eco_arena_screen.gd` (guide, camera, drawing, HUD, pause,
 defeat, summary) are shared; `main.gd` only chooses the mode and connects the
 two campaign signals in campaign mode. Session state lives entirely in the
 model, so practice never touches `GameState.campaign` or the save file. The
-QA stage skip is also disabled while practice is open. The Junkyard Colossus
+practice unlock is a local preference (`practice_unlocked` in
+`user://star_fall_settings.cfg`), set when the campaign records
+`scrap_king_defeated` (live, or found in an existing save). The Junkyard Colossus
 is the arena's final enemy inside the Scrap King encounter, not a fourth
 campaign boss.
 
@@ -1298,7 +1299,7 @@ change any earlier phase's rules.
 | File | Owns |
 |---|---|
 | `core/star_fall/sf_finale.gd` | Finale prerequisites, the mission report built from the recorded run, the published score |
-| `core/star_fall/sf_qa.gd` | The `I + O + P` latch and the milestone plan; two data-driven design builders used only by QA |
+| `core/star_fall/sf_qa.gd` | The milestone plan and two data-driven design builders, used only by the tests (the `I + O + P` skip is removed) |
 | `scenes/star_fall/final_assembly_screen.gd` | The pre-finale gate, the confirm latch, the install animation |
 | `scenes/star_fall/cinematic_screen.gd` | The six-scene escape, subtitles, pause and skip |
 | `scenes/star_fall/mission_report_screen.gd` | Report layout, measured rows, scrolling |
@@ -1425,14 +1426,15 @@ the sequence. A / D, Left / Right or the mouse steer.
 mouth (or when the navigation assist takes over) and `entered` only once
 `ship_x - ship_half_length >= portal_x`, i.e. when the whole hull is through.
 The screen holds the scene until `entered`, then plays a 1.2 s flash; no timer
-or "next beat" key can advance the portal scene early. Esc still skips the
-whole sequence safely.
+or "next beat" key can advance the portal scene early. SKIP SEQUENCE in the
+pause menu still skips the whole sequence safely.
 
 **Cleanup.** `_next_scene()` and `_finish()` clear contacts, shake, flight
 state and notices, so no effect leaks into the next beat.
 
-**Skip and resume.** Space pauses (focus loss also pauses). Esc skips; repeated
-skip input is idempotent. A save written during `escape` resumes at the start of
+**Skip and resume.** Esc, right click or the II PAUSE badge opens the shared
+pause menu (focus loss also pauses); SKIP SEQUENCE there skips. Repeated skip
+input is idempotent. Space and other keys do nothing. A save written during `escape` resumes at the start of
 the escape; the documented safe checkpoint is `final_assembly`, and continuing
 from it replays the sequence rather than resuming mid-scene. Nothing is
 serialised mid-cinematic.
@@ -1460,80 +1462,15 @@ so stockpiling cannot raise it; it never penalises accessibility settings or a
 skipped cinematic; and several engineering approaches reach the same total
 because the efficiency term rewards margin rather than a single best build.
 
-### QA stage skip (`I + O + P`)
+### Milestone driver (tests only)
 
-- **Trigger.** All three of `KEY_I`, `KEY_O`, `KEY_P` held together. The latch
-  fires once, then requires a release *and* a cooldown (`qa.cooldown_seconds`,
-  default 0.45 s in `finale.json`), so holding the keys advances exactly one
-  milestone.
-- **Gate.** `SFQA.is_enabled()` is true in a debug build (`OS.is_debug_build()`),
-  in the editor, or in any build launched with `--qa`. A release build without
-  the flag cannot invoke it, and the HUD hint is not drawn there either.
-- **Milestones.** `briefing`, `construction`, `bill`, `phase_one`, `city`,
-  `coast`, `phase_two`, `dawn`, `workshop`, `ready`, `finale`, `report`, then
-  `done`. The next milestone is derived from the campaign stage, so the same
-  press does the same thing from any screen.
-- **State safety.** Each skip clears any dialogue, pause or transition first. It
-  then applies the same campaign methods the normal flow uses:
-  - construction skipped: a valid day-one design and manifest are built from
-    `ship_parts.json` and confirmed by the real validator;
-  - a boss or chapter skipped: the boss flag, its mandatory component and the
-    chapter archive are applied through `complete_boss()`/`restore_archive()`;
-  - the workshop skipped: a passing design is simulated, replenished to the fair
-    floor and fabricated through `SFReconstruction.commit()`;
-  - the finale skipped: the same snapshot, `complete_return()` and report state
-    the real path writes;
-  - every step ends with `_save_quietly()`, so the run is resumable at each
-    milestone.
-- **Isolation.** It only acts on a full chord. Individual I, O and P presses are
-  never consumed by it, so normal controls are unaffected. It marks
-  `qa_stage_skip_used` so a tester's save is identifiable; it changes no rule,
-  no report value and no score.
-
----
-
-## 15a. Deferred scope (explicitly not built)
-
-- Any 3D pipeline, engine migration, or external asset dependency.
-- A combined test runner across both games.
-- A Windows export executable (no preset and no export templates on the
-  delivery machine; see `docs/submission.md`).
-- A web build.
-
----
-
-## 16. Phase 3: scope and architecture
-
-Phase 3 adds the Dawn Tower chapter, the Sky Remnant typing encounter, the
-`shield_emitter` reward, the Dawn Project archive, the full VELA
-reconstruction workshop and the return-mission simulation. It stops at
-**READY_FOR_FINAL_ASSEMBLY**; the escape is Phase 4.
-
-| File | Owns |
-|---|---|
-| `core/star_fall/sf_vocabulary.gd` | Library load, validation, seeded deck selection |
-| `core/star_fall/sf_typing.gd` | Target selection and progress (first letter, reset, release) |
-| `core/star_fall/sf_typing_encounter.gd` | Pending queue, spawning, lanes, movement, misses, health, attacks, pacing, duration estimate |
-| `core/star_fall/sf_reconstruction.gd` | Workshop selection, material and fabrication cost, atomic commit, replenishment |
-| `core/star_fall/sf_return_sim.gd` | Pure, deterministic return-mission simulation |
-| `scenes/star_fall/typing_duel.gd` | Typing screen: drawing, input, pause, journal view, result signals |
-| `scenes/star_fall/reconstruction_screen.gd` | Workshop screen: selection UI, live preview, report, fabricate |
-| `core/star_fall/sf_ui.gd` `journal_panel()` | The journal view shared by the fight and the exploration pause |
-
-Rules the split enforces:
-
-- The typing screen reports `word_learned(id)`, `attempt_started(attempt,
-  order)` and `duel_finished("victory")`. `main.gd` records the journal entry
-  and the attempt history, and on victory only calls `defeat_boss()`: the
-  `shield_emitter` drops onto the slope and is awarded by
-  `collect_boss_reward()` when Nick picks it up (E), exactly once.
-- A typing fight is never serialised. The pre-boss checkpoint is the resume
-  point; a retry rebuilds the encounter from the same words in a new order.
-- A boss already defeated is never fought again: resuming a `dawn_boss` save
-  with `sky_remnant_defeated` set lands on the slope.
-- The workshop previews and simulates for free. Only
-  `SFReconstruction.commit()` spends materials, after checking every condition,
-  and it refuses once the VELA is assembled.
+The former `I + O + P` stage skip is removed: no key, chord, launch flag or
+build type reaches it. `SFQA` keeps only the milestone plan (`briefing`,
+`construction`, `bill`, `phase_one`, `city`, `coast`, `phase_two`, `dawn`,
+`workshop`, `ready`, `finale`, `report`, `done`) and the two design builders,
+and `main.gd::_apply_qa_skip()` survives as the headless test driver that walks
+a campaign through the same campaign methods the normal flow uses. Only
+`tests/star_fall/test_flow.gd`, `test_phase4.gd` and `capture.gd` call it.
 
 ### Dawn Tower flow
 
@@ -1947,9 +1884,8 @@ None of the earlier ids are renamed. `return_home` keeps its id and changes from
   efficiency, the decision explanations, and the published score.
 - **Credits.** The credit roll, the sources distinction (real physics, invented
   gameplay values, fiction) and the final message, then the title.
-- **QA stage skip.** `I + O + P`, enabled in debug/editor builds and with
-  `--qa`, edge-triggered with a cooldown, one milestone per press, with valid
-  designs, rewards, saves and checkpoints at every step.
+- **Milestone driver.** Test-only; the player-facing `I + O + P` skip is
+  removed (see the integration pass below).
 - **Save version 5** (Phase 4's snapshot on top of the merged version 4);
   versions 1-4 still load.
 - **Reduced motion setting.** Removes screen shake and lowers flashes in both
@@ -1968,8 +1904,8 @@ None of the earlier ids are renamed. `return_home` keeps its id and changes from
 - The credits roll has no music of its own; it reuses the title theme.
 - No executable was built: no export preset exists and no export templates are
   installed. See `docs/submission.md`.
-- The QA skip is guarded by build type and `--qa`, not by a per-session password;
-  anyone running a debug build can use it. That is intentional for playtesting.
+- The Ctrl + Shift + Alt debug hotkeys exist in any debug build (the editor or
+  `godot --path .`); an exported release build never creates them.
 
 ### Phase 3 known limitations
 
@@ -1986,3 +1922,106 @@ None of the earlier ids are renamed. `return_home` keeps its id and changes from
   share the hit sound's rate limit; whether that distinction reads well needs
   a playtest.
 - The vocabulary has not been reviewed by an educator (`docs/vocabulary.md`).
+
+
+## General integration pass (controls, pause, audio, progression)
+
+This pass unified the four phases. Where an earlier section disagrees, this
+section is current.
+
+### Input by context
+
+| Context | Movement | Other input |
+|---|---|---|
+| Exploration (all sites) | WASD / arrows (`move_*`), diagonals normalised, Shift run | E / Enter / Space interact, click to walk |
+| Construction console, workshop, final assembly | none | mouse on every part, row and button; keyboard as listed |
+| Phase 1 launch | none | signal investigation: `move_left` / `move_right` steer the reticle, E / Enter / Space or LOCK SIGNAL lock |
+| Eco Arena (boss 1) | WASD / arrows | mouse aim and fire, Shift dash, 1-3 / wheel colour, right click / E beam |
+| Toxic Tide (boss 2) | none (Nick fixed) | mouse shield, Space counterattack only (Enter / E never fire) |
+| Sky Remnant (typing) | none | A-Z type (I, O, P are ordinary letters), Backspace |
+| Escape cinematic | playable segments only: `move_left` / `move_right`, mouse | Enter / NEXT beat |
+
+One input map in `project.godot` serves every scene; no scene registers or
+erases actions. Focus loss releases every movement action; opening a pause
+menu or a dialogue releases them and disables the world.
+
+### Pause policy
+
+- `main.gd` owns one pause menu for `MAIN_PAUSE_SCREENS` (world, launch,
+  memory, summaries, archive, progression, final assembly, cinematic, report,
+  credits). Esc, right click, the HUD zone badge, the checkpoint MENU button and
+  the cinematic II PAUSE badge open it. It is taken in `_input()`, ahead of
+  every screen.
+- Opening it sets the current screen node to `PROCESS_MODE_DISABLED` (no
+  process, no input: timers, spawns, cinematic clock and animations stop), stops
+  the launch and memory updates and the play-time clock, releases movement, and
+  calls `SFAudio.set_paused(true)` (music ducks, ambience and gameplay voices
+  stop, UI sounds still play).
+- Rows: RESUME, SAVE PROGRESS (world), SKIP (cinematic, memory, installation
+  animation), VOCABULARY JOURNAL (world, when not empty), SETTINGS, RETURN TO
+  MAIN MENU. SETTINGS opens in place; Esc there returns to the menu; Esc on the
+  menu resumes. A dialogue takes Esc first, so one key never both closes a
+  modal and reopens pause.
+- The encounter screens keep their own menus, now mouse-operable, and also duck
+  audio while paused. Esc on a victory panel pauses instead of continuing, and
+  RESTART FIGHT is disabled there.
+- Esc never advances a story screen, starts the next chapter or confirms a
+  victory. Space never pauses.
+
+### Mouse
+
+`SFMenu.rects` is written by `SFUI.menu_list()` at draw time, and
+`item_at() / hover() / click()` test against it, so a hit region always matches
+the drawn row; a disabled row can never be clicked. Screen-space buttons are
+tested in the overlay's coordinates (`main._ui_mouse()`), unaffected by the
+world camera, the window scale or letterboxing. The Eco Arena blocks fire until
+the button that pressed START / RESUME / RETRY is released.
+
+### Progression and practice
+
+- New Game always starts at the Earth briefing. The only main-menu shortcut to
+  an encounter (Eco Arena practice) is locked until `scrap_king_defeated`.
+- A save at `launch` / `flight` now replays the launch from the pad instead of
+  skipping to the crash.
+- Debug presets (`sf_debug_presets.gd`) finish every earlier map: salvage ids
+  via `claim_salvage` (marked collected when the carry limit refuses), the coast
+  terminal and samples, the junction via `repair_junction`, every earlier boss
+  via `defeat_boss` + `collect_boss_reward`.
+
+### Boss 2 projectile speed (x1.2, data only)
+
+| Toxic Tide band | Before (px/s) | After (px/s) |
+|---|---|---|
+| 100% HP | 100.0 | 120.0 |
+| 70% HP | 124.0 | 148.8 |
+| 40% HP | 150.0 | 180.0 |
+| 15% HP | 178.0 | 213.6 |
+| `max_projectile_speed` | 200.0 | 240.0 |
+
+Hostile and beneficial energy still share the band speed; firing intervals
+are unchanged; the legacy Scrap King shield block and the Eco Arena / typing
+speeds are unchanged. The speed is read from data once per spawn, so retries
+never compound it (`test_encounter.gd`).
+
+### Audio
+
+Buses `Master`, `Music`, `SFX`, `UI` are created by `SFAudio.ensure_buses()`.
+Volumes (0-1) live in `user://star_fall_settings.cfg` with text speed, reduced
+motion and the practice unlock (`sf_settings.gd`); headless runs never write
+that file. `play_sfx()` and every synth cue pass a per-cue rate gate. `_go()`
+cuts gameplay voices on every screen change. New cues: `sfx_dash`,
+`sfx_landing`.
+
+### Presentation
+
+- Phase 1 launch: `construction_screen.gd::draw_day_one_ship()` is now the one
+  drawing of the player-built VELA, used by the console, the pad, the climb,
+  the rift and the crash. Stages: pad with gantry and floodlights (engines off,
+  T-3..1), ignition (flame from the bottom nozzles, pad smoke, light shake),
+  liftoff, atmosphere (sky darkens, clouds pass), orbit (Earth limb), then the
+  signal.
+- Bill: a lighter shell, a one-pixel dark outline, reflective white-cyan
+  markings (unlit while dormant), a firmer contact shadow, a pool of spill light
+  and a small gold marker while dormant. Active lights only after activation.
+- Credits: a TEAM section first, six names at double size, then the notes. No
+  agency text anywhere in player-facing data.

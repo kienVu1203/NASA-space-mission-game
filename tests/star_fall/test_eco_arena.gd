@@ -695,6 +695,23 @@ func _screen_and_practice() -> void:
 	var before := FileAccess.get_file_as_string(SFSave.SAVE_PATH)
 	var camp_before: Dictionary = main.campaign.to_save_dict()
 	main._go(main.Screen.TITLE)
+	# Practice is locked until the campaign beats the Scrap King; this save has
+	# not, so the row is locked and refuses.
+	main.practice_unlocked = false
+	main._refresh_save_state()
+	main.title_menu.index = main.title_menu.index_of("eco_arena")
+	check("practice is locked before the Scrap King falls", not main.title_menu.is_current_enabled())
+	main._title_activate()
+	check("the locked row stays on the title", main.screen == main.Screen.TITLE)
+	# A campaign that beat the Scrap King unlocks it (earned progress).
+	main.campaign.set_flag("scrap_king_defeated")
+	main._save_quietly()
+	main._refresh_save_state()
+	check("a save that beat the Scrap King unlocks practice", main.practice_unlocked)
+	main.campaign.set_flag("scrap_king_defeated", false)
+	main._save_quietly()
+	before = FileAccess.get_file_as_string(SFSave.SAVE_PATH)
+	camp_before = main.campaign.to_save_dict()
 	main.title_menu.index = main.title_menu.index_of("eco_arena")
 	check("the main menu lists ECO ARENA — 5-7 MIN", String((main.title_menu.items[main.title_menu.index] as Dictionary)["label"]).begins_with("ECO ARENA"))
 	main._title_activate()

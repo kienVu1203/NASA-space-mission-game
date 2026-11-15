@@ -73,6 +73,10 @@ var _boss_reported: bool = false
 var _reward_reported: bool = false
 var _finished: bool = false
 var _sound_gate: Dictionary = {}
+## Set when a click on a menu button starts or resumes the match: the held
+## left button must be released before the blaster fires, so the click that
+## pressed START or RESUME never also shoots into the arena.
+var _fire_block: bool = false
 
 
 func setup(skin_ref, ui_ref, arena_data: Dictionary, mode_id: String, resume: bool = false) -> void:
@@ -120,6 +124,7 @@ func start_from_guide() -> void:
 		state = State.PAUSED
 	else:
 		state = State.FIGHT
+		_fire_block = true
 		banner("SORT, CLEAN, RECOVER!", 2.0)
 	skin.audio.sfx_confirm()
 	queue_redraw()
@@ -136,6 +141,7 @@ func open_guide_from_pause() -> void:
 ## down a restart keeps it down (the defeat is already saved); `full` (Play
 ## Again) always replays the whole arena.
 func retry(full: bool = false) -> void:
+	_fire_block = true
 	model.reset(resume_reward and not full)
 	effects.clear()
 	shake = 0.0
@@ -163,6 +169,15 @@ func banner(text: String, seconds: float = 2.5) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if input_locked:
+		return
+	if event is InputEventMouseMotion:
+		if state == State.PAUSED and pause_menu.hover(get_global_mouse_position()):
+			skin.audio.sfx_select()
+		elif state == State.SUMMARY:
+			for i in summary_menu.items.size():
+				if _summary_button(i).has_point(get_global_mouse_position()) and summary_menu.index != i:
+					summary_menu.index = i
+					skin.audio.sfx_select()
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -253,6 +268,9 @@ func _mouse_button(mb: InputEventMouseButton) -> void:
 			elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 				model.cycle_spectrum(1)
 				skin.audio.sfx_select()
+		State.PAUSED:
+			if mb.button_index == MOUSE_BUTTON_LEFT and pause_menu.click(pos) != "":
+				_activate_pause(String(pause_menu.current_id()))
 		State.DEFEAT:
 			if mb.button_index == MOUSE_BUTTON_LEFT and defeat_timer >= RETRY_DELAY:
 				retry()
@@ -274,10 +292,13 @@ func _select(cat: String) -> void:
 func _open_pause() -> void:
 	state = State.PAUSED
 	pause_menu.index = 0
+	skin.audio.set_paused(true)
 	queue_redraw()
 
 
 func _close_pause() -> void:
+	skin.audio.set_paused(false)
+	_fire_block = true
 	skin.audio.sfx_blip()
 	if not guide_seen:
 		state = State.GUIDE
@@ -297,9 +318,12 @@ func _activate_pause(id: String) -> void:
 			open_guide_from_pause()
 		"retry":
 			guide_seen = true
+			skin.audio.set_paused(false)
+			_fire_block = true
 			retry()
 		"leave":
 			skin.audio.sfx_back()
+			skin.audio.set_paused(false)
 			arena_aborted.emit()
 
 
@@ -353,6 +377,11 @@ func _advance(dt: float) -> void:
 	elif is_inside_tree():
 		aim = get_global_mouse_position() + cam_draw
 		fire = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+		if _fire_block:
+			if fire:
+				fire = false
+			else:
+				_fire_block = false
 		beam = Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_action_pressed("interact")
 	_consume(model.tick(dt, move, aim, fire, beam))
 
@@ -500,7 +529,7 @@ func _consume(events: Array) -> void:
 				skin.audio.sfx_surge()
 			"dash":
 				_fx("dash", model.nick_pos, 0.25)
-				skin.audio.sfx_blip()
+				skin.audio.sfx_dash()
 			"chip_collected":
 				_fx("burst", at, 0.6)
 				skin.audio.sfx_pickup()
@@ -1366,7 +1395,7 @@ func _draw_pause() -> void:
 	ui.modal(self, Rect2(200, 92, 240, 170), SFPalette.CYAN)
 	skin.text_c(self, 320, 104, "PAUSED", SFPalette.CYAN)
 	ui.menu_list(self, pause_menu, Vector2(216, 122), 208.0, 20.0)
-	skin.text_c(self, 320, 244, "THE MATCH CLOCK IS STOPPED", SFPalette.PAPER_DIM)
+	skin.text_c(self, 320, 244, "THE MATCH CLOCK IS STOPPED - CLICK OR ENTER", SFPalette.PAPER_DIM)
 
 
 func _draw_defeat() -> void:

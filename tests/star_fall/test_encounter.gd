@@ -62,6 +62,7 @@ func _initialize() -> void:
 	_test_save_load()
 	_test_phase_one_untouched()
 	_test_phase_two_repairs()
+	_test_toxic_tide_speed_boost()
 
 	print("")
 	print("RESULT: %d check(s), %d failure(s)" % [checks_run, fails])
@@ -906,3 +907,41 @@ func _test_phase_two_repairs() -> void:
 		e_speed.field.sync_speeds(band_spd)
 		check("%s active projectiles synchronize identically on band transition" % boss_id,
 			is_equal_approx(float(p_hostile["speed"]), band_spd) and is_equal_approx(float(p_benef["speed"]), band_spd))
+
+
+## Toxic Tide (Phase 2 boss 2) projectile speeds are the original values times
+## 1.2, applied once in encounters.json. Before: 100 / 124 / 150 / 178 px/s,
+## cap 200. After: 120 / 148.8 / 180 / 213.6, cap 240.
+func _test_toxic_tide_speed_boost() -> void:
+	section("Toxic Tide projectile speed x1.2 (data, applied once)")
+	var before := {1.0: 100.0, 0.7: 124.0, 0.4: 150.0, 0.15: 178.0}
+	var enc = _new_encounter("toxic_tide")
+	for frac in before:
+		var expected: float = float(before[frac]) * 1.2
+		check("band at %.0f%% HP runs at %.1f (was %.1f)" % [float(frac) * 100.0, expected, float(before[frac])],
+			is_equal_approx(enc.scheduler.projectile_speed_for(float(frac)), expected),
+			"%.2f" % enc.scheduler.projectile_speed_for(float(frac)))
+	check("the cap is raised with them (no band is clamped)", is_equal_approx(float(enc.boss.get("limits", {}).get("max_projectile_speed", 0.0)), 240.0))
+	# Retrying (a new attempt) never compounds the multiplier.
+	for i in 3:
+		enc.reset()
+		enc.begin()
+	check("three retries leave the lowest band at 120", is_equal_approx(enc.scheduler.projectile_speed_for(1.0), 120.0))
+	check("three retries leave the top band at 213.6", is_equal_approx(enc.scheduler.projectile_speed_for(0.05), 213.6))
+	# Hostile and beneficial energy spawn at the same band speed.
+	var h: Dictionary = enc.field.spawn("bolt", Vector2(100, 100), Vector2(1, 0), enc.authoritative_projectile_speed())
+	var b: Dictionary = enc.field.spawn("brine_mote", Vector2(100, 120), Vector2(1, 0), enc.authoritative_projectile_speed())
+	check("hostile and beneficial energy share the boosted speed", is_equal_approx(float(h["speed"]), float(b["speed"])))
+	# The swept shield still intercepts at the fastest band speed.
+	var s = enc.shield
+	var arena := Rect2(0, 0, 640, 360)
+	enc.field.clear()
+	s.snap_direction(Vector2(1, 0))
+	enc.field.spawn("bolt", nick + Vector2(0, -1) * s.radius + Vector2(0, -6), Vector2(0, 1), 213.6)
+	s.aim(nick, nick + Vector2(0, -100))
+	s.aim(nick, nick + Vector2(-100, 0))
+	var events: Array = enc.field.update(0.05, nick, s, 8.0, arena)
+	check("the swept shield blocks a bolt at 213.6 px/s", events.size() == 1 and String(events[0]["kind"]) == "block")
+	# The waste-sorting arena (boss 1) keeps its own unchanged tuning.
+	var sk = _new_encounter("scrap_king")
+	check("the legacy Scrap King shield block is unchanged", is_equal_approx(sk.scheduler.projectile_speed_for(1.0), 92.0))

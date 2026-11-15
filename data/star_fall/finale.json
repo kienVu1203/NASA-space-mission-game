@@ -26,7 +26,7 @@
   },
   "cinematic": {
     "title": "ESCAPE",
-    "skip_hint": "ESC SKIP   SPACE PAUSE   ANY KEY NEXT",
+    "skip_hint": "ESC PAUSE   ENTER NEXT",
     "flight": {
       "_note": "Tuning for the two playable flight segments. VELA flies upright: `x` (ship_x, spawn_x, portal_x) is the along-track axis and runs up the screen (screen y = 360 - x); `y` (lane_top/bottom, portal_y) is the across-track axis, screen x, the axis the player steers on. ship_half_length and the shield half-extents match the canonical VELA renderer at scale 1 (core/star_fall/sf_vela.gd). `target_seconds` is how long a clean run of the segment takes; the assist values guarantee that a player who never touches the controls, or who keeps colliding, still finishes. Grit is small debris aimed at the ship and absorbed by the shield; graze_push is how hard the shield shoves a large body that passes close. The portal captures the ship after align_seconds in the mouth and then flies it in (entry_start_speed, entry_accel); the scene only moves on after the hull has crossed. `kind` is the only field the screen dispatches on.",
       "debris": {
@@ -231,6 +231,18 @@
     "scroll_seconds": 46.0,
     "sections": [
       {
+        "heading": "TEAM",
+        "team": true,
+        "lines": [
+          "DAM TRONG TAM",
+          "VU TRUNG KIEN",
+          "NGUYEN VU KHOI",
+          "NGUYEN CHAN TAI",
+          "NGUYEN LE KHOI HIEU",
+          "NGUYEN THAI DUONG"
+        ]
+      },
+      {
         "heading": "STAR FALL",
         "lines": [
           "A single-player pixel-art adventure.",
@@ -251,8 +263,7 @@
         "heading": "ORIGINAL ASSETS",
         "lines": [
           "Pixel font, sprites, palettes, UI and audio: original work in this repository.",
-          "No NASA imagery, logos or datasets are included.",
-          "No NASA endorsement is implied."
+          "No third-party imagery, logos or datasets are included."
         ]
       },
       {
@@ -284,12 +295,5 @@
       "You found your way back to Earth.",
       "Help keep it a home for those who come after us."
     ]
-  },
-  "qa": {
-    "_note": "QA-only stage skip. Enabled automatically in debug/editor builds, or in any build launched with the --qa command-line flag. Never active in a normal release run.",
-    "keys": ["I", "O", "P"],
-    "cooldown_seconds": 0.45,
-    "flag": "qa_stage_skip_used",
-    "notice": "QA: STAGE SKIPPED"
   }
 }

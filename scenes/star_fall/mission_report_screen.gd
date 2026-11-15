@@ -12,8 +12,9 @@ extends Node2D
 ##
 ## Controls
 ##   UP / DOWN, W / S   scroll
-##   ENTER / SPACE / E  continue to the credits
-##   ESC                continue to the credits
+##   ENTER / SPACE / E  continue to the credits (or click CONTINUE)
+##   MOUSE WHEEL        scroll
+##   ESC                the shared pause menu (controller); never continues
 
 signal closed
 
@@ -65,7 +66,24 @@ func label(key: String, fallback: String = "") -> String:
 
 # ---------------------------------------------------------------- input
 
+const CONTINUE_BUTTON := Rect2(10, 340, 110, 18)
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if not mb.pressed:
+			return
+		get_viewport().set_input_as_handled()
+		match mb.button_index:
+			MOUSE_BUTTON_WHEEL_DOWN:
+				handle_key(KEY_DOWN)
+			MOUSE_BUTTON_WHEEL_UP:
+				handle_key(KEY_UP)
+			MOUSE_BUTTON_LEFT:
+				if CONTINUE_BUTTON.has_point(get_local_mouse_position()):
+					handle_key(KEY_ENTER)
+		return
 	if not (event is InputEventKey):
 		return
 	var key := event as InputEventKey
@@ -83,7 +101,7 @@ func handle_key(keycode: int) -> void:
 		KEY_DOWN, KEY_S:
 			scroll = minf(max_scroll, scroll + 24.0)
 			skin.audio.sfx_select()
-		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E, KEY_ESCAPE:
+		KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E:
 			if closed_once:
 				return
 			closed_once = true
@@ -241,6 +259,7 @@ func _draw() -> void:
 
 	draw_rect(Rect2(0, VH - 22, VW, 22), Color(0.02, 0.04, 0.05, 0.94), true)
 	skin.text_c(self, VW * 0.5, VH - 16, label("continue_hint", "ENTER  CREDITS"), SFPalette.CYAN)
+	skin.button(self, CONTINUE_BUTTON, "CONTINUE", true, true)
 	if max_scroll > 0.0:
 		# The hint doubles as the "there is more below" marker, so the decision
 		# explanations are never missed when they start below the panel edge.

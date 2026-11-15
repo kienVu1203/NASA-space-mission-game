@@ -1,28 +1,23 @@
 extends RefCounted
-## QA stage skip: the `I + O + P` hotkey used for rapid playtesting.
+## Campaign milestone planner, used by the headless tests and the capture tool
+## to walk a campaign forward one checkpoint at a time.
 ##
-## Two halves, both here so the controller stays a controller:
-##   * Polling: a strict edge-triggered chord with a cooldown, so holding the
-##     three keys advances exactly one milestone.
-##   * Planning: which campaign milestone is next, and whether it is already
-##     done. The plan is derived from recorded campaign state, never from the
-##     screen that happens to be open, so the same press does the same thing
-##     from any screen.
+## The former player-facing `I + O + P` stage skip has been removed: this module
+## no longer reads keys, launch flags or build type, and nothing in the game's
+## input path calls it. `main.gd::_apply_qa_skip()` applies each milestone
+## through the same campaign methods the normal flow uses, which keeps a walked
+## campaign in a legal state; only test scripts call it.
 ##
-## This module never mutates the campaign and never touches a node. `main.gd`
-## applies each milestone through the same campaign methods the normal flow
-## uses, which is what keeps a skipped run in a legal state.
-##
-## The hotkey is enabled in debug builds and in the editor automatically, and in
-## any build launched with `--qa`. A release export without that flag cannot
-## invoke it, so it cannot interfere with a normal player's run.
+## Planning: which campaign milestone is next, and whether it is already done.
+## The plan is derived from recorded campaign state, never from the screen that
+## happens to be open. This module never mutates the campaign and never touches
+## a node, except for the two `apply_valid_*` helpers the tests use to build a
+## legal design.
 
 const SFCampaign := preload("res://core/star_fall/sf_campaign.gd")
 const SFReconstruction := preload("res://core/star_fall/sf_reconstruction.gd")
 const SFReturnSim := preload("res://core/star_fall/sf_return_sim.gd")
 
-const QA_FLAG := "--qa"
-const KEYS := ["I", "O", "P"]
 
 # Milestones, in the order the campaign reaches them. Each one is a checkpoint
 # boundary; the controller turns one into the state changes plus the screen.
@@ -55,56 +50,6 @@ const ORDER := [
 	MILESTONE_REPORT,
 	MILESTONE_DONE,
 ]
-
-var _armed: bool = true
-var _cooldown: float = 0.0
-var cooldown_seconds: float = 0.45
-var _last_fired_milestone: String = ""
-
-
-## True when the QA hotkey may run at all. Debug builds and the editor always
-## allow it; a release build needs the explicit `--qa` launch flag.
-static func is_enabled() -> bool:
-	if OS.is_debug_build():
-		return true
-	if OS.has_feature("editor") or OS.has_feature("debug"):
-		return true
-	var args: Array = []
-	args.append_array(OS.get_cmdline_args())
-	args.append_array(OS.get_cmdline_user_args())
-	for a in args:
-		if String(a) == QA_FLAG:
-			return true
-	return false
-
-
-## Edge-triggered chord. All three keys must be down; the chord fires once, then
-## must be released before it can fire again, and a cooldown is applied on top of
-## that so a torn press cannot double-fire. Returns true exactly once per press.
-func poll(i_down: bool, o_down: bool, p_down: bool, delta: float) -> bool:
-	_cooldown = maxf(0.0, _cooldown - delta)
-	var chord: bool = i_down and o_down and p_down
-	if not chord:
-		_armed = true
-		return false
-	if not _armed or _cooldown > 0.0:
-		return false
-	_armed = false
-	_cooldown = cooldown_seconds
-	return true
-
-
-## Test and tooling accessors: the same latch, without needing real key state.
-func armed() -> bool:
-	return _armed
-
-
-func cooldown() -> float:
-	return _cooldown
-
-
-func last_fired_milestone() -> String:
-	return _last_fired_milestone
 
 
 ## The next milestone the campaign has not reached yet.

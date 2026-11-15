@@ -160,8 +160,24 @@ func _run() -> void:
 	finish_dialogue()
 	var ws = main.workshop_screen
 	check("Workshop: all three parts ready, none fitted", ws != null and ws._state("shield_emitter") == "ready" and main.campaign.installed_component_ids().is_empty())
-	var scrap: int = main.campaign.material_count("scrap_metal")
-	check("M adds salvage", dj.handle_key(KEY_M) and main.campaign.material_count("scrap_metal") == scrap + 10)
+	# The jump finished every earlier map: salvage ids collected, every boss
+	# reward picked up (none left as a world drop), the junction paid for.
+	var camp = main.campaign
+	var all_collected := true
+	for site in SFDebugPresets.SITE_COLLECTIBLES:
+		for id in SFDebugPresets.SITE_COLLECTIBLES[site]:
+			all_collected = all_collected and camp.is_collected(String(id))
+	check("Workshop jump: every earlier map's salvage is collected", all_collected)
+	check("Workshop jump: the coast terminal and samples are done", camp.is_collected("coast_records_read") and camp.is_collected("sample_coast_water") and camp.is_collected("sample_coast_sediment"))
+	check("Workshop jump: each boss reward is collected, never waiting as a drop",
+		camp.reward_state("scrap_king_defeated", "navigation_chip") == "collected"
+		and camp.reward_state("toxic_tide_defeated", "power_core") == "collected"
+		and camp.reward_state("sky_remnant_defeated", "shield_emitter") == "collected")
+	check("Workshop jump: no component is held twice", camp.recovered_component_ids().size() == 3)
+	check("Workshop jump: every archive is restored", camp.restored_archives.size() == 3)
+	var scrap: int = camp.material_count("scrap_metal")
+	var free_before: int = camp.inventory_free()
+	check("M adds salvage up to the carry limit", dj.handle_key(KEY_M) and camp.material_count("scrap_metal") == scrap + mini(10, free_before))
 	check("V outside a fight does nothing", not dj.win_fight())
 	check("H toggles the help list", dj.handle_key(KEY_H) and dj.help_visible and dj.handle_key(KEY_H) and not dj.help_visible)
 

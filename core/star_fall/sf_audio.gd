@@ -13,6 +13,20 @@ extends Node
 
 const MIX_RATE := 22050.0
 const SFX_POOL_SIZE := 16
+const UI_POOL_SIZE := 4
+
+## Shared buses. Music carries the score and the ambience beds, SFX carries
+## gameplay one-shots and the synth, UI carries menu and dialogue blips. Each
+## has its own saved volume (core/star_fall/sf_settings.gd); Master scales all.
+const BUS_MUSIC := "Music"
+const BUS_SFX := "SFX"
+const BUS_UI := "UI"
+## While a pause menu is open the score drops to this fraction and the ambience
+## bed is silenced; gameplay voices are cut outright.
+const PAUSE_MUSIC_LEVEL := 0.35
+## The shortest gap between two plays of one sound. Keeps rapid fire, typing
+## and impacts from stacking into a harsh drone or clipping.
+const DEFAULT_MIN_GAP := 0.045
 
 enum Wave { SINE, SQUARE, SAW, TRI, NOISE }
 
@@ -40,6 +54,10 @@ var _tick_timer: float = 4.0
 var _samples: Dictionary = {}
 var _sfx_pool: Array[AudioStreamPlayer] = []
 var _sfx_idx: int = 0
+var _ui_pool: Array[AudioStreamPlayer] = []
+var _ui_idx: int = 0
+var _last_played: Dictionary = {}
+var paused: bool = false
 var _music_earth: AudioStreamPlayer
 var _music_ruin: AudioStreamPlayer
 var _music_earth_vol: float = 0.0
@@ -106,8 +124,31 @@ var _music_vol_b: float = 0.0
 var current_music: String = "none"
 
 
+## Creates the Music, SFX and UI buses once, routed to Master. Safe to call
+## more than once (a second main scene, a test) without duplicating buses.
+static func ensure_buses() -> void:
+	for bus_name in [BUS_MUSIC, BUS_SFX, BUS_UI]:
+		if AudioServer.get_bus_index(bus_name) != -1:
+			continue
+		AudioServer.add_bus()
+		var idx := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(idx, bus_name)
+		AudioServer.set_bus_send(idx, "Master")
+
+
+## Sets one bus's volume from a 0..1 slider value. Zero mutes the bus.
+static func set_bus_volume(bus_name: String, value: float) -> void:
+	var idx := AudioServer.get_bus_index(bus_name)
+	if idx == -1:
+		return
+	var v := clampf(value, 0.0, 1.0)
+	AudioServer.set_bus_mute(idx, v <= 0.001)
+	AudioServer.set_bus_volume_db(idx, linear_to_db(maxf(v, 0.001)))
+
+
 func _ready() -> void:
 	_rng.randomize()
+	ensure_buses()
 
 	# 1. Initialize fallback procedural synthesizer
 	var gen := AudioStreamGenerator.new()
@@ -116,6 +157,7 @@ func _ready() -> void:
 	_player = AudioStreamPlayer.new()
 	_player.stream = gen
 	_player.name = "SFSynth"
+	_player.bus = BUS_SFX
 	add_child(_player)
 	_player.play()
 	_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
@@ -130,8 +172,15 @@ func _ready() -> void:
 	for i in SFX_POOL_SIZE:
 		var p := AudioStreamPlayer.new()
 		p.name = "SFXPlayer_%d" % i
+		p.bus = BUS_SFX
 		add_child(p)
 		_sfx_pool.append(p)
+	for i in UI_POOL_SIZE:
+		var u := AudioStreamPlayer.new()
+		u.name = "UIPlayer_%d" % i
+		u.bus = BUS_UI
+		add_child(u)
+		_ui_pool.append(u)
 
 	# 4. Create ambient music players
 	_music_earth = AudioStreamPlayer.new()
@@ -146,6 +195,7 @@ func _ready() -> void:
 		if ambience == "earth" and not muted and _music_earth.stream != null:
 			_music_earth.play()
 	)
+	_music_earth.bus = BUS_MUSIC
 	add_child(_music_earth)
 
 	_music_ruin = AudioStreamPlayer.new()
@@ -160,6 +210,7 @@ func _ready() -> void:
 		if ambience == "ruin" and not muted and _music_ruin.stream != null:
 			_music_ruin.play()
 	)
+	_music_ruin.bus = BUS_MUSIC
 	add_child(_music_ruin)
 
 	# 5. Preload background music tracks & setup cross-fading BGM players
@@ -177,6 +228,7 @@ func _ready() -> void:
 		if _music_a_active and current_music != "none" and not muted and _music_player_a.stream != null:
 			_music_player_a.play()
 	)
+	_music_player_a.bus = BUS_MUSIC
 	add_child(_music_player_a)
 
 	_music_player_b = AudioStreamPlayer.new()
@@ -186,6 +238,7 @@ func _ready() -> void:
 		if not _music_a_active and current_music != "none" and not muted and _music_player_b.stream != null:
 			_music_player_b.play()
 	)
+	_music_player_b.bus = BUS_MUSIC
 	add_child(_music_player_b)
 
 
@@ -214,6 +267,14 @@ func set_muted(value: bool) -> void:
 	for p in _sfx_pool:
 		if p.playing and muted:
 			p.volume_db = -80.0
+	for u in _ui_pool:
+		if u.playing and muted:
+			u.volume_db = -80.0
+	# Unmuting resumes the current track; it was never started while muted.
+	if not muted and current_music != "none":
+		var active: AudioStreamPlayer = _music_player_a if _music_a_active else _music_player_b
+		if active != null and active.stream != null and not active.playing:
+			active.play()
 
 
 func toggle_muted() -> bool:
@@ -274,13 +335,33 @@ func _synth_transition() -> void:
 
 # ---------------------------------------------------------------- play router
 
+## True when `key` played less than `gap` seconds ago; otherwise records now.
+## Every one-shot goes through this, so one action can never stack the same
+## sound on itself.
+func _gate(key: String, gap: float = DEFAULT_MIN_GAP) -> bool:
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - float(_last_played.get(key, -100.0)) < gap:
+		return true
+	_last_played[key] = now
+	return false
+
+
 func play_sfx(key: String, fallback_callable: Callable = Callable(), pan: float = 0.0) -> bool:
 	if muted:
 		return false
+	if _gate(key):
+		return true
 
-	if _samples.has(key) and _samples[key] != null and not _sfx_pool.is_empty():
-		var p: AudioStreamPlayer = _sfx_pool[_sfx_idx]
-		_sfx_idx = (_sfx_idx + 1) % _sfx_pool.size()
+	var ui_sound: bool = key.begins_with("ui_") or key.begins_with("blip_")
+	var pool: Array[AudioStreamPlayer] = _ui_pool if ui_sound else _sfx_pool
+	if _samples.has(key) and _samples[key] != null and not pool.is_empty():
+		var p: AudioStreamPlayer
+		if ui_sound:
+			p = _ui_pool[_ui_idx]
+			_ui_idx = (_ui_idx + 1) % _ui_pool.size()
+		else:
+			p = _sfx_pool[_sfx_idx]
+			_sfx_idx = (_sfx_idx + 1) % _sfx_pool.size()
 		p.stream = _samples[key]
 		p.volume_db = linear_to_db(master)
 		p.play()
@@ -536,6 +617,8 @@ func _synth_step() -> void:
 
 ## Hostile energy intercepted by the shield: bright, metallic, harmless.
 func sfx_shield_block() -> void:
+	if muted or _gate("sfx_shield_block", 0.05):
+		return
 	_add(Wave.NOISE, 2600.0, 900.0, 0.12, 0.002, 0.05, 0.10)
 	_add(Wave.SQUARE, 720.0, 480.0, 0.05, 0.002, 0.04, 0.08)
 
@@ -544,16 +627,22 @@ func sfx_shield_block() -> void:
 ## correct match is audible without looking: organic is soft and wet, paper
 ## tears, plastic and metal ring hollow. Deflection reuses the shield block.
 func sfx_sort_organic() -> void:
+	if muted or _gate("sfx_sort_organic", 0.05):
+		return
 	_add(Wave.NOISE, 420.0, 160.0, 0.10, 0.004, 0.06, 0.10)
 	_add(Wave.SINE, 180.0, 110.0, 0.08, 0.004, 0.07, 0.10)
 
 
 func sfx_sort_paper() -> void:
+	if muted or _gate("sfx_sort_paper", 0.05):
+		return
 	_add(Wave.NOISE, 3200.0, 1400.0, 0.08, 0.002, 0.03, 0.07)
 	_add(Wave.NOISE, 1800.0, 2600.0, 0.05, 0.02, 0.04, 0.09)
 
 
 func sfx_sort_metal() -> void:
+	if muted or _gate("sfx_sort_metal", 0.05):
+		return
 	_add(Wave.TRI, 1180.0, 1120.0, 0.08, 0.001, 0.12, 0.16)
 	_add(Wave.SQUARE, 2360.0, 2300.0, 0.03, 0.001, 0.05, 0.08)
 
@@ -562,47 +651,63 @@ func sfx_sort_metal() -> void:
 ## at the fire rate. `pitch` shifts it per spectrum so the active color is
 ## audible too.
 func sfx_blaster(pitch: float = 1.0) -> void:
+	if muted or _gate("sfx_blaster", 0.05):
+		return
 	_add(Wave.SQUARE, 880.0 * pitch, 520.0 * pitch, 0.22, 0.001, 0.04, 0.07)
 	_add(Wave.NOISE, 2400.0, 1600.0, 0.10, 0.001, 0.025, 0.04)
 
 
 ## Wrong-color contact with a dirty core: a small harmless static crackle.
 func sfx_static() -> void:
+	if muted or _gate("sfx_static", 0.06):
+		return
 	_add(Wave.NOISE, 5200.0, 2400.0, 0.06, 0.001, 0.03, 0.06)
 
 
 ## Beneficial energy absorbed: rising, warm, distinct from a block.
 func sfx_shield_absorb() -> void:
+	if muted or _gate("sfx_shield_absorb", 0.06):
+		return
 	_add(Wave.SINE, 620.0, 1240.0, 0.10, 0.01, 0.16, 0.22)
 	_add(Wave.TRI, 930.0, 1390.0, 0.05, 0.02, 0.14, 0.20)
 
 
 ## Nick takes a hit: low and blunt, no high frequencies to grate over time.
 func sfx_player_hurt() -> void:
+	if muted or _gate("sfx_player_hurt", 0.15):
+		return
 	_add(Wave.SQUARE, 220.0, 90.0, 0.14, 0.003, 0.10, 0.18)
 	_add(Wave.NOISE, 700.0, 180.0, 0.10, 0.003, 0.08, 0.14)
 
 
 ## Charge reaches full: a clean two-note ready chime.
 func sfx_charge_ready() -> void:
+	if muted or _gate("sfx_charge_ready", 0.3):
+		return
 	_add(Wave.SINE, 660.0, 660.0, 0.10, 0.01, 0.20, 0.26)
 	_add(Wave.SINE, 990.0, 990.0, 0.08, 0.05, 0.24, 0.30)
 
 
 ## Counterattack launch and its travel toward the robot.
 func sfx_counterattack() -> void:
+	if muted or _gate("sfx_counterattack", 0.2):
+		return
 	_add(Wave.SAW, 180.0, 900.0, 0.14, 0.01, 0.22, 0.32)
 	_add(Wave.NOISE, 400.0, 2400.0, 0.10, 0.01, 0.16, 0.26)
 
 
 ## Counterattack impact on the boss chassis.
 func sfx_counter_hit() -> void:
+	if muted or _gate("sfx_counter_hit", 0.15):
+		return
 	_add(Wave.NOISE, 1800.0, 120.0, 0.26, 0.002, 0.20, 0.34)
 	_add(Wave.SINE, 150.0, 55.0, 0.20, 0.003, 0.18, 0.30)
 
 
 ## Boss defeated: a long power-down, not an explosion.
 func sfx_boss_down() -> void:
+	if muted or _gate("sfx_boss_down", 1.0):
+		return
 	_add(Wave.SAW, 300.0, 40.0, 0.16, 0.02, 0.90, 1.30)
 	_add(Wave.NOISE, 900.0, 100.0, 0.12, 0.02, 0.70, 1.10)
 	_add(Wave.SINE, 220.0, 110.0, 0.10, 0.10, 0.80, 1.20)
@@ -610,8 +715,45 @@ func sfx_boss_down() -> void:
 
 ## Encounter failure sting.
 func sfx_defeat() -> void:
+	if muted or _gate("sfx_defeat", 1.0):
+		return
 	_add(Wave.SQUARE, 240.0, 70.0, 0.16, 0.01, 0.35, 0.55)
 	_add(Wave.SAW, 130.0, 45.0, 0.12, 0.03, 0.40, 0.60)
+
+
+## Eco Arena dash: a short low whoosh, quieter than the blaster.
+func sfx_dash() -> void:
+	if muted or _gate("sfx_dash", 0.2):
+		return
+	_add(Wave.NOISE, 900.0, 260.0, 0.09, 0.005, 0.08, 0.16)
+	_add(Wave.SINE, 240.0, 140.0, 0.05, 0.005, 0.08, 0.14)
+
+
+## VELA touches down: a soft weighted thud, then the hull settling.
+func sfx_landing() -> void:
+	if muted or _gate("sfx_landing", 1.0):
+		return
+	_add(Wave.SINE, 120.0, 50.0, 0.18, 0.004, 0.22, 0.40)
+	_add(Wave.NOISE, 600.0, 120.0, 0.08, 0.004, 0.18, 0.32)
+	sfx_hull_creak()
+
+
+## Pause: the score dips, the ambience bed and every gameplay voice stop, and
+## menu sounds keep working on the UI bus. Resuming restores the levels.
+func set_paused(value: bool) -> void:
+	paused = value
+	if value:
+		stop_gameplay_voices()
+
+
+## Cuts gameplay one-shots (synth voices and the SFX pool) without touching the
+## music or the UI bus. Used on pause and whenever a screen is torn down, so no
+## combat or machinery sound outlives the scene that started it.
+func stop_gameplay_voices() -> void:
+	_voices.clear()
+	for p in _sfx_pool:
+		if p.playing:
+			p.stop()
 
 
 # ---------------------------------------------------------------- synthesis core
@@ -628,8 +770,9 @@ func _add(wave: int, f0: float, f1: float, amp: float, attack: float, decay: flo
 
 func _process(delta: float) -> void:
 	# 1. Cross-fade streaming background music tracks
-	var target_a := 1.0 if (_music_a_active and current_music != "none" and not muted) else 0.0
-	var target_b := 1.0 if (not _music_a_active and current_music != "none" and not muted) else 0.0
+	var duck: float = PAUSE_MUSIC_LEVEL if paused else 1.0
+	var target_a := duck if (_music_a_active and current_music != "none" and not muted) else 0.0
+	var target_b := duck if (not _music_a_active and current_music != "none" and not muted) else 0.0
 	_music_vol_a = lerpf(_music_vol_a, target_a, clampf(delta * 2.5, 0.0, 1.0))
 	_music_vol_b = lerpf(_music_vol_b, target_b, clampf(delta * 2.5, 0.0, 1.0))
 
@@ -650,8 +793,8 @@ func _process(delta: float) -> void:
 			_music_player_b.volume_db = linear_to_db(_music_vol_b * master)
 
 	# Cross-fade streaming ambient music tracks
-	var target_earth_vol := 1.0 if (ambience == "earth" and not muted) else 0.0
-	var target_ruin_vol := 1.0 if (ambience == "ruin" and not muted) else 0.0
+	var target_earth_vol := 1.0 if (ambience == "earth" and not muted and not paused) else 0.0
+	var target_ruin_vol := 1.0 if (ambience == "ruin" and not muted and not paused) else 0.0
 	_music_earth_vol = lerpf(_music_earth_vol, target_earth_vol, clampf(delta * 2.0, 0.0, 1.0))
 	_music_ruin_vol = lerpf(_music_ruin_vol, target_ruin_vol, clampf(delta * 2.0, 0.0, 1.0))
 
@@ -681,7 +824,7 @@ func _process(delta: float) -> void:
 			_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
 		return
 
-	_amb_level = lerpf(_amb_level, _amb_target, clampf(delta * 2.0, 0.0, 1.0))
+	_amb_level = lerpf(_amb_level, 0.0 if paused else _amb_target, clampf(delta * 2.0, 0.0, 1.0))
 
 	# Prefer streamed ambience where available, with procedural ambience as fallback.
 	var need_synth_ambience := true
@@ -821,3 +964,5 @@ func stop_all() -> void:
 		_music_player_b.stop()
 	for p in _sfx_pool:
 		p.stop()
+	for u in _ui_pool:
+		u.stop()

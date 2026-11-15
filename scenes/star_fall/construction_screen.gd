@@ -673,12 +673,17 @@ func _delta_row(x: float, y: float, w: float, label: String, before: float, afte
 
 
 ## Draws the ship at a ground point, its shape driven by the design.
-func _draw_assembled_ship(ground: Vector2) -> void:
-	var d = campaign.design
-	var hull: Dictionary = campaign.content.hull
+## Draws the player-built day-one VELA from its design: engine bells, solar
+## wings or cells, comms mast and sensor dome follow the fitted parts. Static so
+## the launch sequence draws exactly the ship the console showed (no asset swap).
+## `show_missing` adds the red markers for empty slots (console only);
+## `grounded` draws the contact shadow (off while the ship is in the air).
+static func draw_day_one_ship(ci: CanvasItem, skin_ref, ground: Vector2, d, content, blink: float, show_missing: bool = true, grounded: bool = true) -> void:
+	var hull: Dictionary = content.hull
 
 	# Cradle and contact shadow.
-	skin.contact_shadow(self, ground + Vector2(0, 4), 54.0, 0.30)
+	if grounded:
+		skin_ref.contact_shadow(ci, ground + Vector2(0, 4), 54.0, 0.30)
 
 	# Propulsion: engine bells widen with the heavy cluster.
 	var prop_id: String = String(d.slot_component("propulsion"))
@@ -689,82 +694,82 @@ func _draw_assembled_ship(ground: Vector2) -> void:
 		bell_w = 22.0
 	elif light:
 		bell_w = 10.0
-	draw_rect(Rect2(ground.x - bell_w * 0.5, ground.y - 22, bell_w, 12), SFPalette.STEEL_DARK, true)
-	draw_rect(Rect2(ground.x - bell_w * 0.5 + 1, ground.y - 22, maxf(2.0, bell_w * 0.25), 12), SFPalette.STEEL_MID, true)
+	ci.draw_rect(Rect2(ground.x - bell_w * 0.5, ground.y - 22, bell_w, 12), SFPalette.STEEL_DARK, true)
+	ci.draw_rect(Rect2(ground.x - bell_w * 0.5 + 1, ground.y - 22, maxf(2.0, bell_w * 0.25), 12), SFPalette.STEEL_MID, true)
 	if not prop_id.is_empty():
-		draw_rect(Rect2(ground.x - bell_w * 0.5, ground.y - 13, bell_w, 3), SFPalette.RUST, true)
+		ci.draw_rect(Rect2(ground.x - bell_w * 0.5, ground.y - 13, bell_w, 3), SFPalette.RUST, true)
 
 	# Main hull body, painted with the campaign palette.
 	var body := Rect2(ground.x - 15, ground.y - 104, 30, 82)
-	draw_rect(body, SFPalette.STEEL_MID, true)
-	draw_rect(Rect2(body.position, Vector2(4, body.size.y)), SFPalette.STEEL, true)
-	draw_rect(Rect2(body.end.x - 4, body.position.y, 4, body.size.y), SFPalette.STEEL_DARK, true)
+	ci.draw_rect(body, SFPalette.STEEL_MID, true)
+	ci.draw_rect(Rect2(body.position, Vector2(4, body.size.y)), SFPalette.STEEL, true)
+	ci.draw_rect(Rect2(body.end.x - 4, body.position.y, 4, body.size.y), SFPalette.STEEL_DARK, true)
 	# Panel lines.
 	var py := body.position.y + 16.0
 	while py < body.end.y:
-		draw_rect(Rect2(body.position.x + 4, py, body.size.x - 8, 1), SFPalette.STEEL_DARK, true)
+		ci.draw_rect(Rect2(body.position.x + 4, py, body.size.x - 8, 1), SFPalette.STEEL_DARK, true)
 		py += 16.0
 
 	# Computer bay (upper hull), visible as a lit band when installed.
 	var comp_id: String = String(d.slot_component("computer"))
 	if comp_id != "":
-		draw_rect(Rect2(ground.x - 9, ground.y - 96, 18, 8), SFPalette.INK, true)
-		draw_rect(Rect2(ground.x - 7, ground.y - 94, 14, 4), SFPalette.CYAN_DIM, true)
-		draw_rect(Rect2(ground.x - 7, ground.y - 94, 8, 1), SFPalette.CYAN, true)
+		ci.draw_rect(Rect2(ground.x - 9, ground.y - 96, 18, 8), SFPalette.INK, true)
+		ci.draw_rect(Rect2(ground.x - 7, ground.y - 94, 14, 4), SFPalette.CYAN_DIM, true)
+		ci.draw_rect(Rect2(ground.x - 7, ground.y - 94, 8, 1), SFPalette.CYAN, true)
 
 	# Power plant: solar wings or a lit cell block.
 	var power_id: String = String(d.slot_component("power"))
 	if power_id == "power_solar_array":
-		draw_rect(Rect2(ground.x - 40, ground.y - 74, 22, 26), SFPalette.BLUE_ACCENT, true)
-		draw_rect(Rect2(ground.x + 18, ground.y - 74, 22, 26), SFPalette.BLUE_ACCENT, true)
+		ci.draw_rect(Rect2(ground.x - 40, ground.y - 74, 22, 26), SFPalette.BLUE_ACCENT, true)
+		ci.draw_rect(Rect2(ground.x + 18, ground.y - 74, 22, 26), SFPalette.BLUE_ACCENT, true)
 		var i := 0
 		while i < 4:
-			draw_rect(Rect2(ground.x - 38 + i * 5, ground.y - 72, 1, 22), SFPalette.CYAN_DIM, true)
-			draw_rect(Rect2(ground.x + 20 + i * 5, ground.y - 72, 1, 22), SFPalette.CYAN_DIM, true)
+			ci.draw_rect(Rect2(ground.x - 38 + i * 5, ground.y - 72, 1, 22), SFPalette.CYAN_DIM, true)
+			ci.draw_rect(Rect2(ground.x + 20 + i * 5, ground.y - 72, 1, 22), SFPalette.CYAN_DIM, true)
 			i += 1
-		draw_rect(Rect2(ground.x - 40, ground.y - 74, 22, 1), SFPalette.STEEL, true)
-		draw_rect(Rect2(ground.x + 18, ground.y - 74, 22, 1), SFPalette.STEEL, true)
+		ci.draw_rect(Rect2(ground.x - 40, ground.y - 74, 22, 1), SFPalette.STEEL, true)
+		ci.draw_rect(Rect2(ground.x + 18, ground.y - 74, 22, 1), SFPalette.STEEL, true)
 	elif power_id == "power_rtg_cell":
-		draw_rect(Rect2(ground.x - 24, ground.y - 70, 10, 22), SFPalette.ASH, true)
-		draw_rect(Rect2(ground.x + 14, ground.y - 70, 10, 22), SFPalette.ASH, true)
-		draw_rect(Rect2(ground.x - 23, ground.y - 66, 8, 2), SFPalette.GOLD, true)
-		draw_rect(Rect2(ground.x + 15, ground.y - 66, 8, 2), SFPalette.GOLD, true)
+		ci.draw_rect(Rect2(ground.x - 24, ground.y - 70, 10, 22), SFPalette.ASH, true)
+		ci.draw_rect(Rect2(ground.x + 14, ground.y - 70, 10, 22), SFPalette.ASH, true)
+		ci.draw_rect(Rect2(ground.x - 23, ground.y - 66, 8, 2), SFPalette.GOLD, true)
+		ci.draw_rect(Rect2(ground.x + 15, ground.y - 66, 8, 2), SFPalette.GOLD, true)
 
 	# Communications mast.
 	if d.slot_component("communications") != "":
-		draw_rect(Rect2(ground.x + 14, ground.y - 118, 2, 20), SFPalette.STEEL_DARK, true)
-		draw_rect(Rect2(ground.x + 10, ground.y - 120, 10, 2), SFPalette.STEEL, true)
-		draw_rect(Rect2(ground.x + 12, ground.y - 126, 6, 6), SFPalette.STEEL_MID, true)
-		draw_rect(Rect2(ground.x + 14, ground.y - 124, 2, 2), SFPalette.CYAN, true)
+		ci.draw_rect(Rect2(ground.x + 14, ground.y - 118, 2, 20), SFPalette.STEEL_DARK, true)
+		ci.draw_rect(Rect2(ground.x + 10, ground.y - 120, 10, 2), SFPalette.STEEL, true)
+		ci.draw_rect(Rect2(ground.x + 12, ground.y - 126, 6, 6), SFPalette.STEEL_MID, true)
+		ci.draw_rect(Rect2(ground.x + 14, ground.y - 124, 2, 2), SFPalette.CYAN, true)
 
 	# Sensor dome: changes size and glow tone with quality.
 	var sensor_id: String = String(d.slot_component("sensor"))
 	if sensor_id != "":
-		var sensor: Dictionary = campaign.content.component(sensor_id)
+		var sensor: Dictionary = content.component(sensor_id)
 		var q := int(sensor.get("sensor_quality", 0))
 		var r := 4.0 + float(q) * 2.0
-		draw_rect(Rect2(ground.x - r, ground.y - 112 - r, r * 2, r * 2), SFPalette.STEEL_DARK, true)
-		draw_rect(Rect2(ground.x - r + 1, ground.y - 111 - r, r * 2 - 2, r * 2 - 2), SFPalette.CYAN_DIM, true)
+		ci.draw_rect(Rect2(ground.x - r, ground.y - 112 - r, r * 2, r * 2), SFPalette.STEEL_DARK, true)
+		ci.draw_rect(Rect2(ground.x - r + 1, ground.y - 111 - r, r * 2 - 2, r * 2 - 2), SFPalette.CYAN_DIM, true)
 		var lens: Color = SFPalette.CYAN
 		if q >= 3:
 			lens = SFPalette.GREEN_OK
 		elif q <= 1:
 			lens = SFPalette.RUST_LIGHT
-		draw_rect(Rect2(ground.x - 2, ground.y - 110 - r, 4, 3), lens, true)
+		ci.draw_rect(Rect2(ground.x - 2, ground.y - 110 - r, 4, 3), lens, true)
 
 	# Nose cone and fuel gauge.
-	draw_rect(Rect2(ground.x - 8, ground.y - 116, 16, 12), SFPalette.STEEL, true)
-	draw_rect(Rect2(ground.x - 5, ground.y - 122, 10, 8), SFPalette.STEEL_MID, true)
-	draw_rect(Rect2(ground.x - 2, ground.y - 126, 4, 6), SFPalette.STEEL_MID, true)
+	ci.draw_rect(Rect2(ground.x - 8, ground.y - 116, 16, 12), SFPalette.STEEL, true)
+	ci.draw_rect(Rect2(ground.x - 5, ground.y - 122, 10, 8), SFPalette.STEEL_MID, true)
+	ci.draw_rect(Rect2(ground.x - 2, ground.y - 126, 4, 6), SFPalette.STEEL_MID, true)
 	var fuel_ratio: float = 0.0
 	var cap := float(hull.get("fuel_capacity_kg", 1.0))
 	if cap > 0.0:
 		fuel_ratio = clampf(d.fuel_kg / cap, 0.0, 1.0)
-	draw_rect(Rect2(ground.x - 3, ground.y - 60, 6, 40), SFPalette.INK, true)
+	ci.draw_rect(Rect2(ground.x - 3, ground.y - 60, 6, 40), SFPalette.INK, true)
 	var fh: float = round(38.0 * fuel_ratio)
 	if fh > 0.0:
-		draw_rect(Rect2(ground.x - 2, ground.y - 21 - fh, 4, fh), SFPalette.CYAN_DIM, true)
-	draw_rect(Rect2(ground.x - 3, ground.y - 60, 6, 40), SFPalette.STEEL_DARK, false, 1.0)
+		ci.draw_rect(Rect2(ground.x - 2, ground.y - 21 - fh, 4, fh), SFPalette.CYAN_DIM, true)
+	ci.draw_rect(Rect2(ground.x - 3, ground.y - 60, 6, 40), SFPalette.STEEL_DARK, false, 1.0)
 
 	# Empty slot markers, so a missing part is visibly missing.
 	var slot_markers := {
@@ -774,10 +779,18 @@ func _draw_assembled_ship(ground: Vector2) -> void:
 		"communications": Vector2(15, -108),
 		"sensor": Vector2(0, -109),
 	}
+	if not show_missing:
+		return
 	for slot in slot_markers.keys():
 		if d.slot_component(String(slot)) == "":
 			var p: Vector2 = ground + (slot_markers[slot] as Vector2)
 			var c: Color = SFPalette.RED
-			c.a = 0.55 + 0.35 * sin(_blink * 4.0)
-			draw_rect(Rect2(p.x - 3, p.y - 3, 6, 6), c, false, 1.0)
-			draw_rect(Rect2(p.x - 1, p.y - 1, 2, 2), c, true)
+			c.a = 0.55 + 0.35 * sin(blink * 4.0)
+			ci.draw_rect(Rect2(p.x - 3, p.y - 3, 6, 6), c, false, 1.0)
+			ci.draw_rect(Rect2(p.x - 1, p.y - 1, 2, 2), c, true)
+
+
+func _draw_assembled_ship(ground: Vector2) -> void:
+	draw_day_one_ship(self, skin, ground, campaign.design, campaign.content, _blink, true)
+
+

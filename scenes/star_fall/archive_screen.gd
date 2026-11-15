@@ -13,7 +13,9 @@ extends Node2D
 ##
 ## Controls
 ##   LEFT/RIGHT (A/D)   previous / next record
-##   ENTER / E / ESC    close and apply the outcome
+##   ENTER / E          close and apply the outcome (or click CLOSE)
+##   < / > buttons      previous / next record with the mouse
+##   ESC                the shared pause menu (controller); never closes
 
 signal archive_closed
 
@@ -54,7 +56,30 @@ func _ready() -> void:
 	queue_redraw()
 
 
+var input_locked: bool = false
+
+const PREV_BUTTON := Rect2(24, 340, 40, 16)
+const NEXT_BUTTON := Rect2(70, 340, 40, 16)
+const CLOSE_BUTTON := Rect2(520, 340, 100, 16)
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	# A closed archive (or one under a dialogue) never swallows input meant for
+	# the controller's dialogue.
+	if closed or input_locked:
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			get_viewport().set_input_as_handled()
+			var pos := get_local_mouse_position()
+			if PREV_BUTTON.has_point(pos):
+				_move(-1)
+			elif NEXT_BUTTON.has_point(pos):
+				_move(1)
+			elif CLOSE_BUTTON.has_point(pos):
+				_finish()
+		return
 	if not (event is InputEventKey):
 		return
 	var key_event := event as InputEventKey
@@ -65,7 +90,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_move(-1)
 		KEY_RIGHT, KEY_D:
 			_move(1)
-		KEY_ENTER, KEY_KP_ENTER, KEY_E, KEY_ESCAPE:
+		KEY_ENTER, KEY_KP_ENTER, KEY_E:
 			_finish()
 	get_viewport().set_input_as_handled()
 
@@ -154,6 +179,10 @@ func _draw() -> void:
 
 	var hints := "LEFT / RIGHT  RECORDS     ENTER  CLOSE"
 	skin.text_c(self, VW * 0.5, VH - 12, hints, SFPalette.PAPER_DIM)
+	var mouse := get_local_mouse_position()
+	skin.button(self, PREV_BUTTON, "<", PREV_BUTTON.has_point(mouse), index > 0)
+	skin.button(self, NEXT_BUTTON, ">", NEXT_BUTTON.has_point(mouse), index < entries.size() - 1)
+	skin.button(self, CLOSE_BUTTON, "CLOSE", true, true)
 	ui.toast(self)
 	skin.scanlines(self, 0.04)
 

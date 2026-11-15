@@ -7,6 +7,9 @@ extends RefCounted
 
 var items: Array = []
 var index: int = 0
+## Screen rects of the rows, written by SFUI.menu_list() every time the menu is
+## drawn, so mouse hit-testing always matches what is on screen.
+var rects: Array = []
 
 
 func set_items(list: Array, keep_id: String = "") -> void:
@@ -72,3 +75,34 @@ func index_of(item_id: String) -> int:
 		if String((items[i] as Dictionary).get("id", "")) == item_id:
 			return i
 	return -1
+
+
+## The row under `pos` (in the drawing canvas's coordinates), or -1.
+func item_at(pos: Vector2) -> int:
+	for i in mini(rects.size(), items.size()):
+		if (rects[i] as Rect2).has_point(pos):
+			return i
+	return -1
+
+
+## Mouse hover: moves the cursor to the enabled row under `pos`. Returns true
+## when the selection changed, so the caller plays one select sound.
+func hover(pos: Vector2) -> bool:
+	var i := item_at(pos)
+	if i < 0 or i == index or not bool((items[i] as Dictionary).get("enabled", true)):
+		return false
+	index = i
+	return true
+
+
+## Mouse click: selects the row under `pos` and returns its id, or "" when the
+## click missed every row. A disabled row returns "" too, so it can never be
+## activated through the mouse path.
+func click(pos: Vector2) -> String:
+	var i := item_at(pos)
+	if i < 0:
+		return ""
+	if not bool((items[i] as Dictionary).get("enabled", true)):
+		return ""
+	index = i
+	return current_id()

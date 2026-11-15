@@ -10,6 +10,7 @@ extends SceneTree
 
 const SFSave := preload("res://core/star_fall/sf_save.gd")
 const SFCampaignQA := preload("res://core/star_fall/sf_qa.gd")
+const SFSettings := preload("res://core/star_fall/sf_settings.gd")
 
 var main
 var step: int = 0
@@ -35,6 +36,17 @@ func finish_dialogue() -> void:
 
 func press(key: int) -> void:
 	main._unhandled_input(_key_event(key))
+
+
+## Delivers an event through the real viewport dispatch, the way the engine
+## does: every node's _input first, then (if nobody handled it) every node's
+## _unhandled_input, deepest child first. Catches a screen that swallows input
+## meant for the controller, which direct handler calls cannot.
+func route(ev: InputEvent) -> void:
+	var vp: Viewport = main.get_viewport()
+	vp.push_input(ev)
+	if not vp.is_input_handled():
+		vp.push_unhandled_input(ev)
 
 
 func _key_event(key: int) -> InputEventKey:
@@ -127,14 +139,38 @@ func _pause_and_settings() -> void:
 	check("resume closes the pause overlay", not main.is_pause_open())
 	check("resume restores movement", main.world.player.input_enabled)
 
-	# Settings round trip from the pause menu returns to the world.
+	# Settings open inside the pause menu; Esc goes back one level at a time.
 	press(KEY_ESCAPE)
 	main.pause_menu.index = 2
 	main._pause_activate()
-	check("settings open from the pause menu", main.screen == main.Screen.SETTINGS)
+	check("settings open inside the pause menu", main.pause_settings_open and main.is_pause_open())
+	check("the world stays loaded under the settings panel", main.screen == main.Screen.WORLD and main.world != null)
 	main._settings_key(KEY_ESCAPE)
-	check("settings return to the world", main.screen == main.Screen.WORLD)
-	check("pause stays closed after settings", not main.is_pause_open())
+	check("esc in settings returns to the pause menu", not main.pause_settings_open and main.is_pause_open())
+	main._input(_key_event(KEY_ESCAPE))
+	check("esc in the pause menu resumes", not main.is_pause_open())
+	check("the world is playable again after settings", main.screen == main.Screen.WORLD and main.world.player.input_enabled)
+
+	# Mouse: the pause rows are clickable through the rects menu_list records
+	# while drawing (the same layout: origin 216,126, 208 wide, 20 per row).
+	press(KEY_ESCAPE)
+	main.pause_menu.rects = []
+	for i in main.pause_menu.size():
+		main.pause_menu.rects.append(Rect2(216, 126 + i * 20, 208, 18))
+	var resume_rect: Rect2 = main.pause_menu.rects[0]
+	check("a click on RESUME hits the RESUME row", main.pause_menu.click(resume_rect.get_center()) == "resume")
+	main._pause_activate()
+	check("the clicked RESUME closes the pause menu", not main.is_pause_open())
+	check("a click outside every row selects nothing", main.pause_menu.click(Vector2(5, 5)) == "")
+
+	# Space and letters are not pause keys, and I / O / P no longer skip.
+	press(KEY_SPACE)
+	check("space does not pause", not main.is_pause_open())
+	var stage_before: String = main.campaign.stage
+	for k in [KEY_I, KEY_O, KEY_P]:
+		press(k)
+	check("I, O and P do not skip a milestone", main.campaign.stage == stage_before and main.screen == main.Screen.WORLD)
+	check("the I + O + P chord poll is gone", not main.has_method("_poll_qa_skip"))
 
 	# Losing focus must release movement so nothing sticks.
 	main.world.player.velocity = Vector2(40, -20)
@@ -162,10 +198,37 @@ func _boot_and_briefing() -> void:
 	# Settings round trip must not touch the campaign.
 	main._go(main.Screen.SETTINGS)
 	check("settings opens", main.screen == main.Screen.SETTINGS)
-	check("settings lists four rows", main.settings_menu.size() == 4)
-	main._settings_adjust(1)
+	check("settings lists the four volume sliders, text speed, reduced motion and back", main.settings_menu.size() == 7)
+	main.settings_menu.index = main.settings_menu.index_of("music_volume")
+	var music_before: float = float(main.settings.get("music_volume", 0.0))
 	main._settings_adjust(-1)
+	check("left lowers the music volume one step", is_equal_approx(float(main.settings["music_volume"]), snappedf(music_before - 0.1, 0.05)))
+	check("the music bus follows the slider", AudioServer.get_bus_index("Music") != -1)
+	main._settings_adjust(1)
+	check("right raises it back", is_equal_approx(float(main.settings["music_volume"]), music_before))
+	check("changing a setting leaves the campaign untouched", main.campaign.stage == main.campaign.STAGE_MENU and main.campaign.recovered_component_ids().is_empty())
+	# The settings store round-trips through its own file, never the save.
+	var tmp_path := "user://star_fall_settings_test.cfg"
+	var stored: Dictionary = SFSettings.DEFAULTS.duplicate()
+	stored["music_volume"] = 0.35
+	stored["practice_unlocked"] = true
+	SFSettings.save_settings(stored, tmp_path)
+	var loaded: Dictionary = SFSettings.load_settings(tmp_path)
+	check("saved volumes load back", is_equal_approx(float(loaded["music_volume"]), 0.35) and bool(loaded["practice_unlocked"]))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tmp_path))
 	main._go(main.Screen.TITLE)
+
+	# A new profile cannot reach the first encounter from the opening screen.
+	main.practice_unlocked = false
+	main._rebuild_title_menu()
+	var eco_row: int = main.title_menu.index_of("eco_arena")
+	check("Eco Arena practice is locked on a new profile", not bool(main.title_menu.items[eco_row]["enabled"]))
+	main.title_menu.index = eco_row
+	main._title_activate()
+	check("the locked row does not open the arena", main.screen == main.Screen.TITLE)
+	main._start_eco_practice()
+	check("the practice guard refuses even a direct call", main.screen == main.Screen.TITLE)
+	main.title_menu.index = 0
 
 	main._title_activate()
 	check("new game enters the world", main.screen == main.Screen.WORLD)
@@ -245,6 +308,15 @@ func _launch_and_crash() -> void:
 	# then runs to the crash on its own (the scripted accident).
 	main._launch_key(KEY_ESCAPE)
 	check("escape does not skip the launch", main.screen == main.Screen.LAUNCH)
+	check("VELA waits on the pad with the engines off", main.launch_phase == main.LaunchPhase.COUNTDOWN)
+	# Esc pauses the sequence; nothing advances until it is resumed.
+	press(KEY_ESCAPE)
+	check("esc pauses the launch", main.is_pause_open() and main.screen == main.Screen.LAUNCH)
+	var launch_t: float = main.launch_timer
+	main._process(0.5)
+	check("a paused launch does not advance", main.launch_timer == launch_t)
+	main._input(_key_event(KEY_ESCAPE))
+	check("esc resumes the launch", not main.is_pause_open())
 	var guard := 0
 	while main.screen == main.Screen.LAUNCH and guard < 800:
 		guard += 1
@@ -417,7 +489,7 @@ func _forgotten_city() -> void:
 	finish_dialogue()
 	check("the city memory screen opens", main.screen == main.Screen.MEMORY, str(main.screen))
 	check("the city memory is the second Green City file", main.memory_id == "memory_city_green")
-	main._memory_key(KEY_ESCAPE)
+	main._skip_memory()
 	check("the optional memory returns to the world", main.screen == main.Screen.WORLD)
 	check("the optional memory is recorded", main.campaign.has_viewed_memory("memory_city_green"))
 
@@ -581,7 +653,7 @@ func _silent_coast() -> void:
 	main._on_world_interact("memory_green_coast", main.world.prop_by_id("memory_green_coast"))
 	finish_dialogue()
 	check("the coastal projection opens", main.screen == main.Screen.MEMORY and main.memory_id == "memory_green_coast")
-	main._memory_key(KEY_ESCAPE)
+	main._skip_memory()
 	check("the coastal projection returns to the world", main.screen == main.Screen.WORLD)
 	check("the coastal projection is recorded", main.campaign.has_viewed_memory("memory_green_coast"))
 
@@ -680,10 +752,22 @@ func _coast_archive_and_base() -> void:
 	check("both components read as recovered", _component_recovered("navigation_chip") and _component_recovered("power_core"))
 	check("Dawn Tower is unlocked", main.campaign.has_flag("dawn_tower_unlocked"))
 	check("the campaign is at the base", main.campaign.chapter_id == main.campaign.CHAPTER_CRASH)
+	# Real event routing (viewport -> every node), not a direct handler call:
+	# while the base-return dialogue is open, Enter advances the dialogue and
+	# never closes the screen underneath.
+	check("the base-return dialogue is open", main.dialogue != null)
+	route(_key_event(KEY_ENTER))
+	check("Enter under the base-return dialogue does not close the screen", not main.progression_screen.closed_once)
 	finish_dialogue()
 
 	main.progression_screen._unhandled_input(_key_event(KEY_ENTER))
-	finish_dialogue()
+	check("the PHASE 2 COMPLETE dialogue opens over the closed screen", main.dialogue != null and main.screen == main.Screen.PROGRESSION)
+	var routed := 0
+	while main.dialogue != null and routed < 40:
+		routed += 1
+		route(_key_event(KEY_ENTER))
+	check("real Enter presses finish the PHASE 2 COMPLETE dialogue", main.dialogue == null, str(routed))
+	# A real left click also reaches a dialogue over this screen.
 	check("finishing the base return reaches the summary", main.screen == main.Screen.CHECKPOINT, str(main.screen))
 	check("Phase 2 is marked complete", main.campaign.has_flag("phase_two_complete"))
 	check("the stage is the Phase 2 complete stage", main.campaign.stage == main.campaign.STAGE_PHASE_TWO_COMPLETE)
@@ -1056,25 +1140,34 @@ func _phase_four() -> void:
 	check("the pre-finale checkpoint is saved", SFSave.has_valid_save())
 	check("the stage is final_assembly", main.campaign.stage == main.campaign.STAGE_FINAL_ASSEMBLY)
 
-	# Esc skips the install animation safely and starts the escape exactly once.
-	gate.handle_key(KEY_ESCAPE)
+	# Esc pauses the installation (its pause menu offers the skip); Enter skips
+	# the animation safely and starts the escape exactly once.
+	press(KEY_ESCAPE)
+	check("esc pauses the installation", main.is_pause_open() and main.pause_menu.index_of("skip") >= 0)
+	main._input(_key_event(KEY_ESCAPE))
+	check("the installation is still running after the pause", gate.is_installing())
+	gate.handle_key(KEY_ENTER)
 	check("skipping the animation starts the cinematic", main.screen == main.Screen.CINEMATIC, str(main.screen))
 	check("the escape stage is recorded", main.campaign.stage == main.campaign.STAGE_ESCAPE)
 	var cine = main.cinematic_screen
 	check("the cinematic has six scenes", cine.scenes.size() == 6)
 	check("the first scene is the crash site", cine.scene_id() == "leaving_crash_site")
 
-	# Pause freezes it; focus loss pauses rather than letting it run unseen.
+	# Esc opens the shared pause; focus loss pauses rather than letting it run
+	# unseen. Space is not a pause key any more.
 	cine.handle_key(KEY_SPACE)
-	check("space pauses the cinematic", cine.is_paused())
+	check("space does not pause the cinematic", not cine.is_paused() and not main.is_pause_open())
+	press(KEY_ESCAPE)
+	check("esc pauses the cinematic", cine.is_paused() and main.is_pause_open())
+	check("the pause menu offers the skip", main.pause_menu.index_of("skip") >= 0)
 	var at_before: float = cine.scene_time
 	cine.advance_for(4.0)
 	check("a paused cinematic does not advance", cine.scene_time == at_before)
-	cine.handle_key(KEY_SPACE)
-	check("space resumes the cinematic", not cine.is_paused())
-	cine._notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
-	check("focus loss pauses the cinematic", cine.is_paused())
-	cine.handle_key(KEY_SPACE)
+	main._input(_key_event(KEY_ESCAPE))
+	check("esc resumes the cinematic", not cine.is_paused() and not main.is_pause_open())
+	main._notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
+	check("focus loss pauses the cinematic", cine.is_paused() and main.is_pause_open())
+	main._input(_key_event(KEY_ESCAPE))
 
 	# Skip must produce the same outcome as watching, and be safe repeatedly.
 	var escape_emit_count := [0]
@@ -1139,19 +1232,13 @@ func _phase_four() -> void:
 	_qa_stage_skip()
 
 
-## The QA hotkey: edge-triggered, one milestone per press, legal state at each
-## step. Driven through the same entry point the keyboard poll uses.
+## The milestone driver (tests only; the I + O + P key route is gone): one
+## milestone per call, legal state at each step.
 func _qa_stage_skip() -> void:
 	print("")
-	print("-- QA stage skip (I + O + P) " + "-".repeat(21))
-	var qa = SFCampaignQA.new()
-	# Edge-trigger: the chord fires once and needs a release plus the cooldown.
-	check("the chord fires once", qa.poll(true, true, true, 0.016))
-	check("holding it does not repeat", not qa.poll(true, true, true, 0.016))
-	check("a release re-arms the latch", not qa.poll(false, false, false, 0.016) and qa.armed())
-	check("the cooldown blocks a quick second press", not qa.poll(true, true, true, 0.016))
-	check("the chord fires after the cooldown", qa.poll(true, true, true, 1.0))
-	check("a partial chord never fires", not SFCampaignQA.new().poll(true, true, false, 1.0))
+	print("-- Milestone driver (tests only) " + "-".repeat(17))
+	check("the planner has no key poll", not SFCampaignQA.new().has_method("poll"))
+	check("the planner has no build/flag switch", not SFCampaignQA.new().has_method("is_enabled"))
 
 	# Walk the whole campaign from the title with the skip alone.
 	main.campaign.reset_campaign()

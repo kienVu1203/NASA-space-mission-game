@@ -57,18 +57,15 @@ func _draw() -> void:
 		elif campaign.chapter_id == SFCampaign.CHAPTER_RETURN:
 			skin.text_r(self, 628, 348, "RETURN HOME", SFPalette.GREEN_OK)
 
-		# QA builds advertise the stage-skip hotkey so a tester can find it. It is
-		# centred on the bottom strip, clear of the day marker, the carry list and
-		# the interaction prompt. It is never drawn in a release run, where the
-		# skip is disabled entirely.
-		if game.qa_enabled:
-			skin.text_c(self, 320, 350, "QA  HOLD I + O + P TO SKIP", SFPalette.ASH_LIGHT)
-
-		# Pause overlay and toasts are the top-most layers.
-		if game.is_pause_open():
-			_draw_pause(skin, ui)
-
 		ui.toast(self)
+
+	# The shared pause menu (and its settings panel) sits above every screen
+	# that uses it, not only the world.
+	if game.is_pause_open():
+		if game.pause_settings_open:
+			game.draw_settings_panel(self)
+		else:
+			_draw_pause(skin, ui)
 
 	# Dialogue sits above every screen, and locks movement while it is open.
 	if game.dialogue != null:
@@ -76,10 +73,12 @@ func _draw() -> void:
 
 
 func _draw_pause(skin, ui) -> void:
-	ui.modal(self, Rect2(200, 96, 240, 146), SFPalette.CYAN)
+	var rows: int = game.pause_menu.size()
+	var panel := Rect2(200, 96, 240, 52 + rows * 20)
+	ui.modal(self, panel, SFPalette.CYAN)
 	skin.text_c(self, 320, 108, "PAUSED", SFPalette.CYAN)
 	ui.menu_list(self, game.pause_menu, Vector2(216, 126), 208.0, 20.0)
-	skin.text_c(self, 320, 222, "ESC RESUME", SFPalette.PAPER_DIM)
+	skin.text_c(self, 320, panel.end.y - 14, "ESC OR CLICK RESUME", SFPalette.PAPER_DIM)
 
 
 func _zone_title() -> String:

@@ -3,8 +3,9 @@
 Ticked items are covered by an automated headless suite; the rest need a person
 at the keyboard. Commands are in `docs/star_fall_contract.md` §9.
 
-Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
-`test_encounter`, `test_phase3`, `test_phase4` and `test_debug_jump`.
+Nine suites cover the build: `test_parse`, `test_logic`, `test_flow`,
+`test_encounter`, `test_phase3`, `test_phase4`, `test_flight`,
+`test_debug_jump` and `test_eco_arena`.
 
 ## Automated (run these first)
 
@@ -46,7 +47,7 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [x] The checkpoint stage, save and Continue all work — `test_flow.gd`
 - [x] Esc opens the pause overlay and locks movement — `test_flow.gd`
 - [x] Resume restores movement — `test_flow.gd`
-- [x] Settings round-trips from the pause menu without stranding the player — `test_flow.gd`
+- [x] Settings open inside the pause menu; Esc returns to the menu, Esc again resumes — `test_flow.gd`
 - [x] Losing window focus zeroes velocity and releases movement — `test_flow.gd`
 
 ### Phase 2: encounter mechanics — `test_encounter.gd`
@@ -197,15 +198,15 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 
 ### Finale data and prerequisites
 
-- [x] `finale.json` loads; six cinematic scenes, a final message, score weights, credits and the QA block
+- [x] `finale.json` loads; six cinematic scenes, a final message, score weights and credits; the removed QA block is gone
 - [x] Every scene has ordered, non-empty subtitles that end inside its duration
 - [x] A complete run meets all six prerequisites
 - [x] A missing boss, a missing component, a stale design or a running sequence each blocks the gate
 
 ### Escape cinematic
 
-- [x] Space pauses; a paused scene does not advance and emits no outcome
-- [x] Space resumes; focus loss pauses
+- [x] Space does not pause; Esc asks for the shared pause menu and never skips
+- [x] A paused scene does not advance and emits no outcome; focus loss pauses
 - [x] Skipping emits the outcome exactly once, however many times it is pressed
 - [x] Watching the whole sequence finishes it at the final message with skipped = false
 - [x] Watching and skipping apply the same flags, stage and checkpoint (`test_flow.gd`)
@@ -247,24 +248,13 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [x] A finale stage without a snapshot is corrected back to the ready point and reported
 - [x] The Phase 3 ready-flag rule still applies
 
-### QA stage skip (`I + O + P`)
+### Milestone driver (tests only; the `I + O + P` skip is removed)
 
-- [x] The hotkey is enabled in a debug build
-- [x] A partial chord never fires
-- [x] The chord fires once and holding it never repeats
-- [x] The cooldown comes from `finale.json`
-- [x] Releasing re-arms; a release alone cannot fire
-- [x] A press inside the cooldown is refused; one after it fires
+- [x] The planner has no key poll and no build/launch-flag switch; the controller no longer polls I + O + P
 - [x] The next milestone follows the campaign stage, not the open screen
-- [x] Skip clears a dialogue, pause or transition before acting
-- [x] Skip leaves a live screen, a valid checkpoint and a resumable save at every step
-- [x] Skip releases world input when no dialogue is open
-- [x] Skip never leaves a dangling dialogue callback
-- [x] The skipped run has a valid day-one design, all three components, a fabrication and a snapshot
-- [x] The skipped run completes the return and produces a report
-- [x] The skipped run's report builds with a positive score
-- [x] A QA checkpoint at the workshop and at the finale resumes after Continue
-- [x] `test_flow.gd` walks the whole campaign with the skip from the title to the credits
+- [x] The driver leaves a live screen, a valid checkpoint and a resumable save at every step
+- [x] The walked run has a valid day-one design, all three components, a fabrication and a snapshot
+- [x] The walked run completes the return and produces a report with a positive score
 
 ### End-to-end (headless)
 
@@ -293,7 +283,7 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [ ] Nothing on the crash site names Earth or shows a future date
 - [ ] The ship drawing visibly changes when components are swapped
 - [ ] The construction screen text never overlaps at 1280x720
-- [ ] Settings: ambience toggles, text speed changes dialogue pacing
+- [ ] Settings: each volume slider is audible on its bus, text speed changes dialogue pacing, values survive a restart
 - [ ] Quit from the main menu exits cleanly
 
 ### Phase 2 manual checks
@@ -372,15 +362,14 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [ ] The portal is clearly a story device, not presented as science
 - [ ] The home scene visually matches the opening Earth and the memories found
 - [ ] The final message is readable and quiet
-- [ ] Space pauses mid-cinematic and Esc skips without a flicker or stuck input
+- [ ] Esc pauses mid-cinematic; SKIP SEQUENCE skips without a flicker or stuck input; Space does nothing
 - [ ] Focus loss during the cinematic pauses it
 - [ ] The mission report scrolls smoothly and nothing overlaps; the "more below" hint is noticed
 - [ ] The score and its formula are understandable without reading the docs
 - [ ] The credits scroll smoothly and the closing card is reached
 - [ ] Continue after the credits returns to the credits; New Game starts clean
 - [ ] The reduced-motion setting visibly removes shake and lowers flashes, and changes no outcome
-- [ ] `I + O + P` skips one milestone per press with the three keys held, in a debug run
-- [ ] `I + O + P` does nothing in a release run built without `--qa`
+- [ ] Holding I + O + P anywhere does nothing (in the typing fight they are ordinary letters)
 
 ### Phase 3 manual checks
 
@@ -403,6 +392,37 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [ ] The workshop reads as repairing the ship: socket preview, install flash, fitted part visible
 - [ ] Workshop and typing screens do not overlap or clip at 1280x720, at the minimum window size and when resized
 - [ ] An educator has reviewed the vocabulary (spelling, meaning, suitability, bands)
+
+## General integration pass
+
+Automated:
+
+- [x] Esc opens the pause menu on the world and the launch; a paused launch does not advance — `test_flow.gd`
+- [x] Esc pauses the installation and the cinematic; the pause menu offers SKIP — `test_flow.gd`
+- [x] A click on a pause row hits that row; a click outside every row does nothing — `test_flow.gd`
+- [x] Space does not pause; I, O and P do not skip a milestone in exploration — `test_flow.gd`
+- [x] Settings list four volume sliders, text speed, reduced motion and back; sliders step by 0.1 — `test_flow.gd`
+- [x] Settings round-trip through their own file and never touch the campaign — `test_flow.gd`
+- [x] Eco Arena practice is locked on a new profile; the row and a direct call both refuse — `test_flow.gd`, `test_eco_arena.gd`
+- [x] A save that beat the Scrap King unlocks practice; practice still never writes the save — `test_eco_arena.gd`
+- [x] Toxic Tide speeds are exactly 1.2x the old bands (120 / 148.8 / 180 / 213.6, cap 240); retries never compound; hostile = beneficial; the swept shield blocks at 213.6 — `test_encounter.gd`
+- [x] The cinematic: only Enter / NEXT advance a beat; letters, Space and scene clicks do nothing; PAUSE and Esc ask for the pause menu — `test_flight.gd`
+- [x] Debug jumps finish every earlier map: salvage ids, coast extras, boss rewards collected (never a waiting drop), no duplicate component — `test_debug_jump.gd`
+
+Manual (needs a display and speakers):
+
+- [ ] Every visible button and menu row reacts to hover and a single click, at 1280x720, maximised and after resizing
+- [ ] UI stays clickable after pause / resume and after every scene transition
+- [ ] Right click and the zone badge open the pause menu in exploration; the checkpoint MENU button opens it on summaries
+- [ ] Settings sliders follow a mouse drag; volumes are audible per bus and survive a restart
+- [ ] Pause ducks the music, silences ambience and combat sounds, and menu sounds still play
+- [ ] Rapid fire, typing and shield impacts never stack into a harsh drone; no clipping
+- [ ] No sound continues after leaving a fight or the cinematic
+- [ ] Phase 1 launch reads clearly: pad and gantry, ignition smoke, liftoff, clouds, Earth limb; VELA upright, same design as the console, no flame on the pad
+- [ ] Bill is easy to find on the crash-site ash before activation, shows no lights while dormant, and lights up only after activation
+- [ ] The credits open with the six team names, fully visible, spelled exactly as listed
+- [ ] No NASA name, logo or link appears anywhere in the game
+- [ ] Boss 2 at the new speed is still fair to block at every health band
 
 ## Regression (the legacy NASA mission-planner skeleton)
 

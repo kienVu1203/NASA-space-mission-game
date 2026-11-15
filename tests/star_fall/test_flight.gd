@@ -386,24 +386,29 @@ func _screen_input_rules() -> void:
 	cine.elapsed = 5.0
 	check("the sequence opens on the crash site", cine.scene_id() == "leaving_crash_site")
 
-	# Any key advances a minor beat, but never Esc or Space.
+	# Only Enter and the NEXT button advance a beat. Space, letters and a click
+	# on the scene do nothing; Esc asks for the pause menu and never skips.
+	var asked: Array = []
+	cine.pause_requested.connect(func(): asked.append(true))
 	_at(cine, 0, 0.0)
 	cine.handle_key(KEY_SPACE)
-	check("space pauses rather than advancing", cine.is_paused())
-	cine.handle_key(KEY_SPACE)
-	check("space resumes", not cine.is_paused())
+	check("space neither pauses nor advances", not cine.is_paused() and cine.scene_time == 0.0)
+	cine.handle_key(KEY_Q)
+	check("an ordinary letter does not advance the clock", cine.scene_time == 0.0)
+	cine.handle_click(Vector2(300, 200))
+	check("a click on the scene does not advance the clock", cine.scene_time == 0.0)
 	var before: float = cine.scene_time
 	cine.handle_key(KEY_ENTER)
-	check("a key advances the clock", cine.scene_time > before)
+	check("enter advances the clock", cine.scene_time > before)
 	_at(cine, 0, 0.0)
-	cine.handle_key(KEY_Q)
-	check("an ordinary letter advances the clock", cine.scene_time > 0.0)
-	_at(cine, 0, 0.0)
-	cine.handle_click(Vector2(300, 200))
-	check("a left click advances the clock", cine.scene_time > 0.0)
-	# Esc skips the whole sequence.
+	cine.handle_click(cine.NEXT_BADGE.get_center())
+	check("the NEXT button advances the clock", cine.scene_time > 0.0)
+	cine.handle_click(cine.PAUSE_BADGE.get_center())
 	cine.handle_key(KEY_ESCAPE)
-	check("escape skips the sequence", cine.is_finished())
+	check("the pause button and Esc ask for the pause menu", asked.size() == 2)
+	check("nothing skipped the sequence", not cine.is_finished())
+	cine.skip()
+	check("the explicit skip ends the sequence", cine.is_finished())
 	cine.free()
 
 	# During a playable segment, keys steer and never advance.
@@ -426,12 +431,13 @@ func _screen_input_rules() -> void:
 	check("steering still moves the ship", cine.flight.ship_y != y_before)
 	cine.handle_click(Vector2(300, 120))
 	check("a click during flight does not skip the beat", cine.scene_time == t_before)
-	cine.handle_key(KEY_SPACE)
-	check("space still pauses mid-flight", cine.is_paused())
+	cine.handle_key(KEY_ENTER)
+	check("enter does not fast-forward a playable segment", cine.scene_time == t_before)
+	cine.paused = true
 	check("a paused segment is not playable", not cine.is_playable())
-	cine.handle_key(KEY_SPACE)
-	cine.handle_key(KEY_ESCAPE)
-	check("escape still skips mid-flight", cine.is_finished())
+	cine.paused = false
+	cine.skip()
+	check("the explicit skip still works mid-flight", cine.is_finished())
 	cine.free()
 
 
@@ -687,13 +693,13 @@ func _presentation_states() -> void:
 	check("shake is back to zero in the next beat", cine._shake_energy == 0.0)
 	# Pause freezes the clock and the contacts.
 	_at(cine, 1, 9.0)
-	cine.handle_key(KEY_SPACE)
+	cine.paused = true
 	var frozen: float = cine.scene_time
 	cine.advance_for(1.0)
 	check("pause freezes the ascent", cine.scene_time == frozen)
-	cine.handle_key(KEY_SPACE)
-	cine.handle_key(KEY_ESCAPE)
-	cine.handle_key(KEY_ESCAPE)
+	cine.paused = false
+	cine.skip()
+	cine.skip()
 	check("skip from the ascent is safe and final", cine.is_finished())
 	check("a finished sequence holds no contacts", cine.shield_contacts_visible() == 0)
 	cine.free()

@@ -1,6 +1,6 @@
 extends Node2D
 ## The Phase 3 VELA reconstruction workshop at the crash-site base. Keyboard
-## only. The rules live in core/star_fall/sf_reconstruction.gd and the physics
+## and mouse: every part card, design row and action row is clickable. The rules live in core/star_fall/sf_reconstruction.gd and the physics
 ## in sf_return_sim.gd; this screen fits recovered parts to the frame, edits a
 ## selection, shows a free live preview, certifies a report on request, and
 ## asks the rules to fabricate once.
@@ -21,6 +21,9 @@ extends Node2D
 ##   F               fabricate and assemble (needs a passing, current report)
 ##   C               scavenge common materials up to the fair floor
 ##   ESC             leave the workshop (the selection is kept)
+##   MOUSE           click a part card to fit it; click a row to select it,
+##                   its < / > halves to change it, an action row to run it;
+##                   LEAVE button leaves
 
 signal closed
 signal assembled
@@ -47,6 +50,7 @@ const COST := Rect2(8, 244, 310, 78)
 const DESIGN := Rect2(324, 30, 308, 150)
 const DETAIL := Rect2(324, 184, 308, 36)
 const REPORT := Rect2(324, 224, 308, 98)
+const LEAVE_BUTTON := Rect2(560, 342, 70, 14)
 
 var skin
 var ui
@@ -99,6 +103,20 @@ func _state(id: String) -> String:
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
+	if input_locked:
+		return
+	if event is InputEventMouseMotion:
+		var hit := _hit_at(get_local_mouse_position())
+		if not hit.is_empty() and _focus_hit(hit):
+			skin.audio.sfx_select()
+			queue_redraw()
+		return
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			get_viewport().set_input_as_handled()
+			handle_click(get_local_mouse_position())
+		return
 	if not (event is InputEventKey):
 		return
 	var key := event as InputEventKey
@@ -133,6 +151,73 @@ func handle_key(keycode: int, shift: bool = false) -> void:
 			fabricate()
 		KEY_C:
 			scavenge()
+	queue_redraw()
+
+
+## Clickable regions, in the same geometry the drawing uses.
+func _hit_at(pos: Vector2) -> Dictionary:
+	if LEAVE_BUTTON.has_point(pos):
+		return {"kind": "leave"}
+	if TRAY.has_point(pos):
+		var w := (TRAY.size.x - 16.0) / 3.0
+		for i in COMPONENTS.size():
+			var card := Rect2(round(TRAY.position.x + 5 + i * (w + 3)), TRAY.position.y + 5, round(w), TRAY.size.y - 10)
+			if card.has_point(pos):
+				return {"kind": "card", "index": i}
+		return {}
+	var y := DESIGN.position.y + 19.0
+	for i in range(1, ROWS.size()):
+		var rr := Rect2(DESIGN.position.x + 4, y - 1, DESIGN.size.x - 8, 12)
+		if rr.has_point(pos):
+			return {"kind": "row", "index": i, "rect": rr}
+		y += 13.0
+	return {}
+
+
+## Hover focuses what is under the pointer. Returns true when focus changed.
+func _focus_hit(hit: Dictionary) -> bool:
+	match String(hit["kind"]):
+		"card":
+			if row == 0 and tray_index == int(hit["index"]):
+				return false
+			row = 0
+			tray_index = int(hit["index"])
+			return true
+		"row":
+			if row == int(hit["index"]):
+				return false
+			row = int(hit["index"])
+			return true
+	return false
+
+
+## One click, one action: a card fits that part; a value row steps its option
+## by the half that was clicked (left: back, right: forward); a toggle or an
+## action row runs it; LEAVE leaves.
+func handle_click(pos: Vector2) -> void:
+	var hit := _hit_at(pos)
+	if hit.is_empty():
+		return
+	match String(hit["kind"]):
+		"leave":
+			handle_key(KEY_ESCAPE)
+			return
+		"card":
+			row = 0
+			tray_index = int(hit["index"])
+			install(String(COMPONENTS[tray_index]))
+		"row":
+			row = int(hit["index"])
+			var id := String(ROWS[row])
+			if id in ["propulsion", "fuel", "protection", "storage", "route"]:
+				var rr: Rect2 = hit["rect"]
+				# The value sits on the right; its left half steps back.
+				if pos.x >= rr.end.x - 120.0:
+					_change(-1 if pos.x < rr.end.x - 60.0 else 1, false)
+				else:
+					skin.audio.sfx_select()
+			else:
+				_activate()
 	queue_redraw()
 
 
@@ -571,7 +656,7 @@ func _draw_detail(r: Rect2) -> void:
 		"additional_records":
 			desc = "240 MB more evidence. Longer relay sync before launch."
 		"simulate":
-			desc = "Free. Certifies a report for this exact design. Simplified educational model, not NASA data."
+			desc = "Free. Certifies a report for this exact design. Simplified educational model with invented values."
 		"scavenge":
 			desc = "Tops common materials up to a fair floor so no run is stranded."
 		"fabricate":
@@ -657,7 +742,8 @@ func _draw_footer() -> void:
 		skin.text_c(self, VW * 0.5, VH - 30, _fit(message, VW - 20.0), c)
 	else:
 		skin.text_c(self, VW * 0.5, VH - 30, _fit("NEXT: " + next_step(), VW - 20.0), SFPalette.GOLD)
-	skin.text_c(self, VW * 0.5, VH - 14, "ARROWS SELECT   ENTER INSTALL / TOGGLE   V SIMULATE   F FABRICATE   C SCAVENGE   ESC LEAVE", SFPalette.PAPER_DIM)
+	skin.text(self, Vector2(10, VH - 14), "CLICK OR ARROWS + ENTER   V SIMULATE   F FABRICATE   C SCAVENGE", SFPalette.PAPER_DIM)
+	skin.button(self, LEAVE_BUTTON, "LEAVE", LEAVE_BUTTON.has_point(get_local_mouse_position()), true)
 
 
 ## Shortens a line to fit `width` pixels, so the footer never clips.

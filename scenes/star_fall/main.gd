@@ -467,7 +467,7 @@ func _go(next: int) -> void:
 		Screen.TITLE:
 			audio.set_ambience("none")
 			if audio.has_method("play_music"):
-				audio.play_music("title")
+				audio.play_music("title", 0.0)
 			_refresh_save_state()
 		Screen.SETTINGS:
 			_rebuild_settings_menu()

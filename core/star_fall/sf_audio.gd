@@ -308,7 +308,9 @@ func set_ambience(mode: String) -> void:
 			_music_ruin.play()
 
 
-func play_music(track_id: String, _crossfade: float = 0.8) -> void:
+## `crossfade` <= 0 starts the new track at full volume instead of fading it in
+## (the outgoing track still fades out).
+func play_music(track_id: String, crossfade: float = 0.8) -> void:
 	if current_music == track_id and not muted:
 		return
 	current_music = track_id
@@ -317,20 +319,19 @@ func play_music(track_id: String, _crossfade: float = 0.8) -> void:
 	var stream: AudioStream = _music_streams.get(track_id, null)
 	if stream == null:
 		return
+	var start_vol: float = 0.0 if crossfade > 0.0 else (PAUSE_MUSIC_LEVEL if paused else 1.0)
+	_music_a_active = not _music_a_active
+	var p: AudioStreamPlayer = _music_player_a if _music_a_active else _music_player_b
+	if p == null:
+		return
 	if _music_a_active:
-		_music_a_active = false
-		if _music_player_b != null:
-			_music_player_b.stream = stream
-			_music_player_b.volume_db = -80.0
-			if not muted:
-				_music_player_b.play()
+		_music_vol_a = start_vol
 	else:
-		_music_a_active = true
-		if _music_player_a != null:
-			_music_player_a.stream = stream
-			_music_player_a.volume_db = -80.0
-			if not muted:
-				_music_player_a.play()
+		_music_vol_b = start_vol
+	p.stream = stream
+	p.volume_db = -80.0 if (muted or start_vol <= 0.01) else linear_to_db(start_vol * master) + _track_gain_db(p)
+	if not muted:
+		p.play()
 
 
 func stop_music(_fade_out: float = 0.8) -> void:

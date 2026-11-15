@@ -96,10 +96,14 @@ func _run() -> void:
 		"sky_remnant": [main.Screen.TYPING, ""],
 		"shield_drop": [main.Screen.WORLD, "dawn_tower"],
 		"workshop": [main.Screen.WORKSHOP, ""],
+		"final_assembly": [main.Screen.CHECKPOINT, ""],
+		"escape": [main.Screen.CINEMATIC, ""],
+		"mission_report": [main.Screen.REPORT, ""],
+		"credits": [main.Screen.CREDITS, ""],
 	}
 	for p in SFDebugPresets.PRESETS:
 		var id := String((p as Dictionary)["id"])
-		var keycode := KEY_0 + int(String((p as Dictionary)["key"]))
+		var keycode := String((p as Dictionary)["key"]).unicode_at(0)
 		check("%s: Ctrl+Shift+Alt+%s is handled" % [id, String(p["key"])], dj.handle_key(keycode))
 		var e: Array = expect[id]
 		check("%s: lands on the right screen" % id, main.screen == int(e[0]) and (String(e[1]) == "" or main.zone == String(e[1])),
@@ -180,6 +184,21 @@ func _run() -> void:
 	check("M adds salvage up to the carry limit", dj.handle_key(KEY_M) and camp.material_count("scrap_metal") == scrap + mini(10, free_before))
 	check("V outside a fight does nothing", not dj.win_fight())
 	check("H toggles the help list", dj.handle_key(KEY_H) and dj.help_visible and dj.handle_key(KEY_H) and not dj.help_visible)
+
+	# Phase 4 presets build the state the real finale would, so it survives a reload.
+	dj.jump("final_assembly")
+	check("Final assembly jump: design fabricated, all parts fitted, nothing frozen",
+		main.campaign.is_ready_for_final_assembly() and main.campaign.all_required_installed()
+		and not main.campaign.has_final_assembly_snapshot())
+	dj.jump("credits")
+	check("Credits jump: snapshot frozen, return complete, report seen",
+		main.campaign.has_final_assembly_snapshot() and main.campaign.is_return_complete()
+		and main.campaign.has_flag("mission_report_seen"))
+	main._save_quietly()
+	main._go(main.Screen.TITLE)
+	main._continue_game()
+	check("Credits jump: the save resumes at the credits", main.campaign.stage == "credits" and main.screen == main.Screen.CREDITS,
+		"%s %s" % [main.campaign.stage, str(main.screen)])
 
 	# The construction preset leaves a valid design ready to confirm.
 	dj.jump("construction")

@@ -19,6 +19,9 @@ extends RefCounted
 ## outside debug_jump.gd: no normal transition, menu or key reaches it.
 
 const SFCampaign := preload("res://core/star_fall/sf_campaign.gd")
+const SFContent := preload("res://core/star_fall/sf_content.gd")
+const SFQA := preload("res://core/star_fall/sf_qa.gd")
+const SFFinale := preload("res://core/star_fall/sf_finale.gd")
 
 ## key: the digit or letter pressed with Ctrl+Shift+Alt.
 ## stage: the campaign stage the controller resumes at.
@@ -34,7 +37,14 @@ const PRESETS := [
 	{"id": "sky_remnant", "key": "8", "title": "P3 SKY REMNANT FIGHT", "stage": "dawn_boss"},
 	{"id": "shield_drop", "key": "9", "title": "P3 SHIELD DROP", "stage": "dawn_intro", "position": Vector2(372, 150)},
 	{"id": "workshop", "key": "0", "title": "P3 WORKSHOP", "stage": "reconstruction"},
+	# Phase 4 uses letters: the digits are taken, and I/O/P stay vocabulary letters.
+	{"id": "final_assembly", "key": "F", "title": "P4 READY FOR FINAL ASSEMBLY", "stage": "ready_for_final_assembly"},
+	{"id": "escape", "key": "E", "title": "P4 ESCAPE CINEMATIC", "stage": "escape"},
+	{"id": "mission_report", "key": "R", "title": "P4 MISSION REPORT", "stage": "return_home"},
+	{"id": "credits", "key": "C", "title": "P4 CREDITS", "stage": "credits"},
 ]
+
+const RECONSTRUCTION_PATH := "res://data/star_fall/reconstruction.json"
 
 ## Authored collectible ids per map, as placed in data/star_fall/sites.json.
 ## The boss drops are not listed: they are awarded only through the boss rules.
@@ -64,6 +74,10 @@ const STEPS := {
 	"sky_remnant": 8,
 	"shield_drop": 9,
 	"workshop": 10,
+	"final_assembly": 11,
+	"escape": 12,
+	"mission_report": 13,
+	"credits": 14,
 }
 
 
@@ -149,6 +163,19 @@ static func apply(campaign, id: String) -> bool:
 		campaign.collect_boss_reward(SFCampaign.FLAG_SKY_REMNANT_DEFEATED, SFCampaign.COMPONENT_SHIELD_EMITTER)
 		campaign.restore_archive(SFCampaign.ARCHIVE_DAWN)
 		campaign.complete_dawn_tower()
+	# Phase 4: the same calls the QA milestones and the real finale make, so the
+	# save passes the load-time finale checks (committed design, frozen snapshot).
+	if step >= 11:
+		var recon: Dictionary = SFContent.read_json(RECONSTRUCTION_PATH) as Dictionary
+		if not bool(SFQA.apply_valid_reconstruction(campaign, recon).get("ok", false)):
+			push_error("Debug preset %s: no valid workshop design could be fabricated" % id)
+			return false
+		if step >= 12:
+			campaign.begin_final_assembly(SFFinale.snapshot(campaign, recon))
+	if step >= 13:
+		campaign.complete_return()
+	if step >= 14:
+		campaign.mark_report_seen()
 
 	var stage := String(p["stage"])
 	campaign.advance_to(stage)

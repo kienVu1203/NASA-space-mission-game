@@ -3,7 +3,11 @@ extends CanvasLayer
 ## Added by main.gd in debug builds only (running from the editor or
 ## `godot --path .`); an exported release build never creates this node.
 ##
-##   1..0  jump to a phase (see SFDebugPresets.PRESETS)
+##   1..0  jump to a Phase 1-3 point (see SFDebugPresets.PRESETS)
+##   F     Phase 4: ready for final assembly (workshop design fabricated)
+##   E     Phase 4: the escape cinematic (final snapshot frozen)
+##   R     Phase 4: the mission report
+##   C     Phase 4: the credits
 ##   V     win the current boss fight (shield duel, typing duel, or the
 ##         Eco Arena: the Colossus falls and its two drops appear)
 ##   K     heal Nick to full in the current fight
@@ -58,7 +62,8 @@ func _input(event: InputEvent) -> void:
 ## The single entry point, shared by real input and the tests. Returns true
 ## when the key was a debug command.
 func handle_key(keycode: int) -> bool:
-	if keycode >= KEY_0 and keycode <= KEY_9:
+	# Digit and letter keycodes equal their ASCII codes (KEY_F == "F").
+	if keycode < 128:
 		var p := SFDebugPresets.preset_for_key(char(keycode))
 		if not p.is_empty():
 			jump(String(p["id"]))

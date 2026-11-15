@@ -2787,7 +2787,7 @@ func _enter_credits() -> void:
 	add_child(credits_screen)
 	audio.set_ambience("none")
 	if audio.has_method("play_music"):
-		audio.play_music("title")
+		audio.play_music("outro")
 	queue_redraw()
 
 

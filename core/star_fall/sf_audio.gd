@@ -101,15 +101,21 @@ const SFX_MAP := {
 }
 
 const MUSIC_MAP := {
-	"title": "res://assets/audio/music/music_title.wav",
+	"title": "res://assets/audio/music/music_menu.mp3",
 	"earth": "res://assets/audio/music/music_earth.wav",
 	"construction": "res://assets/audio/music/music_construction.wav",
 	"flight": "res://assets/audio/music/music_flight.wav",
 	"ruin": "res://assets/audio/music/music_ruin.wav",
 	"memory": "res://assets/audio/music/music_memory.wav",
 	"checkpoint": "res://assets/audio/music/music_checkpoint.wav",
+	"outro": "res://assets/audio/music/music_outro.mp3",
 	"ambience_earth": "res://assets/audio/music/ambience_earth.wav",
 	"ambience_ruin": "res://assets/audio/music/ambience_ruin.wav",
+}
+
+## Per-track loudness trim in dB, for imported songs mastered quieter than the rest.
+const MUSIC_GAIN_DB := {
+	"title": 6.0,
 }
 
 const MUSIC_EARTH_PATH := "res://assets/audio/music/ambience_earth.wav"
@@ -240,6 +246,13 @@ func _ready() -> void:
 	)
 	_music_player_b.bus = BUS_MUSIC
 	add_child(_music_player_b)
+
+
+## Looks up the gain by the player's own stream, not current_music, so a track
+## fading out during a cross-fade keeps its own trim.
+func _track_gain_db(p: AudioStreamPlayer) -> float:
+	var track_id: Variant = MUSIC_MAP.find_key(p.stream.resource_path)
+	return MUSIC_GAIN_DB.get(track_id, 0.0)
 
 
 func _try_load_stream(path: String) -> AudioStream:
@@ -782,7 +795,7 @@ func _process(delta: float) -> void:
 			if target_a <= 0.01 and _music_player_a.playing:
 				_music_player_a.stop()
 		else:
-			_music_player_a.volume_db = linear_to_db(_music_vol_a * master)
+			_music_player_a.volume_db = linear_to_db(_music_vol_a * master) + _track_gain_db(_music_player_a)
 
 	if _music_player_b != null and _music_player_b.stream != null:
 		if _music_vol_b <= 0.01:
@@ -790,7 +803,7 @@ func _process(delta: float) -> void:
 			if target_b <= 0.01 and _music_player_b.playing:
 				_music_player_b.stop()
 		else:
-			_music_player_b.volume_db = linear_to_db(_music_vol_b * master)
+			_music_player_b.volume_db = linear_to_db(_music_vol_b * master) + _track_gain_db(_music_player_b)
 
 	# Cross-fade streaming ambient music tracks
 	var target_earth_vol := 1.0 if (ambience == "earth" and not muted and not paused) else 0.0

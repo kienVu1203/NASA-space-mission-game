@@ -33,14 +33,18 @@ var plan: Array = [
 	{"name": "14_checkpoint", "setup": "_setup_checkpoint", "wait": 10},
 	{"name": "15_forgotten_city", "setup": "_setup_forgotten_city", "wait": 20},
 	{"name": "16_city_memory", "setup": "_setup_city_memory", "wait": 20},
-	{"name": "17_scrap_king", "setup": "_setup_scrap_king", "wait": 40},
-	{"name": "18_scrap_king_charge", "setup": "_setup_scrap_king_charged", "wait": 12},
-	{"name": "19_counterattack", "setup": "_setup_counterattack", "wait": 6},
-	{"name": "20_scrap_king_defeat", "setup": "_setup_scrap_king_defeat", "wait": 20},
+	# The Scrap King encounter is the Eco Arena (campaign mode).
+	{"name": "17_eco_guide", "setup": "_setup_eco_guide", "wait": 30},
+	{"name": "18_eco_stage1", "setup": "_setup_eco_stage1", "wait": 30},
+	{"name": "19_eco_stage2", "setup": "_setup_eco_stage2", "wait": 30},
+	{"name": "20_eco_boss", "setup": "_setup_eco_boss", "wait": 30},
+	{"name": "20b_eco_reward", "setup": "_setup_eco_reward", "wait": 30},
+	{"name": "20c_eco_summary", "setup": "_setup_eco_summary", "wait": 30},
 	{"name": "21_city_archive", "setup": "_setup_city_archive", "wait": 20},
 	{"name": "22_silent_coast", "setup": "_setup_silent_coast", "wait": 20},
 	{"name": "22b_coast_memory", "setup": "_setup_coast_memory", "wait": 20},
 	{"name": "23_toxic_tide", "setup": "_setup_toxic_tide", "wait": 40},
+	{"name": "23b_power_core_drop", "setup": "_setup_power_core_drop", "wait": 20},
 	{"name": "24_coast_archive", "setup": "_setup_coast_archive", "wait": 20},
 	{"name": "25_base_return", "setup": "_setup_base_return", "wait": 20},
 	{"name": "26_phase_two_summary", "setup": "_setup_phase_two_summary", "wait": 12},
@@ -287,37 +291,144 @@ func _start_boss(boss_id: String) -> void:
 		main.duel._advance(2.5)
 
 
-func _setup_scrap_king() -> void:
+func _start_eco() -> void:
 	main.campaign.reset_campaign()
 	main.campaign.set_flag(main.campaign.FLAG_BILL_ACTIVE)
+	main.campaign.set_flag(main.campaign.FLAG_CITY_ENTERED)
 	main.campaign.set_flag(main.campaign.FLAG_CITY_CHECKPOINT)
-	_start_boss("scrap_king")
-	if main.duel != null:
-		main.duel.encounter.aim(Vector2(470, 110))
+	main._begin_city_boss()
+	_clear_dialogue()
 
 
-func _setup_scrap_king_charged() -> void:
-	if main.duel == null:
+## Poses the arena and freezes it, so the capture shows exactly this moment.
+func _freeze_eco(es) -> void:
+	es.banner_timer = 0.0
+	es._snap_camera()
+	es._update_presentation(0.0)
+	es.set_process(false)
+	es.queue_redraw()
+
+
+func _eco_enemy(m, type_id: String, offset: Vector2) -> Dictionary:
+	var e: Dictionary = m.spawn_enemy(type_id, m.nick_pos + offset)
+	e["charges"] = false
+	e["speed"] = 0.0
+	return e
+
+
+func _setup_eco_guide() -> void:
+	_start_eco()
+
+
+func _setup_eco_stage1() -> void:
+	var es = main.eco_screen
+	if es == null:
 		return
-	main.duel.encounter.model.charge = main.duel.encounter.model.charge_max
-	main.duel.encounter.aim(Vector2(500, 130))
-	main.duel._advance(0.4)
+	es.start_from_guide()
+	var m = es.model
+	m.nick_pos = Vector2(560, 640)
+	var target := _eco_enemy(m, "blue_box", Vector2(80, -70))
+	_eco_enemy(m, "green_peel", Vector2(-110, -40))
+	_eco_enemy(m, "yellow_bottle", Vector2(140, 20))
+	_eco_enemy(m, "yellow_can", Vector2(-60, 70))
+	m._drop_core("standard", m.nick_pos + Vector2(-40, 26), ["yellow"], "aluminum_can")
+	m._drop_core("standard", m.nick_pos + Vector2(60, 40), ["green"], "banana_peel")
+	m.add_charge_for_test(12)
+	m.select_spectrum("blue")
+	es.scripted_input = {"move": Vector2.ZERO, "aim": (target["pos"] as Vector2) + Vector2(0, -6), "fire": true, "beam": false}
+	es.advance_for(0.25)
+	_freeze_eco(es)
 
 
-func _setup_counterattack() -> void:
-	if main.duel == null:
+func _setup_eco_stage2() -> void:
+	_start_eco()
+	var es = main.eco_screen
+	if es == null:
 		return
-	main.duel.encounter.model.charge = main.duel.encounter.model.charge_max
-	main.duel._try_counterattack()
-	main.duel._advance(0.18)
+	es.start_from_guide()
+	var m = es.model
+	m.add_charge_for_test(32)
+	m.nick_pos = Vector2(820, 560)
+	var pizza := _eco_enemy(m, "trick_pizza", Vector2(-90, -60))
+	_eco_enemy(m, "trick_paper", Vector2(90, -50))
+	_eco_enemy(m, "trick_crushed", Vector2(110, 60))
+	var elite := _eco_enemy(m, "elite_residue", Vector2(-120, 50))
+	m._drop_core("dual", m.nick_pos + Vector2(-30, 40), ["green", "yellow"], "residue_bottle")
+	m.select_spectrum("blue")
+	es.scripted_input = {"move": Vector2.ZERO, "aim": (pizza["pos"] as Vector2) + Vector2(0, -6), "fire": true, "beam": true}
+	es.advance_for(0.3)
+	m.select_spectrum("blue")
+	_freeze_eco(es)
 
 
-func _setup_scrap_king_defeat() -> void:
-	if main.duel == null:
+func _setup_eco_boss() -> void:
+	_start_eco()
+	var es = main.eco_screen
+	if es == null:
 		return
-	var m = main.duel.encounter.model
-	m.force_victory()
-	main.duel._advance(2.2)
+	es.start_from_guide()
+	var m = es.model
+	m.add_charge_for_test(80)
+	m.boss["state"] = "fight"
+	m.boss["timer"] = 0.0
+	m.boss["toss_t"] = 0.05
+	m.nick_pos = (m.boss["pos"] as Vector2) + Vector2(-60, 150)
+	m.select_spectrum("green")
+	es.scripted_input = {"move": Vector2.ZERO, "aim": (m.boss["pos"] as Vector2) + Vector2(0, -30), "fire": true, "beam": false}
+	es.advance_for(0.6)
+	_freeze_eco(es)
+
+
+func _setup_eco_reward() -> void:
+	_start_eco()
+	var es = main.eco_screen
+	if es == null:
+		return
+	es.start_from_guide()
+	var m = es.model
+	m.debug_defeat_boss()
+	es._consume(m.take_events())
+	var sc: Dictionary = m.cores[0]
+	m.nick_pos = (sc["pos"] as Vector2) + Vector2(0, 6)
+	es.scripted_input = {"move": Vector2.ZERO, "aim": sc["pos"], "fire": false, "beam": false}
+	m.select_spectrum("green")
+	es.advance_for(0.3)
+	m.nick_pos = (m.chip["pos"] as Vector2) + Vector2(0, 8)
+	es.advance_for(0.1)
+	_freeze_eco(es)
+
+
+func _setup_eco_summary() -> void:
+	var es = main.eco_screen
+	if es == null:
+		return
+	es.set_process(true)
+	var m = es.model
+	var sc: Dictionary = m.cores[0] if not m.cores.is_empty() else {}
+	if not sc.is_empty():
+		for cat in ["blue", "yellow"]:
+			m.nick_pos = (sc["pos"] as Vector2) + Vector2(0, 6)
+			m.select_spectrum(cat)
+			es.advance_for(0.4)
+	m.mismatch_counts["pizza_box"] = 2
+	m.decisions["e1:0"] = false
+	m.decisions["e2:0"] = true
+	m.decisions["e3:0"] = true
+	m.elapsed = 371.0
+	m.nick_pos = m.chip["pos"]
+	m.interact()
+	es._consume(m.take_events())
+	_freeze_eco(es)
+
+
+func _setup_power_core_drop() -> void:
+	main.campaign.set_flag(main.campaign.FLAG_TOXIC_TIDE_DEFEATED)
+	main.campaign.advance_to(main.campaign.STAGE_SILENT_INTRO)
+	main.zone = "silent_coast"
+	main._go(main.Screen.WORLD)
+	_clear_dialogue()
+	if main.world != null:
+		main.world.set_player_position(Vector2(530, 250))
 
 
 func _setup_city_archive() -> void:

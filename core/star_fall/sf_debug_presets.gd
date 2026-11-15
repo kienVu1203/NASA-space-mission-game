@@ -18,7 +18,7 @@ const PRESETS := [
 	{"id": "construction", "key": "1", "title": "P1 CONSTRUCTION CONSOLE", "stage": "construction"},
 	{"id": "crash_site", "key": "2", "title": "P1 CRASH SITE", "stage": "crash_site"},
 	{"id": "forgotten_city", "key": "3", "title": "P2 FORGOTTEN CITY", "stage": "city_intro"},
-	{"id": "scrap_king", "key": "4", "title": "P2 SCRAP KING FIGHT", "stage": "city_boss"},
+	{"id": "scrap_king", "key": "4", "title": "P2 SCRAP KING ECO ARENA", "stage": "city_boss"},
 	{"id": "silent_coast", "key": "5", "title": "P2 SILENT COAST", "stage": "silent_intro"},
 	{"id": "toxic_tide", "key": "6", "title": "P2 TOXIC TIDE FIGHT", "stage": "coast_boss"},
 	{"id": "dawn_tower", "key": "7", "title": "P3 DAWN TOWER GATE", "stage": "dawn_intro", "position": Vector2(360, 150)},

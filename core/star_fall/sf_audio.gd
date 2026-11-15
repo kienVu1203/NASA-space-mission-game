@@ -540,6 +540,37 @@ func sfx_shield_block() -> void:
 	_add(Wave.SQUARE, 720.0, 480.0, 0.05, 0.002, 0.04, 0.08)
 
 
+## Eco Arena material hits. Each material has its own short signature so a
+## correct match is audible without looking: organic is soft and wet, paper
+## tears, plastic and metal ring hollow. Deflection reuses the shield block.
+func sfx_sort_organic() -> void:
+	_add(Wave.NOISE, 420.0, 160.0, 0.10, 0.004, 0.06, 0.10)
+	_add(Wave.SINE, 180.0, 110.0, 0.08, 0.004, 0.07, 0.10)
+
+
+func sfx_sort_paper() -> void:
+	_add(Wave.NOISE, 3200.0, 1400.0, 0.08, 0.002, 0.03, 0.07)
+	_add(Wave.NOISE, 1800.0, 2600.0, 0.05, 0.02, 0.04, 0.09)
+
+
+func sfx_sort_metal() -> void:
+	_add(Wave.TRI, 1180.0, 1120.0, 0.08, 0.001, 0.12, 0.16)
+	_add(Wave.SQUARE, 2360.0, 2300.0, 0.03, 0.001, 0.05, 0.08)
+
+
+## Tri-Spectrum Blaster shot: a soft, very short zap, quiet enough to repeat
+## at the fire rate. `pitch` shifts it per spectrum so the active color is
+## audible too.
+func sfx_blaster(pitch: float = 1.0) -> void:
+	_add(Wave.SQUARE, 880.0 * pitch, 520.0 * pitch, 0.22, 0.001, 0.04, 0.07)
+	_add(Wave.NOISE, 2400.0, 1600.0, 0.10, 0.001, 0.025, 0.04)
+
+
+## Wrong-color contact with a dirty core: a small harmless static crackle.
+func sfx_static() -> void:
+	_add(Wave.NOISE, 5200.0, 2400.0, 0.06, 0.001, 0.03, 0.06)
+
+
 ## Beneficial energy absorbed: rising, warm, distinct from a block.
 func sfx_shield_absorb() -> void:
 	_add(Wave.SINE, 620.0, 1240.0, 0.10, 0.01, 0.16, 0.22)
@@ -637,6 +668,14 @@ func _process(delta: float) -> void:
 			_music_ruin.volume_db = linear_to_db(_music_ruin_vol * master)
 
 	# 2. Procedural synthesizer engine (active voices and fallback ambience)
+	# Godot 4.0 ends a generator stream whose buffer runs dry (any frame longer
+	# than buffer_length, e.g. while loading). Without this restart every synth
+	# cue after the first stall was queued but never heard. Stale voices are
+	# dropped so they do not all fire at once on restart.
+	if _player != null and not _player.playing:
+		_voices.clear()
+		_player.play()
+		_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback
 	if _playback == null:
 		if _player != null and _player.playing:
 			_playback = _player.get_stream_playback() as AudioStreamGeneratorPlayback

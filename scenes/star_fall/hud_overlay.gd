@@ -54,6 +54,15 @@ func _draw() -> void:
 
 		if campaign.chapter_id == SFCampaign.CHAPTER_PRESENT:
 			skin.text_r(self, 628, 348, "DAY ONE", SFPalette.ASH_LIGHT)
+		elif campaign.chapter_id == SFCampaign.CHAPTER_RETURN:
+			skin.text_r(self, 628, 348, "RETURN HOME", SFPalette.GREEN_OK)
+
+		# QA builds advertise the stage-skip hotkey so a tester can find it. It is
+		# centred on the bottom strip, clear of the day marker, the carry list and
+		# the interaction prompt. It is never drawn in a release run, where the
+		# skip is disabled entirely.
+		if game.qa_enabled:
+			skin.text_c(self, 320, 350, "QA  HOLD I + O + P TO SKIP", SFPalette.ASH_LIGHT)
 
 		# Pause overlay and toasts are the top-most layers.
 		if game.is_pause_open():

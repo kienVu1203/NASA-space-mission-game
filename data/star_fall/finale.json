@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "_note": "Phase 4 finale: final assembly gate, the in-engine escape cinematic, the mission report, the scoring formula and the credits. All timings are seconds of cinematic time; all prose is here, not in scripts. Every number and claim about the ship comes from the player's own recorded run. Time travel, the portal and the VELA drive are fictional story devices.",
+  "assembly": {
+    "title": "FINAL ASSEMBLY",
+    "subtitle": "VELA / return mission",
+    "confirm_label": "COMPLETE ASSEMBLY AND LAUNCH",
+    "back_label": "GO BACK",
+    "install_seconds": 3.4,
+    "steps": [
+      "Survey the frozen design against the recovered frame.",
+      "Lock the workshop cradle and clear the pad.",
+      "Seat the navigation chip, power core and shield emitter.",
+      "Load Bill's memory core and the evidence archive.",
+      "Pressurize the tank and arm the launch cradle."
+    ],
+    "locked_note": "The design is frozen. The workshop no longer accepts changes.",
+    "check_labels": {
+      "bosses": "All three chapter bosses stopped",
+      "components": "Navigation chip, power core and shield emitter fitted",
+      "payload": "Memory core and evidence archive loaded",
+      "fabricated": "Final fabrication complete",
+      "simulation": "Passing simulation matches this design",
+      "clear": "No other sequence is running"
+    }
+  },
+  "cinematic": {
+    "title": "ESCAPE",
+    "skip_hint": "ESC SKIP   SPACE PAUSE   ANY KEY NEXT",
+    "flight": {
+      "_note": "Tuning for the two playable flight segments. `target_seconds` is how long a clean run of the segment takes; the assist values guarantee that a player who never touches the controls, or who keeps colliding, still finishes. `kind` is the only field the screen dispatches on.",
+      "debris": {
+        "kind": "debris",
+        "lane_top": 74.0,
+        "lane_bottom": 286.0,
+        "ship_x": 98.0,
+        "ship_half_height": 11.0,
+        "steer_speed": 172.0,
+        "obstacle_speed": 148.0,
+        "speed_growth": 66.0,
+        "spawn_interval": 0.50,
+        "spawn_jitter": 0.13,
+        "max_obstacles": 12,
+        "min_radius": 7.0,
+        "max_radius": 19.0,
+        "target_seconds": 17.0,
+        "assist_after_restarts": 2,
+        "assist_after_seconds": 26.0,
+        "hit_freeze_seconds": 0.55,
+        "clear_hold_seconds": 1.6,
+        "seed": 7321
+      },
+      "portal": {
+        "kind": "portal",
+        "lane_top": 84.0,
+        "lane_bottom": 276.0,
+        "ship_x": 150.0,
+        "ship_half_height": 11.0,
+        "steer_speed": 150.0,
+        "portal_x": 512.0,
+        "portal_y": 180.0,
+        "portal_half_height": 40.0,
+        "portal_drift": 46.0,
+        "portal_drift_speed": 0.46,
+        "align_seconds": 0.65,
+        "target_seconds": 12.0,
+        "assist_after_restarts": 0,
+        "assist_after_seconds": 20.0,
+        "clear_hold_seconds": 1.5,
+        "seed": 4417
+      }
+    },
+    "scenes": [
+      {
+        "id": "leaving_crash_site",
+        "name": "LEAVING THE CRASH SITE",
+        "visual": "crash_site",
+        "duration": 16.0,
+        "lines": [
+          {"at": 0.6, "text": "Nick lifts Bill's memory core out of the maintenance shell."},
+          {"at": 3.4, "text": "Bill: \"That is the last of the old body. It did its job.\""},
+          {"at": 6.4, "text": "Nick: \"So did you.\""},
+          {"at": 9.0, "text": "The junction you bridged still carries power to the cradle."},
+          {"at": 12.2, "text": "The wreck that brought you here is the ship that takes you back."}
+        ]
+      },
+      {
+        "id": "launch",
+        "name": "ASCENT THROUGH THE JUNK",
+        "visual": "launch",
+        "duration": 15.0,
+        "lines": [
+          {"at": 0.5, "text": "The rebuilt drive catches on the first attempt."},
+          {"at": 3.4, "text": "Smoke pours off the pad. VELA climbs out of the wreck field."},
+          {"at": 6.6, "text": "The shield emitter lights: a blue bubble around the hull."},
+          {"at": 9.8, "text": "The junk strata thicken with altitude. Every graze ripples the shield."},
+          {"at": 12.6, "text": "The last shell cracks. The shield spends itself forcing a way through."}
+        ]
+      },
+      {
+        "id": "debris_passage",
+        "name": "DEBRIS PASSAGE",
+        "visual": "debris",
+        "interactive": "debris",
+        "duration": 22.0,
+        "lines": [
+          {"at": 0.6, "text": "Bill: \"Meteoroids. Steer with W and S, or move the mouse.\""},
+          {"at": 4.6, "text": "Nick: \"I have it. Holding the left side.\""},
+          {"at": 9.0, "text": "Bill: \"A strike puts us back at the start of the stream. Fly clean.\""},
+          {"at": 13.2, "text": "Nick: \"Then let's not get hit.\""},
+          {"at": 17.0, "text": "Bill: \"Small hits only. Keep her steady.\""},
+          {"at": 20.4, "text": "The passage opens. The lane goes quiet."}
+        ]
+      },
+      {
+        "id": "sunlight",
+        "name": "SUNLIGHT",
+        "visual": "sunlight",
+        "duration": 17.0,
+        "lines": [
+          {"at": 2.2, "text": "Below, the old world is smothered in its own waste."},
+          {"at": 5.0, "text": "Bill: \"Is the sky still blue where you come from?\""},
+          {"at": 8.2, "text": "Nick: \"It is.\""},
+          {"at": 11.4, "text": "Bill: \"Then keep it that way.\""},
+          {"at": 13.8, "text": "The cabin goes quiet. The light does not."}
+        ]
+      },
+      {
+        "id": "portal",
+        "name": "THE PORTAL",
+        "visual": "portal",
+        "interactive": "portal",
+        "duration": 18.0,
+        "lines": [
+          {"at": 0.6, "text": "VELA replays the original recorded signal. Something answers."},
+          {"at": 4.6, "text": "Bill: \"There it is. Line up with the opening and fly it in.\""},
+          {"at": 9.2, "text": "Nick: \"Aligning. Hold it steady.\""},
+          {"at": 13.4, "text": "The access window is open. This is the story's way home, not a claim about physics."}
+        ]
+      },
+      {
+        "id": "home",
+        "name": "HOME",
+        "visual": "home",
+        "duration": 24.0,
+        "lines": [
+          {"at": 0.5, "text": "Mission Control: \"VELA, we have your signal. What happened?\""},
+          {"at": 3.4, "text": "Nick: \"I have data to send. This time, we need to listen.\""},
+          {"at": 6.6, "text": "Landing gear down. The pad is real, and the grass is green."},
+          {"at": 9.4, "text": "Nick steps out of the hatch onto present-day Earth."},
+          {"at": 12.2, "text": "The archive opens: the memories you found, in the order you found them."},
+          {"at": 15.4, "text": "The records reach researchers, analysts and the coastal communities."},
+          {"at": 18.6, "text": "Not one person solves it. The information is finally where it can be used."},
+          {"at": 22.0, "text": "Nick: \"Bill... it is still blue.\""}
+        ]
+      }
+    ],
+    "final_message": {
+      "duration": 9.0,
+      "lines": [
+        "You found your way back to Earth.",
+        "Help keep it a home for those who come after us."
+      ]
+    }
+  },
+  "report": {
+    "title": "MISSION REPORT",
+    "subtitle": "Compiled from the recorded run",
+    "labels": {
+      "objective": "Return objective",
+      "completed": "COMPLETED",
+      "memories": "Archived memories",
+      "samples": "Scientific samples returned",
+      "components": "Recovered components fitted",
+      "original": "Original design",
+      "reconstructed": "Reconstructed design",
+      "mass": "Final launch mass",
+      "route": "Selected route",
+      "propellant": "Simulated propellant reserve",
+      "energy": "Simulated energy reserve",
+      "efficiency": "Material efficiency",
+      "score": "Mission score",
+      "decisions": "DECISIONS THAT ENABLED SUCCESS",
+      "evidence": "Evidence archive",
+      "built": "Built at the spaceport on day one",
+      "rebuilt": "Rebuilt at the crash-site workshop",
+      "skipped": "Cinematic skipped. This has no effect on the outcome or the score.",
+      "none": "None",
+      "continue_hint": "ENTER  CREDITS"
+    },
+    "efficiency_note": "dry mass in kg per salvage unit spent (materials + fabrication units)",
+    "decisions": {
+      "repair_original": "You repaired the day-one engine rather than rebuilding one: fewer fabrication units and less margin spent on hardware.",
+      "rebuilt_cluster": "You rebuilt a Dawn cluster: more thrust and efficiency, paid for in fabrication units.",
+      "protection_none": "You trusted the shield emitter alone and spent the saved mass on propellant.",
+      "armor_plating": "You fitted scrap armor: physical protection bought with mass, and mass bought with propellant.",
+      "shield_amplifier": "You fitted the shield amplifier: protection bought with electrical load during the transit.",
+      "storage_none": "You relied on the navigation chip's own store.",
+      "storage_compact": "You chose the compact data module: enough room for the evidence with little extra load.",
+      "storage_array": "You fitted the archive array: more room for records, more mass and more power draw.",
+      "fast_corridor": "You took the Fast Corridor: the shortest transit, against a denser debris field and a tight relay window.",
+      "extended_arc": "You took the Extended Arc: less delta-v and lighter debris, paid for in hours of electrical load.",
+      "samples": "You carried the environmental samples home. The cooling cost had to fit the power budget.",
+      "records": "You carried the additional scientific records home. The relay window had to be long enough to sync them.",
+      "reserve": "The simulation left %s of propellant and %s of buffer energy in reserve."
+    },
+    "score": {
+      "_note": "Published formula: 100 for completing the return objective, 25 per recovered component fitted, 15 per archived memory, 20 for flying the optional environmental samples, 20 for flying the optional additional records, plus up to 30 efficiency points computed from the simulated propellant reserve fraction. Skipping cinematics and accessibility settings never change it. Inventory size is never scored, so farming cannot raise it.",
+      "return_objective": 100,
+      "component": 25,
+      "memory": 15,
+      "optional_payload": 20,
+      "efficiency_max": 30
+    }
+  },
+  "credits": {
+    "title": "CREDITS",
+    "scroll_seconds": 46.0,
+    "sections": [
+      {
+        "heading": "STAR FALL",
+        "lines": [
+          "A single-player pixel-art adventure.",
+          "Nick, Bill and the VELA are fictional.",
+          "Time travel, the portal and the drive are story devices."
+        ]
+      },
+      {
+        "heading": "ENGINE AND TOOLS",
+        "lines": [
+          "Godot 4.0 stable (MIT License).",
+          "GDScript. No third-party runtime libraries.",
+          "All sprites, fonts and UI drawn procedurally at runtime.",
+          "Music and sound effects generated by the project's own Python tools."
+        ]
+      },
+      {
+        "heading": "ORIGINAL ASSETS",
+        "lines": [
+          "Pixel font, sprites, palettes, UI and audio: original work in this repository.",
+          "No NASA imagery, logos or datasets are included.",
+          "No NASA endorsement is implied."
+        ]
+      },
+      {
+        "heading": "SCIENCE NOTES",
+        "lines": [
+          "The rocket equation and the unit definitions are real physics.",
+          "The rocket equation is used to explain, not to simulate a real vehicle.",
+          "Component masses, costs, routes, delta-v and power budgets are invented gameplay values.",
+          "Environmental and debris statistics in the story are fictional.",
+          "No climate statistic is presented as measured data."
+        ]
+      },
+      {
+        "heading": "WRITING",
+        "lines": [
+          "Dialogue, archives, memories and records written for this project.",
+          "Nick is human. Bill is a maintenance robot first met in the future.",
+          "The Dawn Project archive is fiction."
+        ]
+      },
+      {
+        "heading": "THANKS",
+        "lines": [
+          "To everyone who plays carefully and asks why."
+        ]
+      }
+    ],
+    "final_message": [
+      "You found your way back to Earth.",
+      "Help keep it a home for those who come after us."
+    ]
+  },
+  "qa": {
+    "_note": "QA-only stage skip. Enabled automatically in debug/editor builds, or in any build launched with the --qa command-line flag. Never active in a normal release run.",
+    "keys": ["I", "O", "P"],
+    "cooldown_seconds": 0.45,
+    "flag": "qa_stage_skip_used",
+    "notice": "QA: STAGE SKIPPED"
+  }
+}

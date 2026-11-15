@@ -11,6 +11,7 @@ extends SceneTree
 
 const OUT_DIR := "user://captures/"
 const SFSave := preload("res://core/star_fall/sf_save.gd")
+const SFQA := preload("res://core/star_fall/sf_qa.gd")
 
 var main
 var frame: int = 0
@@ -53,6 +54,21 @@ var plan: Array = [
 	{"name": "33_workshop", "setup": "_setup_workshop", "wait": 10},
 	{"name": "36_workshop_fitted", "setup": "_setup_workshop_fitted", "wait": 12},
 	{"name": "34_ready_summary", "setup": "_setup_ready_summary", "wait": 10},
+	# Phase 4.
+	{"name": "46_final_assembly", "setup": "_setup_final_assembly", "wait": 10},
+	{"name": "47_assembly_install", "setup": "_setup_assembly_install", "wait": 30},
+	{"name": "48_escape_crash_site", "setup": "_setup_escape_crash_site", "wait": 40},
+	{"name": "49_escape_launch", "setup": "_setup_escape_launch", "wait": 24},
+	{"name": "49b_escape_ignition", "setup": "_setup_escape_ignition", "wait": 18},
+	{"name": "49c_escape_shatter", "setup": "_setup_escape_shatter", "wait": 18},
+	{"name": "50_escape_debris", "setup": "_setup_escape_debris", "wait": 24},
+	{"name": "51_escape_sunlight", "setup": "_setup_escape_sunlight", "wait": 24},
+	{"name": "52_escape_portal", "setup": "_setup_escape_portal", "wait": 24},
+	{"name": "53_escape_home", "setup": "_setup_escape_home", "wait": 28},
+	{"name": "53b_escape_portrait", "setup": "_setup_escape_portrait", "wait": 24},
+	{"name": "54_final_message", "setup": "_setup_final_message", "wait": 20},
+	{"name": "55_mission_report", "setup": "_setup_mission_report", "wait": 10},
+	{"name": "56_credits", "setup": "_setup_credits", "wait": 16},
 ]
 var hold: int = 0
 
@@ -508,6 +524,171 @@ func _setup_ready_summary() -> void:
 		ws.fabricate()
 	_clear_dialogue()
 	main._go(main.Screen.CHECKPOINT)
+
+
+# ---------------------------------------------------------------- phase 4
+
+## Drive the campaign to a complete, fabricated, ready state through the QA
+## helpers, so the Phase 4 screens pose from real recorded state.
+func _phase4_campaign() -> void:
+	main.campaign.reset_campaign()
+	main._go(main.Screen.TITLE)
+	var guard := 0
+	while SFQA.next_milestone(main.campaign) != SFQA.MILESTONE_READY and guard < 30:
+		guard += 1
+		main._apply_qa_skip()
+	_clear_dialogue()
+	main._go(main.Screen.CHECKPOINT)
+
+
+func _setup_final_assembly() -> void:
+	_phase4_campaign()
+	main._checkpoint_key(KEY_ENTER)
+	_clear_dialogue()
+
+
+func _setup_assembly_install() -> void:
+	# Standalone-capable: a filtered --shots=36 run has not posed the gate yet.
+	if main.screen != main.Screen.FINAL_ASSEMBLY or main.assembly_screen == null:
+		_phase4_campaign()
+		main._checkpoint_key(KEY_ENTER)
+		_clear_dialogue()
+	if main.assembly_screen != null and not main.assembly_screen.has_started():
+		main.assembly_screen.activate()
+	if main.assembly_screen != null:
+		main.assembly_screen.install_timer = 1.4
+
+
+## Poses one cinematic scene at an exact clock value and freezes its process, so
+## the captured frame is the pose that was asked for rather than wherever the
+## scene drifted during the hold. The playable segments are stepped by hand here
+## because their shape depends on the flight model, not on the clock.
+func _escape_to(scene_index: int, at: float) -> void:
+	if main.cinematic_screen == null:
+		main._go(main.Screen.CINEMATIC)
+	var cine = main.cinematic_screen
+	cine.set_process(false)
+	cine.scene_index = scene_index
+	cine.show_final_message = false
+	cine.scene_time = at
+	cine.elapsed = at
+	cine.paused = false
+	cine.flight = null
+	cine._flight_index = -1
+	cine._hit_freeze = 0.0
+	cine._hold_timer = 0.0
+	# Its own process is off, so nothing else will schedule the redraw.
+	cine.queue_redraw()
+	# A previous screen may have left the sequence paused; a capture always wants
+	# the running pose.
+	cine.paused = false
+
+
+func _start_escape() -> void:
+	if main.screen == main.Screen.CINEMATIC or main.screen == main.Screen.REPORT or main.screen == main.Screen.CREDITS:
+		return
+	_phase4_campaign()
+	var gate = main.assembly_screen
+	if gate == null:
+		main._checkpoint_key(KEY_ENTER)
+		gate = main.assembly_screen
+	if gate != null:
+		gate.activate()
+		gate._finish_installation()
+	_clear_dialogue()
+
+
+func _setup_escape_crash_site() -> void:
+	_start_escape()
+	_escape_to(0, 12.4)
+
+
+func _setup_escape_launch() -> void:
+	_start_escape()
+	# Mid-climb: the blue shield up, the junk strata thickening around the hull.
+	_escape_to(1, 10.4)
+
+
+func _setup_escape_ignition() -> void:
+	_start_escape()
+	# On the pad: thick smoke, full ignition, the shield not yet lit.
+	_escape_to(1, 3.4)
+
+
+func _setup_escape_shatter() -> void:
+	_start_escape()
+	# The final shell overloading: fragments, shockwave, and the bubble gone.
+	_escape_to(1, 13.1)
+
+
+func _setup_escape_debris() -> void:
+	_start_escape()
+	_escape_to(2, 7.0)
+	_populate_flight()
+
+
+func _setup_escape_sunlight() -> void:
+	_start_escape()
+	_escape_to(3, 8.0)
+
+
+func _setup_escape_portal() -> void:
+	_start_escape()
+	_escape_to(4, 6.0)
+	_populate_flight()
+	var cine = main.cinematic_screen
+	if cine != null and cine.flight != null:
+		cine.flight.ship_y = cine.flight.portal_y
+
+
+func _setup_escape_home() -> void:
+	_start_escape()
+	_escape_to(5, 12.0)
+
+
+func _setup_escape_portrait() -> void:
+	_start_escape()
+	_escape_to(5, 21.0)
+
+
+## Steps the playable segment for a few seconds of flight with no steering, so
+## the field has obstacles in it and the ship sits where the lane put it.
+func _populate_flight() -> void:
+	var cine = main.cinematic_screen
+	if cine == null:
+		return
+	cine._ensure_flight()
+	if cine.flight == null:
+		return
+	# Long enough for the field to fill: a capture should show mid-passage, not
+	# the first two seconds.
+	for i in 150:
+		cine.flight.tick(1.0 / 30.0, 0.0)
+	cine.queue_redraw()
+
+
+func _setup_final_message() -> void:
+	_start_escape()
+	if main.cinematic_screen != null:
+		main.cinematic_screen.show_final_message = true
+		main.cinematic_screen.scene_time = 4.0
+		main.cinematic_screen.elapsed = 4.0
+
+
+func _setup_mission_report() -> void:
+	_start_escape()
+	if main.cinematic_screen != null:
+		main.cinematic_screen.skip()
+	_clear_dialogue()
+
+
+func _setup_credits() -> void:
+	_setup_mission_report()
+	if main.report_screen != null:
+		main.report_screen.handle_key(KEY_ENTER)
+	if main.credits_screen != null:
+		main.credits_screen.scroll = 40.0
+	_clear_dialogue()
 
 
 func _setup_checkpoint() -> void:

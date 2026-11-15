@@ -6,12 +6,12 @@ investigate an anomalous signal, and is pulled through a spatial rift into a
 ruined, polluted world. There he meets **Bill**, an abandoned maintenance robot,
 who holds one memory of a green city.
 
-Phases 1, 2 and 3 are complete and playable: present-day Earth, the crash
-site, the Forgotten City and the Silent Coast (two shield-defense boss fights),
-and the Dawn Tower, with the Sky Remnant typing battle, the shield emitter, the
-VELA reconstruction workshop and the return-mission simulation. The campaign
-stops at **READY_FOR_FINAL_ASSEMBLY**; the escape and ending are Phase 4 and
-not built. Time travel and the VELA's drive are fictional story devices, not
+The campaign is complete and playable from the main menu to the credits:
+present-day Earth, the crash site, the Forgotten City and the Silent Coast (two
+shield-defense boss fights), the Dawn Tower with the Sky Remnant typing battle,
+the VELA reconstruction workshop and the return-mission simulation, then final
+assembly, an in-engine escape cinematic, the mission report and the credits.
+Time travel, the portal and the VELA's drive are fictional story devices, not
 claims about real technology.
 
 **Everything is documented in [docs/star_fall_contract.md](docs/star_fall_contract.md)** —
@@ -31,8 +31,8 @@ architecture, data schemas, stable IDs, save format, units and test commands.
 | Target | Desktop, offline, no asset downloads |
 | Resolution | 640x360 base, window opens at 1280x720, `canvas_items`, nearest filtering |
 | Game type | 2D angled top-down exploration, Y-sorted, generated art and audio |
-| Flow | Menu -> Earth -> Briefing -> Construction -> Preflight -> Launch -> Rift -> Crash Site -> Bill -> Memory -> Forgotten City -> Scrap King -> Archive -> Silent Coast -> Toxic Tide -> Archive -> Base -> Dawn Tower -> Sky Remnant -> Dawn Archive -> Reconstruction Workshop -> READY_FOR_FINAL_ASSEMBLY |
-| Status | **STAR FALL Phases 1, 2 and 3** complete and playable; Phase 4 (escape and ending) not built |
+| Flow | Menu -> Earth -> Briefing -> Construction -> Preflight -> Launch -> Rift -> Crash Site -> Bill -> Memory -> Forgotten City -> Scrap King -> Archive -> Silent Coast -> Toxic Tide -> Archive -> Base -> Dawn Tower -> Sky Remnant -> Dawn Archive -> Reconstruction Workshop -> Final Assembly -> Escape -> Return Home -> Mission Report -> Credits |
+| Status | **STAR FALL is complete**: Phases 1-4, main menu to credits, playable end to end |
 | Also in repo | **Operation: Starfall**, a complete orbital-salvage satire in `scenes/starfall/` (see [docs/starfall.md](docs/starfall.md)) |
 
 ## Getting started
@@ -59,13 +59,16 @@ godot --headless --path . --script res://tests/star_fall/test_logic.gd
 godot --headless --path . --script res://tests/star_fall/test_flow.gd
 godot --headless --path . --script res://tests/star_fall/test_encounter.gd
 godot --headless --path . --script res://tests/star_fall/test_phase3.gd
+godot --headless --path . --script res://tests/star_fall/test_phase4.gd
 godot --headless --path . --script res://tests/star_fall/test_debug_jump.gd
 ```
 
-`test_flow.gd`, `test_debug_jump.gd` and `capture.gd` delete `user://star_fall_save.json`; back up a
-real save first. `tests/star_fall/capture.gd` renders 37 key screens to `user://captures/` and
-needs a real display (`-- --shots=17,18` re-renders just those screens). Full
-commands and acceptance steps are in
+`test_flow.gd`, `test_phase4.gd`, `test_debug_jump.gd` and `capture.gd` delete
+`user://star_fall_save.json`; back up a real save first.
+`tests/star_fall/capture.gd` renders 48 key screens (including the
+Phase 4 finale and the debug help) to `user://captures/` and needs a real display
+(`-- --shots=17,18` re-renders just those screens). Full commands and
+acceptance steps are in
 [docs/star_fall_contract.md](docs/star_fall_contract.md).
 
 ### Controls
@@ -140,6 +143,22 @@ toggles optional payload,
 **V** runs the simulation, **F** fabricates, **C** scavenges common materials,
 Esc leaves (the selection is kept; press E at the wreck to return).
 
+**In final assembly:** Up/Down choose COMPLETE ASSEMBLY AND LAUNCH or GO BACK,
+Enter activates, Esc goes back to the ready summary. The confirmation is one-way: it
+freezes the design, writes the pre-finale checkpoint and starts the escape.
+
+**In the escape cinematic:** Space pauses and resumes, Esc skips the rest,
+Enter advances a beat. Skipping is always safe and produces exactly the same
+progress, report and score as watching.
+
+**Mission report and credits:** Up/Down scroll, Enter/Space continue, Esc also
+continues. The credits end at the title.
+
+**QA stage skip (playtesting only):** hold **I + O + P** together to advance one
+campaign milestone per press (it is edge-triggered with a cooldown, so holding
+the keys does not repeat). Enabled automatically in a debug build or the editor,
+and in any build launched with `--qa`; it is inert in a release build.
+
 ### Reaching each Phase 2 encounter
 
 1. **New Game** and finish Phase 1: briefing, build the VELA, preflight, launch,
@@ -179,8 +198,25 @@ Esc leaves (the selection is kept; press E at the wreck to return).
    to simulate, revise until it passes, press **C** if salvage is short, then
    **F** to fabricate. The quickest passing design is the default selection on
    the Extended Arc with the propellant set to the "propellant needed" value.
-7. The **READY FOR FINAL ASSEMBLY** summary appears; **Enter** returns to the
-   title with the save intact. **Continue** resumes at that summary.
+7. The **READY FOR FINAL ASSEMBLY** summary appears; **Enter** opens the Phase 4
+   **final assembly** gate.
+
+### Reaching the ending (Phase 4)
+
+1. At the ready summary press **Enter**: the final-assembly gate lists the six
+   prerequisites. They are evaluated live, so a missing boss, component,
+   fabrication or stale simulation shows up here rather than mid-cinematic.
+2. Press **Enter** on **COMPLETE ASSEMBLY AND LAUNCH**. This is irreversible:
+   the design freezes, a pre-finale checkpoint is written, and the install
+   animation plays. **Esc** skips the animation, not the sequence.
+3. The **escape** plays: crash site, launch, debris passage with the certified
+   telemetry, sunlight, the portal, home. **Space** pauses, **Esc** skips.
+4. The **mission report** shows the recorded run and the published score.
+5. The **credits** roll, then the game returns to the title. **Continue** after
+   the ending returns to the credits, and **New Game** starts clean.
+
+For rapid playtesting, hold **I + O + P** to jump one milestone at a time; see
+the controls table above and `docs/test_checklist.md`.
 
 ## Project structure
 
@@ -196,12 +232,14 @@ core/star_fall/   Pure logic + presentation kit, no nodes: design and preflight
 scenes/star_fall/ main.tscn + main.gd (flow controller), world.gd, player.gd,
                   prop.gd, hud_overlay.gd, construction_screen.gd,
                   shield_duel.gd, archive_screen.gd, progression_screen.gd,
-                  typing_duel.gd, reconstruction_screen.gd
+                  typing_duel.gd, reconstruction_screen.gd,
+                  final_assembly_screen.gd, cinematic_screen.gd,
+                  mission_report_screen.gd, credits_screen.gd
 data/star_fall/   ship_parts.json, campaign.json, encounters.json, sites.json,
-                  vocabulary.json, typing.json, reconstruction.json:
-                  all tuning and prose
+                  vocabulary.json, typing.json, reconstruction.json,
+                  finale.json: all tuning and prose
 tests/star_fall/  test_parse.gd, test_logic.gd, test_flow.gd, test_encounter.gd,
-                  test_phase3.gd, capture.gd
+                  test_phase3.gd, test_phase4.gd, capture.gd
 docs/             star_fall_contract.md (source of truth), vocabulary.md, game_design.md,
                   starfall.md, test_checklist.md, roles.md
 core/starfall/    Operation: Starfall: palette, font, sprites, synth, ship and debris models
@@ -278,11 +316,12 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
   nothing large needs it yet.
 - **`.editorconfig`** was discussed but not added (optional, e.g.
   `indent_style = tab`).
-- **Phase 4:** the escape cinematic, the Return Home chapter and the ending.
-  `return_home` stays `deferred` in `data/star_fall/campaign.json`. See
-  `docs/star_fall_contract.md` section 15.
+- **Windows export build:** no export preset exists and no export templates are
+  installed on this machine, so no executable was produced. The game runs from
+  the editor or `godot --path .`. See `docs/submission.md` for the exact
+  blocker and what would be needed.
 - **Combined test runner:** there is no single script that runs both games'
-  suites. Run STAR FALL's five from the "Run it" section and Operation:
+  suites. Run STAR FALL's six from the "Run it" section and Operation:
   Starfall's from [docs/starfall.md](docs/starfall.md).
 
 ## Event-day timeline (48h)
@@ -302,4 +341,4 @@ Before the event: everyone finishes the official Godot "Your first 2D game" tuto
 
 ## Credits
 
-Third-party notices are in `THIRD_PARTY_NOTICES.md`; asset credits are in `assets/CREDITS.md`. NASA data and any AI tool usage must be declared in `docs/submission.md`.
+Third-party notices are in `THIRD_PARTY_NOTICES.md`; asset credits are in `assets/CREDITS.md`. The in-game credits screen carries the same distinctions (real physics vs. invented gameplay values vs. fiction). NASA data and any AI tool usage must be declared in `docs/submission.md`.

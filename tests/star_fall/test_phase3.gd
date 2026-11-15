@@ -846,12 +846,12 @@ func _test_campaign_rewards_and_save() -> void:
 		String(camp.content.encounters.boss("scrap_king").get("reward_component", "")) == "navigation_chip"
 		and String(camp.content.encounters.boss("toxic_tide").get("reward_component", "")) == "power_core")
 	check("Dawn Tower is now a playable chapter", String(camp.content.chapter("dawn_tower").get("stage", "")) == "dawn_tower")
-	check("Return Home stays deferred", String(camp.content.chapter("return_home").get("stage", "")) == "deferred")
+	check("Return Home is a playable chapter after Phase 4", String(camp.content.chapter("return_home").get("stage", "")) == "return_home")
 
 
 ## The shield emitter's four explicit states, persistence and migration.
 func _test_shield_reward_states() -> void:
-	section("Shield drop states, save version 4 and migration")
+	section("Shield drop states, save version 5 and migration")
 	var flag := "sky_remnant_defeated"
 	var comp := "shield_emitter"
 	var camp = _fresh_campaign()
@@ -880,7 +880,7 @@ func _test_shield_reward_states() -> void:
 	SFSave.write_save(camp, path)
 	var l3 = SFCampaign.new()
 	var res: Dictionary = SFSave.load_into(l3, path)
-	check("a version 4 save loads", bool(res["ok"]) and int(l3.to_save_dict()["version"]) == 4)
+	check("a version 5 save loads", bool(res["ok"]) and int(l3.to_save_dict()["version"]) == 5)
 	check("save/load keeps the installed state", l3.reward_state(flag, comp) == l3.REWARD_INSTALLED and l3.installed_component_ids() == [comp])
 	check("save/load keeps the typing attempt history", l3.typing_attempts == 5 and l3.typing_last_order == ["v_soil", "v_air"])
 	SFSave.load_into(l3, path)

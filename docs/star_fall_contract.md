@@ -1,4 +1,4 @@
-# STAR FALL — Contract (through Phase 3)
+# STAR FALL — Contract (complete, through Phase 4)
 
 This document is the contract between the code, the data, and whoever works on
 the next phase. If something here and the code disagree, treat one of them as a
@@ -38,6 +38,8 @@ core/star_fall/                 Pure logic and presentation kit. No UI nodes.
   sf_typing_encounter.gd        Phase 3: queue, spawning, movement, health, attacks, pacing
   sf_reconstruction.gd          Phase 3: workshop selection, costs, atomic fabrication
   sf_return_sim.gd              Phase 3: return-mission simulation (pure)
+  sf_finale.gd                  Phase 4: finale prerequisites, report, score (pure)
+  sf_qa.gd                      Phase 4: QA stage-skip latch and milestone planning (pure)
   sf_debug_presets.gd           Debug builds: campaign states for the phase hotkeys (pure)
   sf_campaign.gd                Campaign state, quests, salvage, save dicts (pure)
   sf_save.gd                    Versioned save/load to user:// (pure + FileAccess)
@@ -58,6 +60,10 @@ scenes/star_fall/
   progression_screen.gd         Base return and the Phase 2 summary
   typing_duel.gd                Phase 3: the Sky Remnant typing encounter screen
   reconstruction_screen.gd      Phase 3: the VELA reconstruction workshop
+  final_assembly_screen.gd      Phase 4: the pre-finale gate and install animation
+  cinematic_screen.gd           Phase 4: the escape cinematic (six scenes + final card)
+  mission_report_screen.gd      Phase 4: the recorded-run report and the score
+  credits_screen.gd             Phase 4: the credit roll and the closing message
   debug_jump.gd                 Debug builds: Ctrl+Shift+Alt phase hotkeys and help list
 
 data/star_fall/
@@ -68,6 +74,8 @@ data/star_fall/
   vocabulary.json               Phase 3: 203-entry environmental vocabulary library
   typing.json                   Phase 3: typing encounter tuning
   reconstruction.json           Phase 3: workshop options and simulation constants
+  finale.json                   Phase 4: assembly copy, cinematic script, report copy,
+                                score weights, credits, QA hotkey settings
 
 tests/star_fall/
   test_parse.gd                 Every script compiles
@@ -75,8 +83,9 @@ tests/star_fall/
   test_flow.gd                  Boots the real scene, drives both phases end to end
   test_encounter.gd             Phase 2 combat rules, escalation, retry, rewards
   test_phase3.gd                Phase 3 vocabulary, typing, pacing, workshop, simulation, save
+  test_phase4.gd                Phase 4 finale gate, cinematic, report, score, save, QA skip
   test_debug_jump.gd            Every debug phase jump and in-fight debug command
-  capture.gd                    Dev tool: renders 37 key screens to PNG
+  capture.gd                    Dev tool: renders 48 key screens to PNG
 ```
 
 ### Rules the architecture enforces
@@ -122,6 +131,8 @@ menu -> briefing -> construction -> launch -> flight -> crash_intro
      -> base_return -> phase_two_complete -> complete
      -> dawn_intro -> dawn_boss -> dawn_archive
      -> reconstruction -> ready_for_final_assembly
+     -> final_assembly -> escape -> return_home
+     -> mission_report -> credits
 ```
 
 | Stage | Screen | What happens |
@@ -148,16 +159,22 @@ menu -> briefing -> construction -> launch -> flight -> crash_intro
 | `dawn_boss` | Typing duel | Sky Remnant. Never checkpointed mid-fight |
 | `dawn_archive` | Archive | Dawn Project archive; unlocks the workshop |
 | `reconstruction` | Workshop | VELA reconstruction and return simulation |
-| `ready_for_final_assembly` | Checkpoint | READY_FOR_FINAL_ASSEMBLY summary; returns to the title |
+| `ready_for_final_assembly` | Checkpoint | READY_FOR_FINAL_ASSEMBLY summary; opens the final-assembly gate |
+| `final_assembly` | Final assembly | Prerequisite gate, frozen snapshot, pre-finale checkpoint, install animation |
+| `escape` | Cinematic | Six-scene escape and the closing message; Space pauses, Esc skips |
+| `return_home` | Report | Mission report from the recorded run; the return objective is complete |
+| `mission_report` | Report | Reserved continuation of the same screen; marks the report seen |
+| `credits` | Credits | Credit roll, then the title. The ending state is saved |
 
 Chapters (`chapter_id`): `present_day_earth`, `crash_site`, `forgotten_city`,
-`silent_coast`, `dawn_tower`, `return_home`. The first five are playable;
-`return_home` stays declared and `deferred` in `campaign.json` (Phase 4).
+`silent_coast`, `dawn_tower`, `return_home`. All six are playable;
+`return_home` covers the escape, the report and the credits.
 
 The chapter follows the stage automatically. `base_return`,
-`phase_two_complete`, `complete`, `reconstruction` and
-`ready_for_final_assembly` resolve to `crash_site` (the base); the three
-`dawn_*` stages resolve to `dawn_tower`.
+`phase_two_complete`, `complete`, `reconstruction`, `ready_for_final_assembly`
+and `final_assembly` resolve to `crash_site` (the base); the three `dawn_*`
+stages resolve to `dawn_tower`; `escape`, `return_home`, `mission_report` and
+`credits` resolve to `return_home`.
 
 **Spoiler rule.** Until the control-center archive is closed, no HUD label,
 chapter title, zone name or dialogue names Earth, a future date, or the year.
@@ -179,7 +196,7 @@ Do not rename these. Saves and data files refer to them.
 | `forgotten_city` | Phase 2, Scrap King |
 | `silent_coast` | Phase 2, Toxic Tide |
 | `dawn_tower` | Phase 3, Sky Remnant |
-| `return_home` | Declared, not playable |
+| `return_home` | Escape, report and credits |
 
 **Future spacecraft components:** `navigation_chip` (Phase 2 reward),
 `power_core` (Phase 2 reward), `shield_emitter` (Phase 3 reward).
@@ -214,6 +231,10 @@ Silent Coast — `coast_checkpoint`, `coast_boss_gate`, `memory_green_coast`,
 **Quest flags, Phase 1:** `briefing_read`, `design_confirmed`,
 `preflight_passed`, `launched`, `rift_seen`, `crashed`, `vela_inspected`,
 `power_repaired`, `bill_active`, `memory_viewed`, `coordinates_received`.
+
+**Quest flags, Phase 4:** `final_assembly_complete`, `escape_seen`,
+`return_objective_complete`, `mission_report_seen`, `qa_stage_skip_used`
+(the last is diagnostic only and changes nothing).
 
 **Quest flags, Phase 2:** `city_entered`, `city_checkpoint`,
 `scrap_king_defeated`, `city_archive_restored`, `future_earth_revealed`,
@@ -340,6 +361,13 @@ the construction console and menu screens, which are panel-driven.
 | *(typing)* Esc | — | Pause: resume, vocabulary journal, restart, main menu |
 | *(workshop)* Up/Down, Left/Right | — | Choose a row, change its option (Shift: fuel x5) |
 | *(workshop)* V / F / C | — | Run simulation / fabricate / scavenge materials |
+| *(final assembly)* Up/Down, Enter, Esc | — | Choose the row, activate, back |
+| *(cinematic)* Space | — | Pause / resume |
+| *(cinematic)* Esc | — | Skip the rest of the sequence (same outcome) |
+| *(cinematic)* Enter | — | Advance a beat, or skip the closing card |
+| *(report, credits)* Up/Down | — | Scroll |
+| *(report, credits)* Enter / Space / Esc | — | Continue |
+| *(QA, debug or `--qa`)* I + O + P | — | Advance one campaign milestone |
 
 Behaviour requirements honoured by the implementation:
 
@@ -451,8 +479,51 @@ original_propulsion_id() -> String             # the day-one engine, for repair
 store_reconstruction_selection(selection) -> void   # free; ignored once assembled
 commit_reconstruction(selection, report) -> void    # called once by SFReconstruction.commit()
 is_ready_for_final_assembly() -> bool
+# Phase 4
+begin_final_assembly(snapshot: Dictionary) -> bool   # false if already frozen
+has_final_assembly_snapshot() -> bool
+set_cinematic_skipped(value: bool) -> void
+cinematic_skipped() -> bool
+mark_escape_seen() -> bool
+complete_return() -> bool                      # applies once; advances to return_home
+is_return_complete() -> bool
+mark_report_seen() -> void
+is_finale_state() -> bool                      # at or past final_assembly
+mark_qa_stage_skip_used() -> void              # diagnostic only
 mission_id() / mission_data() / mission_name() -> ...
 boss_for_chapter(chapter_id: String) -> Dictionary
+```
+
+### `SFFinale` (pure)
+
+```gdscript
+static workshop_for(campaign, reconstruction_data)          # the committed design
+static stored_report(campaign) -> Dictionary                 # the certified report
+static simulation_for(campaign, reconstruction_data) -> Dictionary
+static prerequisites(campaign, reconstruction_data, others_clear) -> Dictionary
+    # {ok: bool, checks: [{id, ok}]}
+static build_report(campaign, reconstruction_data, finale_data) -> Dictionary
+    # {objective_complete, memories, memory_count, samples_returned,
+    #  records_returned, components, original_design, reconstructed_design,
+    #  launch_mass_kg, dry_mass_kg, route_id, route_name, reserves,
+    #  material_units, fabrication_units, material_cost, efficiency_kg_per_unit,
+    #  debris_impacts, decisions, cinematic_skipped, score}
+static score_for(campaign, report, finale_data) -> Dictionary
+    # {objective, components, memories, payload, efficiency, total, formula}
+static snapshot(campaign, reconstruction_data) -> Dictionary
+```
+
+### `SFQA` (pure latch + milestone plan)
+
+```gdscript
+static is_enabled() -> bool                     # debug/editor build, or --qa
+poll(i_down, o_down, p_down, delta) -> bool     # one true per press
+armed() / cooldown() / last_fired_milestone() -> ...
+static next_milestone(campaign) -> String
+static milestone_done(campaign, id) -> bool
+static milestone_label(id) -> String
+static apply_valid_day_one_design(campaign) -> bool          # QA only
+static apply_valid_reconstruction(campaign, data) -> Dictionary   # QA only
 ```
 
 ### `SFEncounter` and its parts (pure)
@@ -536,7 +607,7 @@ prevents launch. A design is launchable only when every blocking check passes.
 
 ---
 
-## 7. Save schema (version 1 baseline; version 2 adds section 13; versions 3 and 4 add section 19)
+## 7. Save schema (v1 baseline; v2 section 13; v3/v4 section 19; v5 section 19a)
 
 Path: `user://star_fall_save.json`. On Windows this resolves under
 `%APPDATA%\Godot\app_userdata\STAR FALL\`.
@@ -607,7 +678,7 @@ Validation model (all values from `ship_parts.json`):
 7. Fuel >= `minimum_fuel_kg` and <= tank capacity.
 8. Data capture <= data capacity (informational only).
 
-Balanced against the shipped data, three configurations are worth knowing:
+Balanced against the shipped data, five configurations are worth knowing:
 
 | Config | Parts | Launch mass | Cost | Result |
 |---|---|---|---|---|
@@ -656,16 +727,20 @@ GODOT="/c/Users/<you>/Downloads/Godot_v4.0-stable_win64.exe/Godot_v4.0-stable_wi
 "$GODOT" --headless --path . --script res://tests/star_fall/test_flow.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_encounter.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_phase3.gd
+"$GODOT" --headless --path . --script res://tests/star_fall/test_phase4.gd
 "$GODOT" --headless --path . --script res://tests/star_fall/test_debug_jump.gd
 ```
 
 Each prints `PASS`/`FAIL` per check and a `RESULT:` line, and exits non-zero on
 failure. `test_encounter.gd` is the Phase 2 combat and persistence suite;
 `test_phase3.gd` is the Phase 3 vocabulary, typing, pacing, workshop,
-simulation and save suite; `test_flow.gd` drives the real main scene from the
-title to READY_FOR_FINAL_ASSEMBLY.
+simulation and save suite; `test_phase4.gd` is the Phase 4 finale gate,
+cinematic, report, score, save-version and QA-skip suite; `test_flow.gd` drives
+the real main scene from the title to the credits, then walks the campaign again
+with the QA skip.
 
-**Warning:** `test_flow.gd`, `test_debug_jump.gd` and `capture.gd` delete
+**Warning:** `test_flow.gd`, `test_phase4.gd`, `test_debug_jump.gd` and
+`capture.gd` delete
 `user://star_fall_save.json`. Back up a real save before running them.
 
 ### Screenshots (needs a display, not headless)
@@ -675,7 +750,8 @@ title to READY_FOR_FINAL_ASSEMBLY.
 "$GODOT" --path . --script res://tests/star_fall/capture.gd -- --shots=17,18
 ```
 
-Writes 37 PNGs to `user://captures/`. `--shots=` renders only the named screens
+Writes 48 PNGs to `user://captures/` (01-36 the campaign and workshop, 46-56
+the Phase 4 finale, plus 22b). `--shots=` renders only the named screens
 (by their number prefix), which is the quickest way to re-check one pose. This
 is a presentation aid only; it is not evidence that the game plays correctly.
 
@@ -701,7 +777,13 @@ save/load behave as specified; the real main scene boots; every screen
 transition and every quest beat fires; skipping a cutscene preserves state;
 Continue restores a save; the shield, projectile, scheduler, encounter and
 progression models obey every rule in section 12 of the Phase 2 brief; both
-Phase 2 fights can be won through their own rules and fully reset on retry.
+Phase 2 fights can be won through their own rules and fully reset on retry;
+the finale gate refuses to open on any missing prerequisite; the cinematic's
+natural end and its skip both emit one outcome and apply identical state; the
+report is deterministic and cannot be raised by farming; a skipped cinematic
+never changes the score; a version 5 save round-trips the ending and a version 4
+save still loads; and the QA skip walks the campaign in legal, resumable states
+without leaving input locked.
 
 **Not** proven: that anything looks right, that audio is audible, that the
 window scales well, that the mouse aims the shield as it feels, that typing
@@ -945,13 +1027,138 @@ Phase 3.
 
 ---
 
-## 15. Deferred scope (explicitly not built)
+## 15. Phase 4: finale, ending and QA skip
 
-- Phase 4: the final escape cinematic, the return-home chapter and the ending.
-  The campaign stops at READY_FOR_FINAL_ASSEMBLY.
+Phase 4 turns READY_FOR_FINAL_ASSEMBLY into the end of the campaign. It adds one
+data file, two pure rules modules, four screens and one save field. It does not
+change any earlier phase's rules.
+
+| File | Owns |
+|---|---|
+| `core/star_fall/sf_finale.gd` | Finale prerequisites, the mission report built from the recorded run, the published score |
+| `core/star_fall/sf_qa.gd` | The `I + O + P` latch and the milestone plan; two data-driven design builders used only by QA |
+| `scenes/star_fall/final_assembly_screen.gd` | The pre-finale gate, the confirm latch, the install animation |
+| `scenes/star_fall/cinematic_screen.gd` | The six-scene escape, subtitles, pause and skip |
+| `scenes/star_fall/mission_report_screen.gd` | Report layout, measured rows, scrolling |
+| `scenes/star_fall/credits_screen.gd` | The credit roll and the closing card |
+| `data/star_fall/finale.json` | All Phase 4 copy, timings, score weights, credits, QA settings |
+
+### Rules the split enforces
+
+- Screens own no campaign state. The final-assembly gate emits
+  `assembly_started`; `main.gd` freezes the snapshot, advances the stage, writes
+  the checkpoint and saves before the install animation begins.
+- The cinematic emits `cinematic_finished(skipped)` exactly once, whether it ends
+  naturally or is skipped. Every persistent outcome (`escape_seen`,
+  `return_objective_complete`, the stage, the checkpoint, the skip record) is
+  applied in `main.gd`, so watching and skipping cannot diverge.
+- The final-assembly confirm is latched twice over: the screen's `_started` flag
+  and `SFCampaign.begin_final_assembly()`, which refuses a second snapshot. A
+  double click therefore cannot open two sequences or write two checkpoints.
+- The report and the score read only recorded state. `build_report()` recomputes
+  the simulation from the committed design with the same code the workshop used,
+  so the report can never disagree with the report a player passed.
+- The workshop is locked once `ready_for_final_assembly` is set; the finale stage
+  additionally freezes it via `is_finale_state()`.
+
+### Finale prerequisites
+
+`SFFinale.prerequisites()` returns six checks, evaluated live on every gate
+entry and again on confirmation:
+
+| id | Condition |
+|---|---|
+| `bosses` | `scrap_king_defeated`, `toxic_tide_defeated`, `sky_remnant_defeated` |
+| `components` | `navigation_chip`, `power_core`, `shield_emitter` all recovered |
+| `fabricated` | the committed reconstruction record exists |
+| `payload` | the committed design carries Bill's memory core and the evidence archive |
+| `simulation` | recomputing the committed design still passes, and its signature matches the stored report |
+| `clear` | no dialogue, cutscene or transition is running |
+
+### Cinematic
+
+Six scenes, each with its own duration and ordered subtitles, plus the closing
+card. All copy and timing is in `finale.json`; the screen has no prose.
+
+| Scene | What it shows | Recorded state it reads |
+|---|---|---|
+| A `leaving_crash_site` | Bill's core moves to VELA; the shell powers down | the junction lights only if `power_repaired` |
+| B `launch` | Ignition, dust, ascent, darkening sky | none |
+| C `debris_passage` | Shield absorbs impacts, chip steers wide | route, masses, delta-v, propellant, buffer, peak power and impact count from the certified simulation |
+| D `sunlight` | Warm light, Bill's last question | none |
+| E `portal` | The recorded signal opens the seam, VELA crosses | none (fiction, labelled in-game) |
+| F `home` | Mission Control, the archive transfer, communities receiving it | the memory count drives the transfer and the lit windows |
+
+The final card is the two-line message from the brief. No effects run over it.
+
+**Skip and resume.** Space pauses (focus loss also pauses). Esc skips; repeated
+skip input is idempotent. A save written during `escape` resumes at the start of
+the escape; the documented safe checkpoint is `final_assembly`, and continuing
+from it replays the sequence rather than resuming mid-scene. Nothing is
+serialised mid-cinematic.
+
+### Mission report and score
+
+The report shows: return objective, archived memories, samples and records
+returned, components fitted, the original and reconstructed designs, final
+launch mass, selected route, simulated propellant and energy reserves, material
+efficiency (dry kg per salvage unit), the decision explanations, and the score.
+
+The score is published in `finale.json` (`report.score`) and applied by
+`SFFinale.score_for()`:
+
+```
+score = 100 (return objective complete)
+      + 25 per recovered component fitted
+      + 15 per archived memory
+      + 20 per optional payload flown (environmental samples, additional records)
+      + efficiency, up to 30 = 30 * clamp(propellant_reserve_fraction / 0.5, 0, 1)
+```
+
+Rules: it reads only recorded state; it never reads inventory size or play time,
+so stockpiling cannot raise it; it never penalises accessibility settings or a
+skipped cinematic; and several engineering approaches reach the same total
+because the efficiency term rewards margin rather than a single best build.
+
+### QA stage skip (`I + O + P`)
+
+- **Trigger.** All three of `KEY_I`, `KEY_O`, `KEY_P` held together. The latch
+  fires once, then requires a release *and* a cooldown (`qa.cooldown_seconds`,
+  default 0.45 s in `finale.json`), so holding the keys advances exactly one
+  milestone.
+- **Gate.** `SFQA.is_enabled()` is true in a debug build (`OS.is_debug_build()`),
+  in the editor, or in any build launched with `--qa`. A release build without
+  the flag cannot invoke it, and the HUD hint is not drawn there either.
+- **Milestones.** `briefing`, `construction`, `bill`, `phase_one`, `city`,
+  `coast`, `phase_two`, `dawn`, `workshop`, `ready`, `finale`, `report`, then
+  `done`. The next milestone is derived from the campaign stage, so the same
+  press does the same thing from any screen.
+- **State safety.** Each skip clears any dialogue, pause or transition first. It
+  then applies the same campaign methods the normal flow uses:
+  - construction skipped: a valid day-one design and manifest are built from
+    `ship_parts.json` and confirmed by the real validator;
+  - a boss or chapter skipped: the boss flag, its mandatory component and the
+    chapter archive are applied through `complete_boss()`/`restore_archive()`;
+  - the workshop skipped: a passing design is simulated, replenished to the fair
+    floor and fabricated through `SFReconstruction.commit()`;
+  - the finale skipped: the same snapshot, `complete_return()` and report state
+    the real path writes;
+  - every step ends with `_save_quietly()`, so the run is resumable at each
+    milestone.
+- **Isolation.** It only acts on a full chord. Individual I, O and P presses are
+  never consumed by it, so normal controls are unaffected. It marks
+  `qa_stage_skip_used` so a tester's save is identifiable; it changes no rule,
+  no report value and no score.
+
+---
+
+## 15a. Deferred scope (explicitly not built)
+
 - Any 3D pipeline, engine migration, or external asset dependency.
 - A combined test runner across both games.
-- An export preset and a web build.
+- A Windows export executable (no preset and no export templates on the
+  delivery machine; see `docs/submission.md`).
+- A web build.
 
 ---
 
@@ -1226,7 +1433,9 @@ floor, so every valid Phase 1 build can reach READY_FOR_FINAL_ASSEMBLY.
 ## 19. Phase 3 save schema (versions 3 and 4)
 
 Version 3 adds two fields. Versions 1 and 2 load with both empty. Version 4
-adds three more (below); versions 1 to 3 load with them migrated.
+adds three more (below); versions 1 to 3 load with them migrated. Version 5
+(section 19a) is Phase 4's. Phase 3 shipped on version 4, so a version 4
+document written there loads unchanged.
 
 ```jsonc
 {
@@ -1250,11 +1459,65 @@ adds three more (below); versions 1 to 3 load with them migrated.
   no record.
 - An active falling word, attack or partial typing fight is never saved.
 
-Version 4:
+Version 4 (main): installed components and typing attempt history.
 
 ```jsonc
 {
   "version": 4,
+  "installed_components": ["navigation_chip", "power_core", "shield_emitter"],
+  "typing_attempts": 3,                          // typing attempts started so far
+  "typing_last_order": ["v_air", "v_soil", ...]  // ids of the last attempt's order
+}
+```
+
+Version 5 (Phase 4) adds the frozen finale snapshot:
+
+Code from both branches was merged with the same version number, so the
+document version was raised to **5**. Versions 1-4 all still load: a document
+without `finale` simply has no finale record, exactly as a Phase 4-less save
+should.
+
+```jsonc
+{
+  "version": 5,
+  "stage": "credits",
+  "chapter_id": "return_home",
+  "finale": {
+    "design": {...},                // the committed reconstruction design
+    "report_signature": "...",      // the certified report this run launched on
+    "route_id": "extended_arc",
+    "launch_mass_kg": 1443.0,
+    "components": ["navigation_chip", "power_core", "shield_emitter"],
+    "memories": ["memory_green_city", "..."],
+    "frozen": true,                 // the snapshot exists and is trusted
+    "cinematic_skipped": false      // descriptive only; never read by the score
+  },
+  // ... every version 4 field, unchanged
+}
+```
+
+Rules:
+
+- `begin_final_assembly()` writes the snapshot at most once. A second call is
+  refused, so a double confirmation cannot freeze two designs.
+- A document whose stage is `final_assembly` or later but which has no frozen
+  snapshot is contradictory: `apply_save_dict()` warns, moves the stage back to
+  `ready_for_final_assembly`, clears `finale` and clears the four Phase 4 flags.
+  The workshop reopens rather than claiming an ending with no record.
+- `escape_seen`, `return_objective_complete` and `mission_report_seen` are only
+  meaningful with a snapshot; they are cleared by the correction above.
+- `cinematic_skipped` is stored so the report can say so plainly. No rule, no
+  report value and no score term reads it.
+- A save written mid-cinematic is still just an `escape`-stage document with a
+  valid snapshot, which resumes at the start of the escape.
+- `qa_stage_skip_used` lives in `flags` like any other flag and is diagnostic.
+
+---
+
+### Version 4: installed components and the typing attempt history
+
+```jsonc
+{
   "installed_components": ["navigation_chip", "power_core", "shield_emitter"],
   "typing_attempts": 3,                         // typing attempts started so far
   "typing_last_order": ["v_air", "v_soil", ...] // ids of the last attempt's order
@@ -1273,7 +1536,7 @@ facts: `sky_remnant_defeated` (flag), `recovered_components`, and
 | installed | yes | yes | yes | The emitter in its socket on the VELA |
 
 - Installed ids are kept only if they are also recovered.
-- **Migration.** A version 1–3 save has no `installed_components`. If it has a
+- **Migration.** A version 1–4 save has no `installed_components`. If it has a
   committed (fabricated) design, every recovered component is marked installed;
   otherwise none is. A version 3 save whose victory already awarded the shield
   therefore keeps it as *collected* (or *installed* if assembled) and never has
@@ -1299,6 +1562,24 @@ facts: `sky_remnant_defeated` (flag), `recovered_components`, and
 | Vocabulary | `v_<text>` for every entry in `vocabulary.json` |
 | Workshop options | `repair_original`, `rebuilt_cluster`; `protection_none`, `armor_plating`, `shield_amplifier`; `storage_none`, `storage_compact`, `storage_array`; `bill_memory_core`, `evidence_archive`, `environmental_samples`, `additional_records`; `fast_corridor`, `extended_arc` |
 
+## 20a. Phase 4 stable IDs
+
+| Kind | id |
+|---|---|
+| Stage | `final_assembly`, `escape`, `return_home`, `mission_report`, `credits` |
+| Chapter | `return_home` (now playable) |
+| Flag | `final_assembly_complete`, `escape_seen`, `return_objective_complete`, `mission_report_seen`, `qa_stage_skip_used` |
+| Save field | `finale` |
+| Data file | `data/star_fall/finale.json` |
+| Report row | `objective`, `memories`, `samples`, `components`, `original`, `reconstructed`, `mass`, `route`, `propellant`, `energy`, `efficiency`, `score` |
+| Prerequisite | `bosses`, `components`, `fabricated`, `payload`, `simulation`, `clear` |
+| QA milestone | `briefing`, `construction`, `bill`, `phase_one`, `city`, `coast`, `phase_two`, `dawn`, `workshop`, `ready`, `finale`, `report`, `done` |
+
+None of the earlier ids are renamed. `return_home` keeps its id and changes from
+`deferred` to a playable chapter.
+
+---
+
 ### Phase 3 completed scope
 
 - Dawn Tower exploration: dead forest, survey projector with the healthy-forest
@@ -1310,7 +1591,42 @@ facts: `sky_remnant_defeated` (flag), `recovered_components`, and
 - The `shield_emitter` drops onto the slope on victory and is awarded once when
   collected; the Dawn Project archive restored.
 - The full reconstruction workshop with visible component installation and the
-  return-mission simulation, ending at READY_FOR_FINAL_ASSEMBLY. Save version 4.
+  return-mission simulation, ending at READY_FOR_FINAL_ASSEMBLY.
+
+### Phase 4 completed scope
+
+- **Final assembly.** A live prerequisite gate with six checks, a one-way
+  confirmation, a frozen design snapshot, a pre-finale checkpoint, and an
+  install animation that can be skipped without changing the outcome.
+- **Escape cinematic.** Six in-engine scenes plus the closing message, all
+  drawn from generated sprites and primitives, with data-driven subtitles,
+  pause, focus-loss handling and an idempotent skip. Watching and skipping
+  produce the same persistent state.
+- **Mission report.** The recorded run: objective, memories, samples and records,
+  components, both designs, launch mass, route, simulated reserves, material
+  efficiency, the decision explanations, and the published score.
+- **Credits.** The credit roll, the sources distinction (real physics, invented
+  gameplay values, fiction) and the final message, then the title.
+- **QA stage skip.** `I + O + P`, enabled in debug/editor builds and with
+  `--qa`, edge-triggered with a cooldown, one milestone per press, with valid
+  designs, rewards, saves and checkpoints at every step.
+- **Save version 5** (Phase 4's snapshot on top of the merged version 4);
+  versions 1-4 still load.
+- **Reduced motion setting.** Removes screen shake and lowers flashes in both
+  boss fights and in the launch transition without changing any rule.
+
+### Phase 4 known limitations
+
+- Visuals and audio of the cinematic have been checked only through the
+  screenshot tool (`tests/star_fall/capture.gd`, shots 46-56), not by playing it
+  on a real display with a person watching. Whether it *reads* well is untested.
+- The cinematic is drawn from primitives and generated sprites; it is deliberately
+  stylised, not a rendered animation.
+- The credits roll has no music of its own; it reuses the title theme.
+- No executable was built: no export preset exists and no export templates are
+  installed. See `docs/submission.md`.
+- The QA skip is guarded by build type and `--qa`, not by a per-session password;
+  anyone running a debug build can use it. That is intentional for playtesting.
 
 ### Phase 3 known limitations
 

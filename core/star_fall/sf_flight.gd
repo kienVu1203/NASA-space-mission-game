@@ -6,8 +6,20 @@ extends RefCounted
 ##     the right. Steering is vertical only. A collision is reported to the
 ##     screen, which plays a short impact beat and then calls `restart()`, so
 ##     the segment begins again with an empty field and no progress carried.
-##   * `portal` — no obstacles. The player lines the ship up with the opening
-##     seam; enough time inside the mouth enters it.
+##   * `portal` — no obstacles. The player lines the ship up with the opening;
+##     enough time inside the mouth captures the ship, and the capture then flies
+##     it in. `entered` is reported only once the whole hull has crossed the
+##     portal plane, so the screen can never cut away while VELA is still far
+##     from the opening.
+##
+## Axes. `x` is the along-track axis (the direction of travel) and `y` the
+## across-track axis the player steers on. The screen decides how they map to
+## pixels; the finale draws VELA upright, so `x` runs up the screen.
+##
+## The shield. Small grit is aimed at the ship and absorbed on the shield
+## boundary; a large body that passes close without striking the hull grazes
+## the shield and is pushed aside. Both report a `shield` event at the real
+## contact point, so every ripple and impact sound matches a visible contact.
 ##
 ## Pure by construction: no nodes, no `InputEvent`, no drawing, no campaign
 ## state. The screen feeds it a steering direction (and, for the mouse, a target
@@ -31,7 +43,21 @@ var lane_bottom: float = 282.0
 var ship_x: float = 96.0
 var ship_y: float = 173.0
 var ship_half_height: float = 11.0
+## Half the hull's along-track length. 4 reproduces a point-like ship.
+var ship_half_length: float = 4.0
 var steer_speed: float = 165.0
+var ship_home_x: float = 96.0
+## Along-track distance at which bodies appear.
+var spawn_x: float = 676.0
+
+# Shield (0 half-width disables it).
+var shield_half_width: float = 0.0
+var shield_half_length: float = 0.0
+var graze_push: float = 70.0
+var heavy_radius: float = 12.0
+var grit_interval: float = 0.0
+var grit_speed_scale: float = 1.25
+var max_grit: int = 10
 
 # Debris field.
 var obstacle_speed: float = 150.0
@@ -50,6 +76,8 @@ var portal_half_height: float = 42.0
 var portal_drift: float = 28.0
 var portal_drift_speed: float = 0.55
 var align_seconds: float = 0.70
+var entry_start_speed: float = 20.0
+var entry_accel: float = 70.0
 
 # Pacing and the guaranteed exit.
 var target_seconds: float = 15.0
@@ -69,7 +97,12 @@ var assist: bool = false
 ## across the frames the screen spends showing the impact.
 var impact_pending: bool = false
 var aligned_time: float = 0.0
+## Portal: alignment held long enough; the ship is being drawn in.
+var captured: bool = false
+var entry_speed: float = 0.0
 var obstacles: Array = []
+var grit: Array = []
+var shield_contacts: int = 0
 
 var _spawn_timer: float = 0.0
 var _last_spawn_y: float = -999.0
@@ -77,6 +110,8 @@ var _last_spawn_hh: float = 0.0
 var _spawn_seq: int = 0
 var _seed: int = 7321
 var _rng: RandomNumberGenerator = null
+var _grit_rng: RandomNumberGenerator = null
+var _grit_timer: float = 0.0
 
 
 ## Reads one block of `data/star_fall/finale.json` -> cinematic.flight.<kind>.
@@ -84,8 +119,20 @@ func configure(config: Dictionary) -> void:
 	kind = String(config.get("kind", "debris"))
 	lane_top = float(config.get("lane_top", 64.0))
 	lane_bottom = float(config.get("lane_bottom", 282.0))
-	ship_x = float(config.get("ship_x", 96.0))
+	ship_home_x = float(config.get("ship_x", 96.0))
+	ship_x = ship_home_x
 	ship_half_height = float(config.get("ship_half_height", 11.0))
+	ship_half_length = float(config.get("ship_half_length", 4.0))
+	spawn_x = float(config.get("spawn_x", VW_SPAWN_X))
+	shield_half_width = float(config.get("shield_half_width", 0.0))
+	shield_half_length = float(config.get("shield_half_length", 0.0))
+	graze_push = float(config.get("graze_push", 70.0))
+	heavy_radius = float(config.get("heavy_radius", 12.0))
+	grit_interval = float(config.get("grit_interval", 0.0))
+	grit_speed_scale = float(config.get("grit_speed_scale", 1.25))
+	max_grit = int(config.get("max_grit", 10))
+	entry_start_speed = float(config.get("entry_start_speed", 20.0))
+	entry_accel = float(config.get("entry_accel", 70.0))
 	steer_speed = float(config.get("steer_speed", 165.0))
 	obstacle_speed = float(config.get("obstacle_speed", 150.0))
 	speed_growth = float(config.get("speed_growth", 70.0))
@@ -107,6 +154,7 @@ func configure(config: Dictionary) -> void:
 	_seed = int(config.get("seed", 7321))
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = _seed
+	_grit_rng = RandomNumberGenerator.new()
 	begin()
 
 
@@ -123,13 +171,18 @@ func begin() -> void:
 ## resumes; the subtitles, which live on the scene clock, keep running.
 func reset_segment() -> void:
 	obstacles.clear()
+	grit.clear()
 	time = 0.0
 	progress = 0.0
 	cleared = false
 	entered = false
 	impact_pending = false
 	aligned_time = 0.0
+	captured = false
+	entry_speed = 0.0
+	ship_x = ship_home_x
 	ship_y = (lane_top + lane_bottom) * 0.5
+	_grit_timer = grit_interval * 0.5
 	_spawn_timer = spawn_interval * 0.8
 	_last_spawn_y = -999.0
 	_last_spawn_hh = 0.0
@@ -137,6 +190,9 @@ func reset_segment() -> void:
 	if _rng == null:
 		_rng = RandomNumberGenerator.new()
 	_rng.seed = _seed + restarts * 7919
+	if _grit_rng == null:
+		_grit_rng = RandomNumberGenerator.new()
+	_grit_rng.seed = _seed * 3 + restarts * 104729
 	portal_y = portal_home_y
 
 
@@ -194,7 +250,8 @@ func tick(delta: float, direction: float) -> Array:
 	if not assist and time >= assist_after_seconds:
 		assist = true
 		events.append({"type": "assist"})
-	steer(direction, delta)
+	if not captured:
+		steer(direction, delta)
 	if kind == "portal":
 		_tick_portal(delta, events)
 	else:
@@ -214,6 +271,7 @@ func _tick_debris(delta: float, events: Array) -> void:
 		events.append({"type": "spawn"})
 
 	var speed: float = obstacle_speed + speed_growth * progress
+	_tick_grit(delta, speed, events)
 	var impact: Dictionary = {}
 	var index: int = 0
 	while index < obstacles.size():
@@ -221,14 +279,21 @@ func _tick_debris(delta: float, events: Array) -> void:
 		var previous_x: float = float(body["x"])
 		var current_x: float = previous_x - speed * delta
 		body["x"] = current_x
-		if impact.is_empty() and not assist:
-			# Swept on the horizontal axis: a step larger than the hull can
-			# never tunnel through the ship without being reported.
-			var half_w: float = float(body["hw"])
-			var half_h: float = float(body["hh"])
-			var vertical: bool = absf(ship_y - float(body["y"])) <= half_h + ship_half_height * 0.72
-			if vertical and ship_x >= current_x - half_w - 4.0 and ship_x <= previous_x + half_w + 4.0:
-				impact = {"type": "hit", "x": ship_x + half_w * 0.6, "y": float(body["y"])}
+		if body.has("push"):
+			body["y"] = float(body["y"]) + float(body["push"]) * delta
+		var half_w: float = float(body["hw"])
+		var half_h: float = float(body["hh"])
+		# Swept on the along-track axis: a step larger than the hull can never
+		# tunnel through the ship without being reported.
+		var across: bool = absf(ship_y - float(body["y"])) <= half_h + ship_half_height * 0.72
+		var along: bool = ship_x + ship_half_length >= current_x - half_w and ship_x - ship_half_length <= previous_x + half_w
+		var strikes: bool = across and along
+		if impact.is_empty() and strikes and not assist:
+			impact = {"type": "hit", "x": ship_x + ship_half_length + half_w * 0.6, "y": float(body["y"])}
+		elif strikes or not across:
+			# A near miss, or (under the navigation chip) a strike the shield is
+			# allowed to turn: the body touches the bubble and is shoved aside.
+			_graze(body, events, strikes)
 		if current_x < -90.0:
 			obstacles.remove_at(index)
 		else:
@@ -247,6 +312,9 @@ func _tick_debris(delta: float, events: Array) -> void:
 
 func _tick_portal(delta: float, events: Array) -> void:
 	progress = clampf(time / maxf(0.01, target_seconds), 0.0, 1.0)
+	if captured:
+		_tick_entry(delta, events)
+		return
 	if assist:
 		portal_y = lerpf(portal_y, ship_y, clampf(delta * 2.6, 0.0, 1.0))
 	else:
@@ -255,12 +323,102 @@ func _tick_portal(delta: float, events: Array) -> void:
 		aligned_time += delta
 	else:
 		aligned_time = maxf(0.0, aligned_time - delta * 0.6)
-	if aligned_time >= align_seconds:
+	if aligned_time >= align_seconds or (assist and time >= assist_after_seconds):
+		captured = true
+		aligned_time = maxf(aligned_time, align_seconds)
+		entry_speed = entry_start_speed
+		events.append({"type": "captured"})
+
+
+## The capture: the opening holds still, the ship is pulled onto its axis and
+## accelerates in. The crossing is reported when the tail clears the plane.
+func _tick_entry(delta: float, events: Array) -> void:
+	entry_speed += entry_accel * delta
+	ship_x += entry_speed * delta
+	ship_y = lerpf(ship_y, portal_y, clampf(delta * 4.0, 0.0, 1.0))
+	if ship_x - ship_half_length >= portal_x:
 		entered = true
 		events.append({"type": "entered"})
-	elif assist and time >= assist_after_seconds:
-		entered = true
-		events.append({"type": "entered"})
+
+
+## 0 at capture, 1 when the tail crosses the portal plane.
+func entry_fraction() -> float:
+	if not captured:
+		return 0.0
+	var span: float = maxf(1.0, portal_x + ship_half_length - ship_home_x)
+	return clampf((ship_x - ship_home_x) / span, 0.0, 1.0)
+
+
+# ---------------------------------------------------------------- shield
+
+func shield_enabled() -> bool:
+	return shield_half_width > 0.0 and shield_half_length > 0.0
+
+
+## Normalised distance from the ship centre on the shield ellipse grown by
+## (`grow_x`, `grow_y`); <= 1 is touching.
+func _shield_distance(x: float, y: float, grow_x: float, grow_y: float) -> float:
+	var dx: float = (x - ship_x) / (shield_half_length + grow_x)
+	var dy: float = (y - ship_y) / (shield_half_width + grow_y)
+	return sqrt(dx * dx + dy * dy)
+
+
+## The point on the shield boundary toward (x, y).
+func shield_point(x: float, y: float) -> Vector2:
+	var dx: float = x - ship_x
+	var dy: float = y - ship_y
+	if absf(dx) < 0.01 and absf(dy) < 0.01:
+		dx = 1.0
+	var k: float = 1.0 / sqrt(pow(dx / shield_half_length, 2.0) + pow(dy / shield_half_width, 2.0))
+	return Vector2(ship_x + dx * k, ship_y + dy * k)
+
+
+func _graze(body: Dictionary, events: Array, forced: bool) -> void:
+	if not shield_enabled() or body.has("push"):
+		return
+	if _shield_distance(float(body["x"]), float(body["y"]), float(body["hw"]), float(body["hh"])) > 1.0:
+		return
+	var side: float = signf(float(body["y"]) - ship_y)
+	if side == 0.0:
+		side = 1.0
+	body["push"] = side * graze_push * (1.8 if forced else 1.0)
+	var contact := shield_point(float(body["x"]), float(body["y"]))
+	shield_contacts += 1
+	events.append({"type": "shield", "x": contact.x, "y": contact.y,
+		"heavy": float(body["hw"]) >= heavy_radius})
+
+
+## Small grit, aimed at the ship. It never strikes the hull: it either meets
+## the shield or falls past. Its own generator keeps the large-body field the
+## same with and without grit.
+func _tick_grit(delta: float, speed: float, events: Array) -> void:
+	if not shield_enabled() or grit_interval <= 0.0:
+		return
+	_grit_timer -= delta
+	if _grit_timer <= 0.0 and grit.size() < max_grit:
+		_grit_timer = grit_interval * _grit_rng.randf_range(0.6, 1.4)
+		grit.append({
+			"x": spawn_x,
+			"y": clampf(ship_y + _grit_rng.randf_range(-1.3, 1.3) * shield_half_width, lane_top, lane_bottom),
+			"vy": _grit_rng.randf_range(-12.0, 12.0),
+			"r": _grit_rng.randf_range(1.0, 2.5),
+			"tone": _grit_rng.randi_range(0, 2),
+		})
+	var index: int = 0
+	while index < grit.size():
+		var g: Dictionary = grit[index]
+		g["x"] = float(g["x"]) - speed * grit_speed_scale * delta
+		g["y"] = float(g["y"]) + float(g["vy"]) * delta
+		if _shield_distance(float(g["x"]), float(g["y"]), 0.0, 0.0) <= 1.0:
+			var contact := shield_point(float(g["x"]), float(g["y"]))
+			shield_contacts += 1
+			events.append({"type": "shield", "x": contact.x, "y": contact.y, "heavy": false})
+			grit.remove_at(index)
+			continue
+		if float(g["x"]) < -40.0:
+			grit.remove_at(index)
+		else:
+			index += 1
 
 
 func _spawn_obstacle() -> void:
@@ -293,7 +451,7 @@ func _spawn_obstacle() -> void:
 	_last_spawn_y = best
 	_last_spawn_hh = half_h
 	obstacles.append({
-		"x": float(VW_SPAWN_X) + half_w,
+		"x": spawn_x + half_w,
 		"y": best,
 		"hw": half_w,
 		"hh": half_h,
@@ -330,7 +488,7 @@ func _autopilot(delta: float) -> void:
 	for entry in obstacles:
 		var body: Dictionary = entry
 		var dx: float = float(body["x"]) - ship_x
-		if dx < -24.0 or dx > 250.0:
+		if dx < -24.0 - ship_half_length or dx > 250.0 + ship_half_length:
 			continue
 		var top: float = float(body["y"]) - float(body["hh"]) - ship_half_height - 10.0
 		var bottom: float = float(body["y"]) + float(body["hh"]) + ship_half_height + 10.0
@@ -357,7 +515,7 @@ func alignment_fraction() -> float:
 
 
 func is_aligned() -> bool:
-	return absf(ship_y - portal_y) <= portal_half_height
+	return captured or absf(ship_y - portal_y) <= portal_half_height
 
 
 func active_obstacles() -> Array:

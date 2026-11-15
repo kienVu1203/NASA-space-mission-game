@@ -37,7 +37,9 @@ const ROWS := ["components", "propulsion", "fuel", "protection", "storage", "env
 const COMPONENTS := ["navigation_chip", "power_core", "shield_emitter"]
 const COMPONENT_SHORT := {"navigation_chip": "NAV CHIP", "power_core": "POWER CORE", "shield_emitter": "SHIELD"}
 ## Socket centres on the bay drawing, relative to the ship's centre.
-const SOCKETS := {"navigation_chip": Vector2(52, -4), "power_core": Vector2(-14, -2), "shield_emitter": Vector2(-4, -34)}
+const SFVela := preload("res://core/star_fall/sf_vela.gd")
+## The workshop shows the canonical VELA at twice the finale's pixel scale.
+const VELA_SCALE := 2
 
 const BAY := Rect2(8, 30, 310, 150)
 const TRAY := Rect2(8, 184, 310, 56)
@@ -351,7 +353,7 @@ func _draw_bay(r: Rect2) -> void:
 	_draw_vela(c)
 	var ghost := _previewed_component()
 	for id in COMPONENTS:
-		_draw_socket(String(id), c + (SOCKETS[id] as Vector2), String(id) == ghost)
+		_draw_socket(String(id), _socket_at(c, String(id)), String(id) == ghost)
 	# The installation preview: the chosen part blinks in its socket above.
 	if ghost != "":
 		skin.text_c(self, r.position.x + r.size.x * 0.5, r.end.y - 12, "ENTER: FIT THE %s HERE" % String(COMPONENT_SHORT[ghost]), SFPalette.CYAN)
@@ -359,36 +361,31 @@ func _draw_bay(r: Rect2) -> void:
 		skin.text_c(self, r.position.x + r.size.x * 0.5, r.end.y - 12, "ASSEMBLED", SFPalette.GREEN_OK)
 
 
+## The canonical VELA (core/star_fall/sf_vela.gd) in its maintenance view, at
+## twice the finale's pixel scale. `c` is the hull's middle.
 func _draw_vela(c: Vector2) -> void:
 	var done := is_locked_design()
-	var hull_col := SFPalette.STEEL if done else SFPalette.STEEL.darkened(0.15)
 	# Cradle and floor.
 	draw_rect(Rect2(c.x - 110, c.y + 30, 220, 2), SFPalette.STEEL_DARK, true)
 	for i in 4:
 		draw_rect(Rect2(c.x - 72 + i * 48, c.y + 18, 4, 12), SFPalette.RUST.darkened(0.2), true)
 	skin.contact_shadow(self, c + Vector2(0, 30), 180.0, 0.25)
-	# Hull: a long body with a tapered nose and an engine bell at the back.
-	draw_rect(Rect2(c.x - 78, c.y - 18, 140, 36), hull_col, true)
-	draw_rect(Rect2(c.x - 78, c.y - 18, 140, 3), SFPalette.STEEL_MID, true)
-	draw_rect(Rect2(c.x - 78, c.y + 15, 140, 3), SFPalette.STEEL_DARK, true)
-	for i in 4:
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(c.x + 62, c.y - 18 + i * 3), Vector2(c.x + 92 - i * 4, c.y - 2),
-			Vector2(c.x + 92 - i * 4, c.y + 2), Vector2(c.x + 62, c.y + 18 - i * 3)]),
-			SFPalette.STEEL_MID.darkened(float(i) * 0.06))
-	draw_rect(Rect2(c.x - 96, c.y - 12, 18, 24), SFPalette.STEEL_DARK, true)
-	draw_rect(Rect2(c.x - 100, c.y - 15, 6, 30), SFPalette.STEEL_MID.darkened(0.2), true)
-	if done:
-		var glow := 0.4 + 0.3 * sin(time * 4.0)
-		draw_rect(Rect2(c.x - 108, c.y - 8, 8, 16), Color(0.37, 0.90, 0.85, glow), true)
-	# Panel seams, and scorch marks until assembly.
-	for i in 5:
-		draw_rect(Rect2(c.x - 62 + i * 26, c.y - 15, 1, 30), SFPalette.STEEL_DARK, true)
-	if not done:
-		draw_rect(Rect2(c.x - 40, c.y + 4, 14, 6), SFPalette.RUIN_DARK, true)
-		draw_rect(Rect2(c.x + 24, c.y - 12, 10, 4), SFPalette.RUIN_DARK, true)
-	# The emitter mast on top: the shield socket sits on it.
-	draw_rect(Rect2(c.x - 6, c.y - 26, 4, 8), SFPalette.STEEL_DARK, true)
+	var fitted: Array = []
+	for id in COMPONENTS:
+		if _state(String(id)) == "fitted":
+			fitted.append(String(id))
+	SFVela.draw(self, _vela_origin(c), VELA_SCALE, SFVela.MAINTENANCE,
+		{"modules": fitted, "time": time, "damaged": not done, "assembled": done})
+
+
+func _vela_origin(c: Vector2) -> Vector2:
+	# Unit 51 along the hull is the middle of the workshop drawing.
+	return c - Vector2(51.0 * float(VELA_SCALE), 0)
+
+
+## Where a component's socket sits on screen: the renderer's module position.
+func _socket_at(c: Vector2, id: String) -> Vector2:
+	return SFVela.module_screen(_vela_origin(c), VELA_SCALE, SFVela.MAINTENANCE, id)
 
 
 func _draw_socket(id: String, at: Vector2, previewed: bool) -> void:

@@ -9,10 +9,17 @@ extends SceneTree
 ## skip, a strike restarts the segment, and a player who never touches anything
 ## still reaches the next scene).
 ##
-## Headless execution cannot say whether the lane feels good to fly. It does
-## prove that no input can strand the sequence and no strike can soft-lock it.
+## Also covers the canonical VELA renderer (`core/star_fall/sf_vela.gd`): one
+## geometry, upright in every finale state, engines only under thrust, modules
+## where the workshop sockets are; the shield contacts; the portal waiting for a
+## visible entry; and the per-scene cleanup of contacts and shake.
+##
+## Headless execution cannot say whether the lane feels good to fly, or whether
+## the art and audio read well. It does prove that no input can strand the
+## sequence, no strike can soft-lock it, and the state rules hold.
 
 const SFContent := preload("res://core/star_fall/sf_content.gd")
+const SFVela := preload("res://core/star_fall/sf_vela.gd")
 const SFCampaign := preload("res://core/star_fall/sf_campaign.gd")
 const SFFinale := preload("res://core/star_fall/sf_finale.gd")
 const SFFlight := preload("res://core/star_fall/sf_flight.gd")
@@ -51,6 +58,10 @@ func _process(_delta: float) -> bool:
 	_portal_rules()
 	_screen_input_rules()
 	_screen_reaches_the_end()
+	_vela_rules()
+	_shield_rules()
+	_portal_entry_rules()
+	_presentation_states()
 	_finish()
 	return true
 
@@ -169,27 +180,31 @@ func _debris_rules() -> void:
 	# Obstacles stream in from the right and are removed off the left edge.
 	f = _debris_rig()
 	var spawned := false
+	var ahead := true
 	for i in 60:
 		var events: Array = f.tick(0.05, 0.0)
 		for e in events:
 			if String((e as Dictionary).get("type", "")) == "spawn":
 				spawned = true
+				var newest: Dictionary = f.active_obstacles().back()
+				if float(newest["x"]) - float(newest["hw"]) <= f.ship_x + f.ship_half_length:
+					ahead = false
 	check("obstacles spawn", spawned)
-	var right_spawned := true
-	for body in f.active_obstacles():
-		if float((body as Dictionary)["x"]) < float(f.ship_x):
-			right_spawned = false
-	check("every obstacle enters from the right of the ship", right_spawned)
+	check("every obstacle enters ahead of the ship's nose", ahead)
 
 	# The field is always dodgeable: consecutive bodies in spawn order leave a
 	# gap the ship can cross in the time between their arrivals.
 	f = _debris_rig()
+	# The navigation chip flies, so no strike freezes the field mid-sample.
+	f.assist = true
 	var by_seq: Dictionary = {}
 	for i in 400:
 		f.tick(0.05, 0.0)
 		for body in f.active_obstacles():
 			var b: Dictionary = body
-			by_seq[int(b["seq"])] = b
+			# The layout as spawned: a shield graze may push a body aside later.
+			if not by_seq.has(int(b["seq"])):
+				by_seq[int(b["seq"])] = b.duplicate()
 	var gaps_ok := true
 	var sizes_ok := true
 	var previous_y: float = -999.0
@@ -460,6 +475,227 @@ func _screen_reaches_the_end() -> void:
 	check("the scene did not end on the strike", cine.scene_index == 2)
 	check("the restart is counted", cine.flight.restarts == 1)
 	cine.skip()
+	cine.free()
+
+
+# ---------------------------------------------------------------- VELA renderer
+
+func _vela_rules() -> void:
+	print("")
+	print("-- Canonical VELA renderer " + "-".repeat(37))
+	for state in SFVela.STATES:
+		var s := String(state)
+		var should_burn: bool = s in [SFVela.IGNITION, SFVela.ASCENDING, SFVela.PORTAL_ENTRY, SFVela.DESCENDING]
+		check("engines in state '%s' are %s" % [s, "on" if should_burn else "off"], SFVela.engines_on(s) == should_burn)
+	check("only the workshop view is horizontal", not SFVela.is_upright(SFVela.MAINTENANCE)
+		and SFVela.is_upright(SFVela.PARKED) and SFVela.is_upright(SFVela.LANDED))
+	var o := Vector2(320, 300)
+	for state in [SFVela.PARKED, SFVela.ASCENDING, SFVela.PORTAL_ENTRY, SFVela.LANDED]:
+		var nose := SFVela.to_screen(o, 1, String(state), float(SFVela.LENGTH), 0.0)
+		var nozzle := SFVela.to_screen(o, 1, String(state), 0.0, 0.0)
+		check("state '%s' points the nose straight up" % String(state), nose.y < nozzle.y and is_equal_approx(nose.x, nozzle.x))
+	var side_nose := SFVela.to_screen(o, 2, SFVela.MAINTENANCE, float(SFVela.LENGTH), 0.0)
+	check("the workshop view points the nose right", side_nose.x > o.x and is_equal_approx(side_nose.y, o.y))
+	# The workshop sockets keep their Phase 3 places (hull middle at unit 51, x2).
+	var c := Vector2(200, 120)
+	var origin := c - Vector2(102, 0)
+	var expected := {"navigation_chip": Vector2(52, -4), "power_core": Vector2(-14, -2), "shield_emitter": Vector2(-4, -34)}
+	for id in expected:
+		var at := SFVela.module_screen(origin, 2, SFVela.MAINTENANCE, String(id)) - c
+		check("the %s socket keeps its workshop position" % String(id), at.is_equal_approx(expected[id]), str(at))
+	# Scale is uniform: the upright ship is LENGTH x scale tall and keeps its width.
+	for s in [1, 2]:
+		var top := SFVela.to_screen(o, s, SFVela.PARKED, float(SFVela.LENGTH), 0.0)
+		var side := SFVela.to_screen(o, s, SFVela.PARKED, 0.0, float(SFVela.HALF_WIDTH))
+		check("scale %d is uniform" % s, is_equal_approx(o.y - top.y, float(SFVela.LENGTH * s))
+			and is_equal_approx(side.x - o.x, float(SFVela.HALF_WIDTH * s)))
+	var feet := SFVela.ground_origin(Vector2(320, 300))
+	check("a parked ship's legs reach the ground", is_equal_approx(feet.y + float(SFVela.LEG_DEPTH), 300.0))
+	# The departure ship stands several characters tall (Nick's sprite is 20 px).
+	check("VELA stands several times Nick's height", float(SFVela.LENGTH + SFVela.LEG_DEPTH) >= 20.0 * 4.0)
+	# The flight lanes' shield matches the drawn shield.
+	var r := SFVela.shield_radii(1, SFVela.ASCENDING)
+	var cfg := _flight_data("debris")
+	check("the debris shield matches the drawn bubble",
+		is_equal_approx(r.x, float(cfg.get("shield_half_width", 0.0))) and is_equal_approx(r.y, float(cfg.get("shield_half_length", 0.0))),
+		str(r))
+	check("the flight hull length matches the renderer",
+		is_equal_approx(float(cfg.get("ship_half_length", 0.0)), float(SFVela.LENGTH) * 0.5))
+
+
+# ---------------------------------------------------------------- shield
+
+func _shield_rules() -> void:
+	print("")
+	print("-- Shield contacts " + "-".repeat(45))
+	var f = _debris_rig()
+	f.assist = true
+	var contacts: Array = []
+	var hits := 0
+	var on_rim := true
+	for i in 300:
+		for e in f.tick(0.05, 0.0):
+			var ev: Dictionary = e
+			if String(ev.get("type", "")) == "shield":
+				contacts.append(ev)
+				# Checked on the frame it is reported, against the ship as it is then.
+				var dx: float = (float(ev["x"]) - f.ship_x) / f.shield_half_length
+				var dy: float = (float(ev["y"]) - f.ship_y) / f.shield_half_width
+				if absf(sqrt(dx * dx + dy * dy) - 1.0) > 0.01:
+					on_rim = false
+			elif String(ev.get("type", "")) == "hit":
+				hits += 1
+	check("grit and near misses meet the shield", contacts.size() >= 5, str(contacts.size()))
+	check("shield contacts never count as strikes", hits == 0 and f.hits == 0)
+	check("each contact is reported on the shield boundary", on_rim)
+	var light := 0
+	var heavy := 0
+	for ev in contacts:
+		if bool(ev["heavy"]):
+			heavy += 1
+		else:
+			light += 1
+	check("light contacts happen", light > 0, "%d light, %d heavy" % [light, heavy])
+
+	# A near miss grazes the shield once and is pushed away from the hull.
+	var g = _debris_rig()
+	g.obstacles.clear()
+	g.grit_interval = 0.0
+	var y0: float = g.ship_y + g.ship_half_height + 16.0
+	g.obstacles.append({"x": g.ship_x + 90.0, "y": y0, "hw": 12.0, "hh": 6.0, "tone": 0, "phase": 0.0, "seq": 0})
+	var grazes := 0
+	var struck := false
+	for i in 40:
+		for e in g.tick(0.02, 0.0):
+			var t := String((e as Dictionary).get("type", ""))
+			if t == "shield":
+				grazes += 1
+			elif t == "hit":
+				struck = true
+	check("a near miss grazes the shield exactly once", grazes == 1, str(grazes))
+	check("the graze does not strike the hull", not struck)
+	if not g.obstacles.is_empty():
+		check("the grazed body is pushed away from the ship", float(g.obstacles[0]["y"]) > y0)
+	# Grit off the ship's line falls past without a contact.
+	var h = _debris_rig()
+	h.obstacles.clear()
+	h.grit_interval = 0.0
+	h.grit.append({"x": h.ship_x + 120.0, "y": h.ship_y + 80.0, "vy": 0.0, "r": 1.0, "tone": 0})
+	var missed_contact := false
+	for i in 80:
+		for e in h.tick(0.02, 0.0):
+			if String((e as Dictionary).get("type", "")) == "shield":
+				missed_contact = true
+	check("grit that misses the bubble makes no contact", not missed_contact)
+
+
+# ---------------------------------------------------------------- portal entry
+
+func _portal_entry_rules() -> void:
+	print("")
+	print("-- Portal capture and visible entry " + "-".repeat(28))
+	var f = SFFlight.new()
+	f.configure(_flight_data("portal"))
+	var captured_at := -1.0
+	var entered_at := -1.0
+	var ship_at_capture := 0.0
+	var steer_ignored := true
+	var t := 0.0
+	while entered_at < 0.0 and t < 30.0:
+		t += 0.05
+		if not f.captured:
+			f.ship_y = f.portal_y
+		var y_before: float = f.ship_y
+		for e in f.tick(0.05, 1.0 if f.captured else 0.0):
+			var kind := String((e as Dictionary).get("type", ""))
+			if kind == "captured":
+				captured_at = t
+				ship_at_capture = f.ship_x
+			elif kind == "entered":
+				entered_at = t
+		if f.captured and entered_at < 0.0 and f.ship_y > y_before + 1.0 and f.ship_y > f.portal_y + 0.5:
+			steer_ignored = false
+	check("alignment captures the ship first", captured_at > 0.0)
+	check("the crossing comes after the capture", entered_at > captured_at, "%.2f / %.2f" % [captured_at, entered_at])
+	check("the capture flies the ship in over a readable time", entered_at - captured_at >= 1.2, "%.2f s" % (entered_at - captured_at))
+	check("the ship actually travels to the portal", f.ship_x - f.ship_half_length >= f.portal_x and ship_at_capture < f.portal_x)
+	check("steering cannot pull a captured ship off the axis", steer_ignored)
+
+	# The cinematic does not leave the portal scene before the crossing.
+	var camp = _ready_campaign()
+	var cine = _cinematic(camp)
+	cine.scene_index = 4
+	cine.scene_time = 0.0
+	cine.elapsed = 0.0
+	cine._ensure_flight()
+	var left_early := false
+	var guard := 0
+	while cine.scene_index == 4 and guard < 2000:
+		guard += 1
+		var was_entered: bool = cine.flight != null and cine.flight.entered
+		cine.advance_for(0.05)
+		if cine.scene_index != 4 and not was_entered:
+			left_early = true
+	check("the portal scene waits for the hull to cross", not left_early and cine.scene_index == 5)
+	check("the portal flight is gone after the transition", cine.flight == null)
+	cine.skip()
+	cine.free()
+
+
+# ---------------------------------------------------------------- presentation
+
+func _presentation_states() -> void:
+	print("")
+	print("-- Presentation states and cleanup " + "-".repeat(29))
+	var camp = _ready_campaign()
+	var cine = _cinematic(camp)
+	cine.reduced_motion = false
+	_at(cine, 0, 4.0)
+	check("the departure ship is parked", cine.ship_state() == SFVela.PARKED)
+	check("engines are off during the transfer", not cine.engines_on())
+	_at(cine, 1, 0.5)
+	check("the launch opens parked, engines off", cine.ship_state() == SFVela.PARKED and not cine.engines_on())
+	_at(cine, 1, 2.0)
+	check("ignition burns on the pad", cine.ship_state() == SFVela.IGNITION and cine.engines_on())
+	_at(cine, 1, 8.0)
+	check("the climb is upright and under thrust", cine.ship_state() == SFVela.ASCENDING and cine.engines_on())
+	_at(cine, 5, 2.0)
+	check("home opens on the powered descent", cine.ship_state() == SFVela.DESCENDING)
+	_at(cine, 5, 9.0)
+	check("after touchdown the ship is landed", cine.ship_state() == SFVela.LANDED)
+	check("engines are off after landing", not cine.engines_on())
+	check("the face close-up is gone", not cine.has_method("_draw_home_portrait") and not cine.has_method("_home_zoom"))
+
+	# The ascent's contacts are choreographed inside the climb, with the shield on.
+	var launch: Dictionary = (cine.scenes[1] as Dictionary)
+	var in_window := true
+	for i in cine.LAUNCH_CONTACTS.size():
+		var at: float = cine.launch_contact_time(i)
+		if at < cine.SHIELD_ON_AT or at >= float(launch.get("duration", 0.0)):
+			in_window = false
+	check("every ascent contact happens with the shield up, inside the scene", in_window)
+	# Watch the climb: contacts show, the shake decays, and nothing leaks out.
+	_at(cine, 1, 0.0)
+	var max_contacts := 0
+	var guard := 0
+	while cine.scene_index == 1 and guard < 1000:
+		guard += 1
+		cine.advance_for(0.05)
+		max_contacts = maxi(max_contacts, cine.shield_contacts_visible())
+	check("the ascent shows shield contacts", max_contacts > 0, str(max_contacts))
+	check("contacts are cleared when the scene ends", cine.shield_contacts_visible() == 0)
+	check("shake is back to zero in the next beat", cine._shake_energy == 0.0)
+	# Pause freezes the clock and the contacts.
+	_at(cine, 1, 9.0)
+	cine.handle_key(KEY_SPACE)
+	var frozen: float = cine.scene_time
+	cine.advance_for(1.0)
+	check("pause freezes the ascent", cine.scene_time == frozen)
+	cine.handle_key(KEY_SPACE)
+	cine.handle_key(KEY_ESCAPE)
+	cine.handle_key(KEY_ESCAPE)
+	check("skip from the ascent is safe and final", cine.is_finished())
+	check("a finished sequence holds no contacts", cine.shield_contacts_visible() == 0)
 	cine.free()
 
 

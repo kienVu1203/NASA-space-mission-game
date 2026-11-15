@@ -145,6 +145,22 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [x] Watching the whole sequence finishes it at the final message with skipped = false
 - [x] Watching and skipping apply the same flags, stage and checkpoint (`test_flow.gd`)
 
+### Canonical VELA and the finale presentation — `test_flight.gd`
+
+- [x] Engines are on only in `ignition`, `ascending`, `portal_entry` and `descending`; off in `maintenance`, `parked` and `landed`
+- [x] Every finale state points the nose straight up; only the workshop view is horizontal
+- [x] Scale is uniform at 1x and 2x; a parked ship's legs reach the ground
+- [x] The workshop sockets keep their Phase 3 positions (taken from the renderer's module table)
+- [x] The flight lanes' hull length and shield match the drawn ship
+- [x] The departure ship is parked with engines off; the launch opens parked, ignites on the pad, climbs upright
+- [x] Home opens on the powered descent and is landed, engines off, after touchdown; the face close-up is gone
+- [x] Grit and near misses report shield contacts on the shield boundary; contacts never count as strikes
+- [x] A near miss grazes once and is pushed away from the hull; grit off the ship's line makes no contact
+- [x] The portal captures first and reports the crossing only after the hull is through (about 2 s later); steering cannot pull a captured ship off the axis
+- [x] The portal scene never advances before the crossing
+- [x] Every ascent contact happens with the shield up, inside the scene; contacts and shake are cleared at the next beat
+- [x] Pause freezes the ascent; skip from the ascent is safe and final
+
 ### Mission report and score
 
 - [x] The report carries the objective, memories, components, both designs, mass, route, reserves and decisions
@@ -276,9 +292,17 @@ Seven suites cover the build: `test_parse`, `test_logic`, `test_flow`,
 - [ ] Confirming final assembly feels final: the design visibly locks and the install animation reads
 - [ ] The install animation can be skipped without leaving the screen stuck
 - [ ] The escape reads as six distinct beats, not one long fade
-- [ ] Scene A visibly reflects the repaired junction and the carried memories
-- [ ] Scene C's telemetry is legible and matches the numbers in the report
-- [ ] The debris passage shows shielding and navigation, not invulnerable smashing
+- [ ] VELA is recognisably the same ship in the workshop, final assembly, departure, launch, debris, sunlight, portal and home (compare captures 36, 46, 48-53b)
+- [ ] Final assembly shows VELA upright with the three fitted modules and no flame; no engine or impact sound plays on that screen
+- [ ] Scene A: VELA stands upright on the pad, several times taller than Nick and Bill, engines cold; the transfer readout fills and turns DONE; Bill's shell goes dark; Nick walks to the ramp and boards; the hatch and umbilical close before ignition
+- [ ] Scene A visibly reflects the repaired junction (lit cable)
+- [ ] Scene B: ignition builds on the pad (smoke, dust, thrown scrap), then the ship lifts straight up with the flame under the nozzles; no sideways start, no asset swap
+- [ ] Scene B: each shield ripple coincides with a body hitting the bubble; heavier hits sound heavier; the shake is brief and stops; with reduced motion the ripples still show and nothing shakes
+- [ ] The debris passage shows shielding and navigation, not invulnerable smashing; A / D, Left / Right and the mouse steer; grit sparks on the shield rather than passing through the hull
+- [ ] Contact sounds never stack into noise during a burst of grit, and stop when the scene ends or is paused
+- [ ] The portal: the opening is clearly active, lining up under it locks, the ship is visibly pulled in and disappears through the rim, and only then does the flash come
+- [ ] Home: the spaceport reads as the same pixel-art world as the opening Earth level (trees, bushes, lamps, crisp shapes, contact shadows, correct overlap of Nick, ramp, ship and pad); VELA lands with engines off; the ramp lowers; Nick walks out and celebrates; there is no face close-up
+- [ ] Subtitles never cover Nick's exit or celebration
 - [ ] The sunlight beat has room to breathe; Bill's three lines land
 - [ ] The portal is clearly a story device, not presented as science
 - [ ] The home scene visually matches the opening Earth and the memories found

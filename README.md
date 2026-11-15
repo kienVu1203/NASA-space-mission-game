@@ -60,12 +60,13 @@ godot --headless --path . --script res://tests/star_fall/test_flow.gd
 godot --headless --path . --script res://tests/star_fall/test_encounter.gd
 godot --headless --path . --script res://tests/star_fall/test_phase3.gd
 godot --headless --path . --script res://tests/star_fall/test_phase4.gd
+godot --headless --path . --script res://tests/star_fall/test_flight.gd
 godot --headless --path . --script res://tests/star_fall/test_debug_jump.gd
 ```
 
-`test_flow.gd`, `test_phase4.gd`, `test_debug_jump.gd` and `capture.gd` delete
+`test_flow.gd`, `test_phase4.gd`, `test_flight.gd`, `test_debug_jump.gd` and `capture.gd` delete
 `user://star_fall_save.json`; back up a real save first.
-`tests/star_fall/capture.gd` renders 48 key screens (including the
+`tests/star_fall/capture.gd` renders 53 key screens (including the
 Phase 4 finale and the debug help) to `user://captures/` and needs a real display
 (`-- --shots=17,18` re-renders just those screens). Full commands and
 acceptance steps are in
@@ -148,8 +149,10 @@ Enter activates, Esc goes back to the ready summary. The confirmation is one-way
 freezes the design, writes the pre-finale checkpoint and starts the escape.
 
 **In the escape cinematic:** Space pauses and resumes, Esc skips the rest,
-Enter advances a beat. Skipping is always safe and produces exactly the same
-progress, report and score as watching.
+Enter advances a beat. In the two playable segments (debris passage, portal)
+**A / D**, **Left / Right** or the mouse steer VELA across the corridor; there
+keys steer and never skip. Skipping is always safe and produces exactly the
+same progress, report and score as watching.
 
 **Mission report and credits:** Up/Down scroll, Enter/Space continue, Esc also
 continues. The credits end at the title.
@@ -209,8 +212,12 @@ and in any build launched with `--qa`; it is inert in a release build.
 2. Press **Enter** on **COMPLETE ASSEMBLY AND LAUNCH**. This is irreversible:
    the design freezes, a pre-finale checkpoint is written, and the install
    animation plays. **Esc** skips the animation, not the sequence.
-3. The **escape** plays: crash site, launch, debris passage with the certified
-   telemetry, sunlight, the portal, home. **Space** pauses, **Esc** skips.
+3. The **escape** plays: the departure station (Bill's memory core streams into
+   the parked VELA, Nick boards), ignition and a vertical launch through the
+   junk strata, the playable debris passage (steer with A / D or the mouse; the
+   shield takes the grit), sunlight, the portal (line up under it and it pulls
+   VELA in), and home (VELA lands, Nick steps out and celebrates). **Space**
+   pauses, **Esc** skips.
 4. The **mission report** shows the recorded run and the published score.
 5. The **credits** roll, then the game returns to the title. **Continue** after
    the ending returns to the credits, and **New Game** starts clean.
@@ -224,7 +231,8 @@ the controls table above and `docs/test_checklist.md`.
 autoload/         game_state.gd (owns the campaign), events.gd (signal bus), data_loader.gd
 core/star_fall/   Pure logic + presentation kit, no nodes: design and preflight
                   validation, campaign state, save/load, content loading, palette,
-                  bitmap font, generated sprites, synth audio, shared UI drawing,
+                  bitmap font, generated sprites, the canonical VELA renderer
+                  (sf_vela.gd), synth audio, shared UI drawing,
                   and the Phase 2 encounter parts (shield, projectiles, pattern
                   scheduler, encounter model, encounter controller) and the
                   Phase 3 parts (vocabulary, typing, typing encounter,
@@ -239,7 +247,8 @@ data/star_fall/   ship_parts.json, campaign.json, encounters.json, sites.json,
                   vocabulary.json, typing.json, reconstruction.json,
                   finale.json: all tuning and prose
 tests/star_fall/  test_parse.gd, test_logic.gd, test_flow.gd, test_encounter.gd,
-                  test_phase3.gd, test_phase4.gd, capture.gd
+                  test_phase3.gd, test_phase4.gd, test_flight.gd,
+                  test_debug_jump.gd, capture.gd
 docs/             star_fall_contract.md (source of truth), vocabulary.md, game_design.md,
                   starfall.md, test_checklist.md, roles.md
 core/starfall/    Operation: Starfall: palette, font, sprites, synth, ship and debris models
@@ -321,7 +330,7 @@ Each person edits **only their own folders**. Need a change elsewhere? Ask the o
   the editor or `godot --path .`. See `docs/submission.md` for the exact
   blocker and what would be needed.
 - **Combined test runner:** there is no single script that runs both games'
-  suites. Run STAR FALL's six from the "Run it" section and Operation:
+  suites. Run STAR FALL's eight from the "Run it" section and Operation:
   Starfall's from [docs/starfall.md](docs/starfall.md).
 
 ## Event-day timeline (48h)

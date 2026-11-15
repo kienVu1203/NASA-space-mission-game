@@ -33,6 +33,7 @@ const SCRIPTS := [
 	"res://core/star_fall/sf_return_sim.gd",
 	"res://core/star_fall/sf_reconstruction.gd",
 	"res://core/star_fall/sf_finale.gd",
+	"res://core/star_fall/sf_flight.gd",
 	"res://core/star_fall/sf_qa.gd",
 	"res://core/star_fall/sf_debug_presets.gd",
 	"res://scenes/star_fall/player.gd",

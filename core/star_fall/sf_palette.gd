@@ -52,6 +52,18 @@ const GOLD := Color("e5c04a")
 const RED := Color("d9534f")
 const GREEN_OK := Color("66c96a")
 
+# The blue escape shield, and the one human face the game ever shows close up.
+# Nick remains placeholder art in the world; the finale portrait is the one
+# deliberately detailed human drawing, because the ending rests on his face.
+const SHIELD_BLUE := Color("57c8f5")
+const SHIELD_BLUE_LIGHT := Color("b6ecff")
+const SHIELD_BLUE_DEEP := Color("1f6c9c")
+const SKIN := Color("e2a97e")
+const SKIN_LIGHT := Color("f4c79a")
+const SKIN_DARK := Color("b87a52")
+const HAIR := Color("3a2a22")
+const HAIR_LIGHT := Color("5b4233")
+
 const SLOT_NAMES := {
 	"computer": "FLIGHT COMPUTER",
 	"propulsion": "PROPULSION",

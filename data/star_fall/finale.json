@@ -26,7 +26,50 @@
   },
   "cinematic": {
     "title": "ESCAPE",
-    "skip_hint": "ESC SKIP     SPACE PAUSE",
+    "skip_hint": "ESC SKIP   SPACE PAUSE   ANY KEY NEXT",
+    "flight": {
+      "_note": "Tuning for the two playable flight segments. `target_seconds` is how long a clean run of the segment takes; the assist values guarantee that a player who never touches the controls, or who keeps colliding, still finishes. `kind` is the only field the screen dispatches on.",
+      "debris": {
+        "kind": "debris",
+        "lane_top": 74.0,
+        "lane_bottom": 286.0,
+        "ship_x": 98.0,
+        "ship_half_height": 11.0,
+        "steer_speed": 172.0,
+        "obstacle_speed": 148.0,
+        "speed_growth": 66.0,
+        "spawn_interval": 0.50,
+        "spawn_jitter": 0.13,
+        "max_obstacles": 12,
+        "min_radius": 7.0,
+        "max_radius": 19.0,
+        "target_seconds": 17.0,
+        "assist_after_restarts": 2,
+        "assist_after_seconds": 26.0,
+        "hit_freeze_seconds": 0.55,
+        "clear_hold_seconds": 1.6,
+        "seed": 7321
+      },
+      "portal": {
+        "kind": "portal",
+        "lane_top": 84.0,
+        "lane_bottom": 276.0,
+        "ship_x": 150.0,
+        "ship_half_height": 11.0,
+        "steer_speed": 150.0,
+        "portal_x": 512.0,
+        "portal_y": 180.0,
+        "portal_half_height": 40.0,
+        "portal_drift": 46.0,
+        "portal_drift_speed": 0.46,
+        "align_seconds": 0.65,
+        "target_seconds": 12.0,
+        "assist_after_restarts": 0,
+        "assist_after_seconds": 20.0,
+        "clear_hold_seconds": 1.5,
+        "seed": 4417
+      }
+    },
     "scenes": [
       {
         "id": "leaving_crash_site",
@@ -43,27 +86,30 @@
       },
       {
         "id": "launch",
-        "name": "LAUNCH",
+        "name": "ASCENT THROUGH THE JUNK",
         "visual": "launch",
         "duration": 15.0,
         "lines": [
           {"at": 0.5, "text": "The rebuilt drive catches on the first attempt."},
-          {"at": 3.6, "text": "Dust and loose scrap lift off the pad and fall back."},
-          {"at": 7.0, "text": "VELA climbs out of the wreck field, nose up, steady."},
-          {"at": 10.6, "text": "Ground detail thins. The dark upper atmosphere closes in."}
+          {"at": 3.4, "text": "Smoke pours off the pad. VELA climbs out of the wreck field."},
+          {"at": 6.6, "text": "The shield emitter lights: a blue bubble around the hull."},
+          {"at": 9.8, "text": "The junk strata thicken with altitude. Every graze ripples the shield."},
+          {"at": 12.6, "text": "The last shell cracks. The shield spends itself forcing a way through."}
         ]
       },
       {
         "id": "debris_passage",
         "name": "DEBRIS PASSAGE",
         "visual": "debris",
-        "duration": 16.0,
+        "interactive": "debris",
+        "duration": 22.0,
         "lines": [
-          {"at": 0.5, "text": "Route telemetry is read straight from the certified simulation."},
-          {"at": 3.8, "text": "Small impacts land on the shield and are counted, not ignored."},
-          {"at": 7.4, "text": "The navigation chip steers around the larger bodies."},
-          {"at": 11.0, "text": "Bill: \"Nothing is being smashed. That is the point of the design.\""},
-          {"at": 13.4, "text": "Reserves hold. The transit ends with margin left in the tank."}
+          {"at": 0.6, "text": "Bill: \"Meteoroids. Steer with W and S, or move the mouse.\""},
+          {"at": 4.6, "text": "Nick: \"I have it. Holding the left side.\""},
+          {"at": 9.0, "text": "Bill: \"A strike puts us back at the start of the stream. Fly clean.\""},
+          {"at": 13.2, "text": "Nick: \"Then let's not get hit.\""},
+          {"at": 17.0, "text": "Bill: \"Small hits only. Keep her steady.\""},
+          {"at": 20.4, "text": "The passage opens. The lane goes quiet."}
         ]
       },
       {
@@ -72,7 +118,8 @@
         "visual": "sunlight",
         "duration": 17.0,
         "lines": [
-          {"at": 4.4, "text": "Bill: \"Is the sky still blue where you come from?\""},
+          {"at": 2.2, "text": "Below, the old world is smothered in its own waste."},
+          {"at": 5.0, "text": "Bill: \"Is the sky still blue where you come from?\""},
           {"at": 8.2, "text": "Nick: \"It is.\""},
           {"at": 11.4, "text": "Bill: \"Then keep it that way.\""},
           {"at": 13.8, "text": "The cabin goes quiet. The light does not."}
@@ -82,12 +129,13 @@
         "id": "portal",
         "name": "THE PORTAL",
         "visual": "portal",
-        "duration": 14.0,
+        "interactive": "portal",
+        "duration": 18.0,
         "lines": [
-          {"at": 0.6, "text": "VELA replays the original recorded signal."},
-          {"at": 4.0, "text": "Something answers from the same direction it always did."},
-          {"at": 7.4, "text": "The access window opens. The tear widens along the old seam."},
-          {"at": 10.8, "text": "VELA crosses. This is the story's way home, not a claim about physics."}
+          {"at": 0.6, "text": "VELA replays the original recorded signal. Something answers."},
+          {"at": 4.6, "text": "Bill: \"There it is. Line up with the opening and fly it in.\""},
+          {"at": 9.2, "text": "Nick: \"Aligning. Hold it steady.\""},
+          {"at": 13.4, "text": "The access window is open. This is the story's way home, not a claim about physics."}
         ]
       },
       {
@@ -96,12 +144,14 @@
         "visual": "home",
         "duration": 24.0,
         "lines": [
-          {"at": 0.6, "text": "Mission Control: \"VELA, we have your signal. What happened?\""},
-          {"at": 4.6, "text": "Nick: \"I have data to send. This time, we need to listen.\""},
-          {"at": 8.4, "text": "The archive opens: the memories you found, in the order you found them."},
-          {"at": 12.6, "text": "The records reach researchers, analysts and the coastal communities."},
-          {"at": 17.0, "text": "Not one person solves it. The information is finally where it can be used."},
-          {"at": 20.6, "text": "The transfer continues. Nick stays at the console."}
+          {"at": 0.5, "text": "Mission Control: \"VELA, we have your signal. What happened?\""},
+          {"at": 3.4, "text": "Nick: \"I have data to send. This time, we need to listen.\""},
+          {"at": 6.6, "text": "Landing gear down. The pad is real, and the grass is green."},
+          {"at": 9.4, "text": "Nick steps out of the hatch onto present-day Earth."},
+          {"at": 12.2, "text": "The archive opens: the memories you found, in the order you found them."},
+          {"at": 15.4, "text": "The records reach researchers, analysts and the coastal communities."},
+          {"at": 18.6, "text": "Not one person solves it. The information is finally where it can be used."},
+          {"at": 22.0, "text": "Nick: \"Bill... it is still blue.\""}
         ]
       }
     ],

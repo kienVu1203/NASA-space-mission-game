@@ -402,6 +402,8 @@ func apply_reduced_motion() -> void:
 		duel.reduced_motion = setting_reduced_motion
 	if typing_duel != null:
 		typing_duel.reduced_motion = setting_reduced_motion
+	if cinematic_screen != null:
+		cinematic_screen.reduced_motion = setting_reduced_motion
 
 
 func _enter_world(zone_id: String) -> void:
@@ -2239,6 +2241,7 @@ func _enter_cinematic() -> void:
 	cinematic_screen = SFCinematic.new()
 	cinematic_screen.name = "Cinematic"
 	cinematic_screen.setup(skin, ui, campaign, finale_data, reconstruction_data)
+	cinematic_screen.reduced_motion = setting_reduced_motion
 	cinematic_screen.cinematic_finished.connect(_on_cinematic_finished)
 	add_child(cinematic_screen)
 	audio.set_ambience("none")
